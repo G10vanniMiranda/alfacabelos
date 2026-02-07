@@ -1,0 +1,40 @@
+import {
+  Barber,
+  BlockedSlot,
+  Booking,
+  BookingFilters,
+  BookingStatus,
+  BookingWithRelations,
+  Service,
+} from "@/types/domain";
+
+export type CreateBookingInput = {
+  serviceId: string;
+  barberId: string;
+  customerName: string;
+  customerPhone: string;
+  dateTimeStart: string;
+  dateTimeEnd: string;
+};
+
+export type CreateBlockedSlotInput = {
+  barberId?: string;
+  dateTimeStart: string;
+  dateTimeEnd: string;
+  reason: string;
+};
+
+export interface BookingRepository {
+  getServices(): Promise<Service[]>;
+  getBarbers(): Promise<Barber[]>;
+  getServiceById(id: string): Promise<Service | undefined>;
+  getBookingById(id: string): Promise<BookingWithRelations | undefined>;
+  listBookings(filters?: BookingFilters): Promise<BookingWithRelations[]>;
+  listBlockedSlots(date?: string): Promise<BlockedSlot[]>;
+  listBookingsInRange(startIso: string, endIso: string, barberId?: string): Promise<Booking[]>;
+  createBooking(input: CreateBookingInput): Promise<Booking>;
+  updateBookingStatus(bookingId: string, status: BookingStatus): Promise<Booking | undefined>;
+  createBlockedSlot(input: CreateBlockedSlotInput): Promise<BlockedSlot>;
+  deleteBlockedSlot(blockedSlotId: string): Promise<boolean>;
+}
+

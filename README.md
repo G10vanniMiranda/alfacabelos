@@ -1,36 +1,172 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ALFA Barber - Agendamento Online
 
-## Getting Started
+Projeto completo de barbearia com Next.js (App Router), TypeScript e TailwindCSS, com fluxo de agendamento em 4 passos e painel admin para gestao da agenda.
 
-First, run the development server:
+## Visao Geral
+
+- Home de marketing com CTA, servicos, equipe, precos, depoimentos, galeria, localizacao, FAQ e rodape.
+- Cliente precisa criar conta e fazer login para acessar `/agendar`.
+- Fluxo `/agendar` com Stepper (4 passos): servico -> barbeiro -> data/horario -> dados do cliente.
+- Regras de agenda:
+  - horario configuravel (seg-sab 09:00-19:00)
+  - slots de 30 min
+  - duracao por servico
+  - buffer entre atendimentos (10 min)
+  - bloqueio de conflitos por barbeiro/horario
+- Pagina `/confirmacao` com resumo e status do agendamento.
+- `/admin` com login por senha em variavel de ambiente, filtros e acoes de confirmar/cancelar e bloqueios.
+- Validacao com Zod e Server Actions para operacoes criticas.
+- API routes locais para listagem de dados e horarios disponiveis.
+
+## Stack
+
+- Next.js 16 (compativel com requisito 14+)
+- App Router
+- TypeScript
+- TailwindCSS v4
+- Zod
+- Prisma schema + seed (pronto para PostgreSQL/Supabase)
+- Repositorio em memoria por padrao (funciona sem DB)
+
+## Estrutura de Pastas
+
+```txt
+app/
+  api/
+    services/route.ts
+    barbers/route.ts
+    available-slots/route.ts
+    booking/route.ts
+    admin/
+      bookings/route.ts
+      blocked-slots/route.ts
+  admin/page.tsx
+  agendar/page.tsx
+  confirmacao/page.tsx
+  globals.css
+  layout.tsx
+  page.tsx
+components/
+  admin/
+    admin-dashboard.tsx
+    admin-login.tsx
+  home/
+    hero-section.tsx
+    home-sections.tsx
+  scheduler/
+    available-slots.tsx
+    scheduler-wizard.tsx
+    stepper.tsx
+  ui/
+    mobile-cta.tsx
+    site-header.tsx
+    status-badge.tsx
+    toast.tsx
+lib/
+  actions/
+    booking-actions.ts
+  data/
+    seed.ts
+  repositories/
+    in-memory.ts
+    index.ts
+    types.ts
+  validators/
+    schemas.ts
+  booking-service.ts
+  config.ts
+  time.ts
+  utils.ts
+types/
+  domain.ts
+  scheduler.ts
+prisma/
+  schema.prisma
+  seed.ts
+```
+
+## Variaveis de Ambiente
+
+Crie `.env.local`:
+
+```env
+ADMIN_PASSWORD=admin123
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/alfa_barber
+```
+
+Observacao:
+- `DATABASE_URL` so e necessaria ao usar Prisma/PostgreSQL.
+- O projeto ja funciona localmente sem banco (memoria).
+- O cadastro/login de cliente e em memoria (reinicia ao reiniciar o servidor).
+
+## Como Rodar
+
+1. Instalar dependencias:
+
+```bash
+npm install
+```
+
+2. Rodar em desenvolvimento:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. Lint:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run lint
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Prisma (Opcional - PostgreSQL/Supabase)
 
-## Learn More
+Schema pronto em `prisma/schema.prisma`.
 
-To learn more about Next.js, take a look at the following resources:
+Comandos:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run prisma:generate
+npm run prisma:migrate -- --name init
+npm run prisma:seed
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Endpoints e Acoes
 
-## Deploy on Vercel
+### API Routes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `GET /api/services` -> lista servicos ativos
+- `GET /api/barbers` -> lista barbeiros ativos
+- `GET /api/available-slots?date=YYYY-MM-DD&barberId=...&serviceId=...` -> horarios disponiveis
+- `POST /api/booking` -> cria agendamento
+- `GET /api/admin/bookings` -> lista agendamentos (filtros opcionais)
+- `PATCH /api/admin/bookings` -> atualiza status
+- `GET /api/admin/blocked-slots` -> lista bloqueios
+- `POST /api/admin/blocked-slots` -> cria bloqueio
+- `DELETE /api/admin/blocked-slots?blockedSlotId=...` -> remove bloqueio
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Server Actions
+
+- `createBookingAction`
+- `updateBookingStatusAction`
+- `createBlockedSlotAction`
+- `deleteBlockedSlotAction`
+- `adminLoginAction` / `adminLogoutAction`
+
+## Fluxo de Teste (Manual)
+
+1. Acesse `/agendar`.
+2. Se nao estiver autenticado, faca login em `/cliente/login` ou cadastre em `/cliente/cadastro`.
+3. Selecione servico e barbeiro.
+4. Escolha data futura e horario disponivel.
+5. Preencha/confira nome + telefone e confirme.
+6. Valide redirecionamento para `/confirmacao?id=...`.
+7. Acesse `/admin` e faca login com `ADMIN_PASSWORD`.
+8. Confirme/cancele um agendamento.
+9. Crie um bloqueio e veja o horario sumir no fluxo de agendamento.
+
+## Observacoes Tecnicas
+
+- O repositorio padrao esta em `lib/repositories/in-memory.ts`.
+- Para migrar para Prisma, basta implementar um repository Prisma com a mesma interface de `lib/repositories/types.ts` e trocar `lib/repositories/index.ts`.
+- Conflitos sao barrados por sobreposicao de intervalo (`start/end`) considerando buffer.
