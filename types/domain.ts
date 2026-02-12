@@ -40,7 +40,6 @@ export type ClientUser = {
   id: string;
   name: string;
   phone: string;
-  password: string;
   createdAt: string;
 };
 

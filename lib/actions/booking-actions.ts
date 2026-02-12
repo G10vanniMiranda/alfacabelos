@@ -15,8 +15,10 @@ const ADMIN_COOKIE = "barber_admin";
 
 function isAdminPasswordValid(password: string): boolean {
   const fromEnv = process.env.ADMIN_PASSWORD;
-  const fallback = "admin123";
-  return password === (fromEnv || fallback);
+  if (!fromEnv) {
+    return false;
+  }
+  return password === fromEnv;
 }
 
 export async function createBookingAction(payload: {
@@ -54,7 +56,7 @@ export async function adminLoginAction(
   }
 
   if (!isAdminPasswordValid(parsed.data.password)) {
-    return { success: false, message: "Senha incorreta" };
+    return { success: false, message: "Senha incorreta ou ADMIN_PASSWORD nao configurada" };
   }
 
   const cookieStore = await cookies();

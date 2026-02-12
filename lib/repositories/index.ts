@@ -1,4 +1,4 @@
-import { inMemoryRepository } from "./in-memory";
+import { prismaRepository } from "./prisma";
 
-export const repository = inMemoryRepository;
+export const repository = prismaRepository;
 

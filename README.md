@@ -25,8 +25,7 @@ Projeto completo de barbearia com Next.js (App Router), TypeScript e TailwindCSS
 - TypeScript
 - TailwindCSS v4
 - Zod
-- Prisma schema + seed (pronto para PostgreSQL/Supabase)
-- Repositorio em memoria por padrao (funciona sem DB)
+- Prisma + PostgreSQL/Supabase
 
 ## Estrutura de Pastas
 
@@ -95,9 +94,8 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/alfa_barber
 ```
 
 Observacao:
-- `DATABASE_URL` so e necessaria ao usar Prisma/PostgreSQL.
-- O projeto ja funciona localmente sem banco (memoria).
-- O cadastro/login de cliente e em memoria (reinicia ao reiniciar o servidor).
+- `DATABASE_URL` e obrigatoria no ambiente.
+- Defina `ADMIN_PASSWORD` forte em producao.
 
 ## Como Rodar
 
@@ -119,7 +117,7 @@ npm run dev
 npm run lint
 ```
 
-## Prisma (Opcional - PostgreSQL/Supabase)
+## Prisma (Obrigatorio - PostgreSQL/Supabase)
 
 Schema pronto em `prisma/schema.prisma`.
 
@@ -128,6 +126,24 @@ Comandos:
 ```bash
 npm run prisma:generate
 npm run prisma:migrate -- --name init
+npm run prisma:migrate:deploy
+npm run prisma:seed
+```
+
+## Deploy (Vercel)
+
+1. Configure no projeto da Vercel:
+   - `DATABASE_URL`
+   - `ADMIN_PASSWORD`
+2. Aplique migrations no banco:
+
+```bash
+npm run prisma:migrate:deploy
+```
+
+3. Opcional para carga inicial:
+
+```bash
 npm run prisma:seed
 ```
 
@@ -167,6 +183,6 @@ npm run prisma:seed
 
 ## Observacoes Tecnicas
 
-- O repositorio padrao esta em `lib/repositories/in-memory.ts`.
-- Para migrar para Prisma, basta implementar um repository Prisma com a mesma interface de `lib/repositories/types.ts` e trocar `lib/repositories/index.ts`.
+- O repositorio padrao esta em `lib/repositories/prisma.ts`.
+- Cadastro/login de cliente persiste no banco com hash de senha.
 - Conflitos sao barrados por sobreposicao de intervalo (`start/end`) considerando buffer.
