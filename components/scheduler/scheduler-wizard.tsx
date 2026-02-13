@@ -9,6 +9,7 @@ import { Service } from "@/types/domain";
 import { AvailableSlot, SchedulerDraft } from "@/types/scheduler";
 import { useToast } from "@/components/ui/toast";
 import { AvailableSlots } from "./available-slots";
+import { DateCalendar } from "./date-calendar";
 import { Stepper } from "./stepper";
 
 const STORAGE_KEY = "scheduler-draft";
@@ -152,16 +153,13 @@ export function SchedulerWizard({
       {step === 2 && (
         <div className="mt-6">
           <label className="text-sm text-zinc-300">Selecione a data</label>
-          <input
-            type="date"
-            min={minDate}
-            value={draft.date ?? ""}
-            onChange={(event) => {
-              const date = event.target.value;
+          <DateCalendar
+            minDate={minDate}
+            selectedDate={draft.date}
+            onSelect={(date) => {
               setDraft((prev) => ({ ...prev, date, time: undefined }));
               loadSlots(date, draft.serviceId);
             }}
-            className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
           />
           <AvailableSlots
             slots={slots}
@@ -243,4 +241,3 @@ export function SchedulerWizard({
     </section>
   );
 }
-

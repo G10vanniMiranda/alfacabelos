@@ -1,8 +1,10 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { clientLoginSchema, clientRegisterSchema } from "@/lib/validators/schemas";
 import { authenticateClient, createClient, findClientById } from "@/lib/auth/client-store";
+import { cancelClientBooking } from "@/lib/booking-service";
 import { ActionState } from "@/types/scheduler";
 
 const CLIENT_COOKIE = "barber_client";
@@ -25,7 +27,11 @@ export async function getCurrentClient() {
     return null;
   }
 
-  return findClientById(clientId);
+  try {
+    return await findClientById(clientId);
+  } catch {
+    return null;
+  }
 }
 
 export async function registerClientAction(
@@ -48,7 +54,11 @@ export async function registerClientAction(
     await setClientCookie(client.id);
     return { success: true, message: "Cadastro realizado com sucesso" };
   } catch (error) {
-    return { success: false, message: error instanceof Error ? error.message : "Falha no cadastro" };
+    const message = error instanceof Error ? error.message : "Falha no cadastro";
+    if (message.includes("Can't reach database server")) {
+      return { success: false, message: "Banco indisponivel no momento. Tente novamente em instantes." };
+    }
+    return { success: false, message };
   }
 }
 
@@ -62,7 +72,17 @@ export async function loginClientAction(_prev: ActionState, formData: FormData):
     return { success: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
-  const client = await authenticateClient(parsed.data.phone, parsed.data.password);
+  let client = null;
+  try {
+    client = await authenticateClient(parsed.data.phone, parsed.data.password);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("Can't reach database server")) {
+      return { success: false, message: "Banco indisponivel no momento. Tente novamente em instantes." };
+    }
+    return { success: false, message: "Falha ao realizar login" };
+  }
+
   if (!client) {
     return { success: false, message: "Telefone ou senha incorretos" };
   }
@@ -74,4 +94,20 @@ export async function loginClientAction(_prev: ActionState, formData: FormData):
 export async function logoutClientAction() {
   const cookieStore = await cookies();
   cookieStore.delete(CLIENT_COOKIE);
+}
+
+export async function cancelMyBookingAction(formData: FormData) {
+  const bookingId = String(formData.get("bookingId") ?? "");
+  if (!bookingId) {
+    return;
+  }
+
+  const client = await getCurrentClient();
+  if (!client) {
+    return;
+  }
+
+  await cancelClientBooking({ bookingId, customerPhone: client.phone });
+  revalidatePath("/cliente");
+  revalidatePath("/admin/agenda");
 }

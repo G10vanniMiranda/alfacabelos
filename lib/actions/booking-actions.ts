@@ -6,6 +6,7 @@ import {
   createService,
   createBlockedSlot,
   createBooking,
+  deleteService,
   deleteBlockedSlot,
   updateService,
   updateBookingStatus,
@@ -120,8 +121,14 @@ export async function createServiceAction(payload: {
   revalidatePath("/agendar");
 }
 
+export async function deleteServiceAction(payload: { serviceId: string }) {
+  await deleteService(payload.serviceId);
+  revalidatePath("/admin/servicos");
+  revalidatePath("/");
+  revalidatePath("/agendar");
+}
+
 export async function isAdminAuthenticated() {
   const cookieStore = await cookies();
   return cookieStore.get(ADMIN_COOKIE)?.value === "ok";
 }
-

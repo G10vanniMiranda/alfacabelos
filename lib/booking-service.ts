@@ -47,6 +47,17 @@ export async function updateService(input: unknown) {
   return updated;
 }
 
+export async function deleteService(serviceId: string) {
+  if (!serviceId) {
+    throw new Error("Servico invalido");
+  }
+
+  const deleted = await repository.deleteService(serviceId);
+  if (!deleted) {
+    throw new Error("Servico nao encontrado");
+  }
+}
+
 export async function listBarbers() {
   return repository.getBarbers();
 }
@@ -122,6 +133,33 @@ export async function getBookingById(bookingId: string) {
 
 export async function listAdminBookings(filters: BookingFilters) {
   return repository.listBookings(filters);
+}
+
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
+export async function listClientBookings(customerPhone: string) {
+  const normalized = normalizePhone(customerPhone);
+  const bookings = await repository.listBookings({});
+  return bookings.filter((booking) => normalizePhone(booking.customerPhone) === normalized);
+}
+
+export async function cancelClientBooking(input: { bookingId: string; customerPhone: string }) {
+  const booking = await repository.getBookingById(input.bookingId);
+  if (!booking) {
+    throw new Error("Agendamento nao encontrado");
+  }
+
+  if (normalizePhone(booking.customerPhone) !== normalizePhone(input.customerPhone)) {
+    throw new Error("Voce nao tem permissao para cancelar este agendamento");
+  }
+
+  if (booking.status === "CANCELADO") {
+    return booking;
+  }
+
+  return repository.updateBookingStatus(booking.id, "CANCELADO");
 }
 
 export async function updateBookingStatus(input: unknown) {

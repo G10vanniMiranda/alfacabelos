@@ -12,7 +12,7 @@ export default async function AgendarPage() {
   const client = await getCurrentClient();
 
   if (!client) {
-    redirect("/cliente/login?next=/agendar");
+    redirect("/cliente/login?next=/cliente");
   }
 
   const services = await listServices();

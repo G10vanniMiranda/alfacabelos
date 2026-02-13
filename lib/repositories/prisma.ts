@@ -133,6 +133,21 @@ export const prismaRepository: BookingRepository = {
     });
   },
 
+  async deleteService(serviceId) {
+    const existing = await prisma.service.findUnique({
+      where: { id: serviceId },
+    });
+    if (!existing) {
+      return false;
+    }
+
+    await prisma.service.update({
+      where: { id: serviceId },
+      data: { isActive: false },
+    });
+    return true;
+  },
+
   async getBarbers() {
     await ensureDefaultCatalog();
     const rows = await prisma.barber.findMany({

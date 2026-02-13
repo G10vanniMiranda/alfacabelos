@@ -6,7 +6,8 @@ import { useTransition } from "react";
 import { adminLogoutAction } from "@/lib/actions/booking-actions";
 
 const items = [
-  { href: "/admin/servicos", label: "Servicos" },
+  { href: "/admin/dashboard", label: "Dashboard" },
+  { href: "/admin/servicos", label: "Serviços" },
   { href: "/admin/agenda", label: "Agenda" },
   { href: "/admin/bloqueios", label: "Bloqueios" },
 ];
@@ -18,9 +19,9 @@ export function AdminSidebar() {
   return (
     <aside className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4 lg:sticky lg:top-6">
       <div className="rounded-xl border border-zinc-700/80 bg-zinc-950/80 p-4">
-        <p className="text-xs uppercase tracking-[0.22em] text-cyan-300">ALFA BARBER</p>
+        <p className="text-xs uppercase tracking-[0.22em] text-cyan-300">ESPAÇO ALFA</p>
         <h1 className="mt-2 text-xl font-semibold text-zinc-100">Painel Admin</h1>
-        <p className="mt-1 text-xs text-zinc-400">Gestao operacional</p>
+        <p className="mt-1 text-xs text-zinc-400">Gestão operacional</p>
       </div>
 
       <nav className="mt-4 space-y-2 text-sm">
@@ -30,11 +31,10 @@ export function AdminSidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`block rounded-lg border px-3 py-2 transition ${
-                active
+              className={`block rounded-lg border px-3 py-2 transition ${active
                   ? "border-cyan-400/70 bg-cyan-500/10 text-cyan-200"
                   : "border-zinc-700 bg-zinc-950/70 text-zinc-200 hover:border-cyan-400/50 hover:text-cyan-200"
-              }`}
+                }`}
             >
               {item.label}
             </Link>

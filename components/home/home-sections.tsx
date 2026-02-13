@@ -33,7 +33,7 @@ export async function HomeSections() {
         </div>
       </section>
 
-      <section id="precos" className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+      <section id="depoimentos" className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
         <h2 className="text-3xl font-bold text-zinc-100">Depoimentos</h2>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {testimonials.map((item) => (
@@ -45,39 +45,46 @@ export async function HomeSections() {
         </div>
       </section>
 
-      <section className="border-y border-zinc-800 bg-zinc-900/40 py-16">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 sm:px-6 md:grid-cols-2">
-          <div>
-            <h2 className="text-3xl font-bold text-zinc-100">Galeria</h2>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              {[1, 2, 3, 4].map((item) => (
-                <div
-                  key={item}
-                  className="aspect-square rounded-lg border border-zinc-800 bg-linear-to-br from-zinc-900 via-zinc-800 to-cyan-950"
-                />
-              ))}
-            </div>
+      <section id="galeria" className="border-y border-zinc-800 bg-zinc-900/40 py-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <h2 className="text-3xl font-bold text-zinc-100">Galeria</h2>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((item) => (
+              <div
+                key={item}
+                className="aspect-square rounded-lg border border-zinc-800 bg-linear-to-br from-zinc-900 via-zinc-800 to-cyan-950"
+              />
+            ))}
           </div>
-          <div>
-            <h2 className="text-3xl font-bold text-zinc-100">Localização</h2>
-            <p className="mt-3 text-zinc-300">R. São Miguel, 824 - Eldorado, Porto Velho - RO, 76811-888</p>
-            <div className="mt-4 aspect-video rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-sm text-zinc-500">
-              <iframe
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1623.087367220366!2d-63.871474024266924!3d-8.786385786098876!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x92325d64144e26bf%3A0xcb50b4b781eee0fe!2sAlfa%20-%20Para%20todos%20os%20cabelos*21!5e1!3m2!1spt-BR!2sbr!4v1770951104946!5m2!1spt-BR!2sbr"
-                width="600" height="450"
-                style={{ border: 0 }}
-                allowFullScreen loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              >
-              </iframe>
-            </div>
-            <h3 id="faq" className="mt-8 text-2xl font-bold text-zinc-100">FAQ</h3>
-            <ul className="mt-3 space-y-2 text-sm text-zinc-300">
-              <li>Posso reagendar? Sim, pela área admin.</li>
-              <li>Tem encaixe sem horário? Depende da agenda do dia.</li>
-              <li>Quais formas de pagamento? Pix, débito e crédito.</li>
-            </ul>
-          </div>
+        </div>
+      </section>
+
+      <section id="localizacao" className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+        <h2 className="text-3xl font-bold text-zinc-100">Localização</h2>
+        <p className="mt-3 text-zinc-300">R. Sao Miguel, 824 - Eldorado, Porto Velho - RO, 76811-888</p>
+        <div className="mt-6 aspect-video rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-sm text-zinc-500">
+          <iframe
+            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1623.087367220366!2d-63.871474024266924!3d-8.786385786098876!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x92325d64144e26bf%3A0xcb50b4b781eee0fe!2sAlfa%20-%20Para%20todos%20os%20cabelos*21!5e1!3m2!1spt-BR!2sbr!4v1770951104946!5m2!1spt-BR!2sbr"
+            width="600"
+            height="450"
+            style={{ border: 0 }}
+            allowFullScreen
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            className="h-full w-full rounded-md"
+          >
+          </iframe>
+        </div>
+      </section>
+
+      <section id="faq" className="border-y border-zinc-800 bg-zinc-900/40 py-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <h2 className="text-3xl font-bold text-zinc-100">FAQ</h2>
+          <ul className="mt-4 space-y-2 text-sm text-zinc-300">
+            <li>Posso reagendar? Sim, pela area admin.</li>
+            <li>Tem encaixe sem horario? Depende da agenda do dia.</li>
+            <li>Quais formas de pagamento? Pix, debito e credito.</li>
+          </ul>
         </div>
       </section>
 

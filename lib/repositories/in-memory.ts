@@ -54,6 +54,16 @@ export const inMemoryRepository: BookingRepository = {
     return service;
   },
 
+  async deleteService(serviceId) {
+    const service = data.services.find((item) => item.id === serviceId);
+    if (!service) {
+      return false;
+    }
+
+    service.isActive = false;
+    return true;
+  },
+
   async getBarbers() {
     return data.barbers.filter((item) => item.isActive);
   },
@@ -163,4 +173,3 @@ export const inMemoryRepository: BookingRepository = {
     return true;
   },
 };
-

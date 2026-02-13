@@ -12,7 +12,7 @@ export function ClientRegisterForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { pushToast } = useToast();
-  const next = searchParams.get("next") || "/agendar";
+  const next = searchParams.get("next") || "/cliente";
   const [state, formAction, isPending] = useActionState(registerClientAction, initialState);
 
   useEffect(() => {
