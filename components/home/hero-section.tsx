@@ -39,7 +39,7 @@ export async function HeroSection() {
           <ul className="mt-4 space-y-3 text-sm text-zinc-200">
             <li className="rounded-lg bg-zinc-800/60 px-3 py-2">Atendimento de segunda a sábado, 09h às 12h e 14h às 19h</li>
             <li className="rounded-lg bg-zinc-800/60 px-3 py-2">Confirmação em segundos</li>
-            <li className="rounded-lg bg-zinc-800/60 px-3 py-2">Barbeiros especializados em cortes clássicos e modernos</li>
+            <li className="rounded-lg bg-zinc-800/60 px-3 py-2">Barbeiro especializado em cortes clássicos e modernos</li>
           </ul>
         </div>
       </div>

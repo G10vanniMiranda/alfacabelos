@@ -10,7 +10,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
@@ -30,8 +30,5 @@
     "tailwindcss": "^4",
     "tsx": "^4.19.2",
     "typescript": "^5"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   }
 }
