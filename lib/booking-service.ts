@@ -1,6 +1,13 @@
 import { BUSINESS_CONFIG } from "@/lib/config";
+import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
 import { repository } from "@/lib/repositories";
-import { createBookingSchema, createBlockedSlotSchema, updateBookingStatusSchema } from "@/lib/validators/schemas";
+import {
+  createBlockedSlotSchema,
+  createBookingSchema,
+  createServiceSchema,
+  updateBookingStatusSchema,
+  updateServiceSchema,
+} from "@/lib/validators/schemas";
 import { BookingFilters } from "@/types/domain";
 import { generateAvailableSlots, getDayRange } from "./time";
 import { addMinutesToIso, overlaps } from "./utils";
@@ -9,23 +16,55 @@ export async function listServices() {
   return repository.getServices();
 }
 
+export async function createService(input: unknown) {
+  const parsed = createServiceSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados do servico invalidos");
+  }
+
+  return repository.createService({
+    name: parsed.data.name,
+    priceCents: parsed.data.priceCents,
+    durationMinutes: 45,
+  });
+}
+
+export async function updateService(input: unknown) {
+  const parsed = updateServiceSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados do servico invalidos");
+  }
+
+  const updated = await repository.updateService(parsed.data.serviceId, {
+    name: parsed.data.name,
+    priceCents: parsed.data.priceCents,
+  });
+
+  if (!updated) {
+    throw new Error("Servico nao encontrado");
+  }
+
+  return updated;
+}
+
 export async function listBarbers() {
   return repository.getBarbers();
 }
 
-export async function getAvailableSlots(params: { date: string; barberId: string; serviceId: string }) {
+export async function getAvailableSlots(params: { date: string; barberId?: string; serviceId: string }) {
   const service = await repository.getServiceById(params.serviceId);
   if (!service) {
     throw new Error("Servico nao encontrado");
   }
 
   const { start, end } = getDayRange(params.date);
-  const bookings = await repository.listBookingsInRange(start, end, params.barberId);
+  const barberId = params.barberId || DEFAULT_BARBER_ID;
+  const bookings = await repository.listBookingsInRange(start, end, barberId);
   const blockedSlots = await repository.listBlockedSlots(params.date);
 
   return generateAvailableSlots({
     date: params.date,
-    barberId: params.barberId,
+    barberId,
     serviceDurationMinutes: service.durationMinutes,
     barberBookings: bookings,
     blockedSlots,
@@ -39,6 +78,7 @@ export async function createBooking(input: unknown) {
   }
 
   const data = parsed.data;
+  const barberId = data.barberId ?? DEFAULT_BARBER_ID;
   const service = await repository.getServiceById(data.serviceId);
   if (!service) {
     throw new Error("Servico nao encontrado");
@@ -49,14 +89,14 @@ export async function createBooking(input: unknown) {
     service.durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes,
   );
 
-  const conflicts = await repository.listBookingsInRange(data.start, computedEnd, data.barberId);
+  const conflicts = await repository.listBookingsInRange(data.start, computedEnd, barberId);
   if (conflicts.length > 0) {
     throw new Error("Este horario acabou de ser reservado. Escolha outro horario.");
   }
 
   const blockedSlots = await repository.listBlockedSlots(data.start.slice(0, 10));
   const blockedConflict = blockedSlots.some((slot) => {
-    if (slot.barberId && slot.barberId !== data.barberId) {
+    if (slot.barberId && slot.barberId !== barberId) {
       return false;
     }
     return overlaps(new Date(data.start), new Date(computedEnd), new Date(slot.dateTimeStart), new Date(slot.dateTimeEnd));
@@ -67,7 +107,7 @@ export async function createBooking(input: unknown) {
   }
 
   return repository.createBooking({
-    barberId: data.barberId,
+    barberId,
     serviceId: data.serviceId,
     customerName: data.customerName,
     customerPhone: data.customerPhone,

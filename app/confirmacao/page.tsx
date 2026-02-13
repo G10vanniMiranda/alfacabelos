@@ -20,11 +20,11 @@ export default async function ConfirmacaoPage({
     <div className="min-h-screen">
       <SiteHeader />
       <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-        <h1 className="text-4xl font-bold text-zinc-100">Confirmacao</h1>
+        <h1 className="text-4xl font-bold text-zinc-100">Confirmação</h1>
 
         {!booking ? (
           <section className="mt-6 rounded-xl border border-amber-400/40 bg-amber-500/10 p-5 text-amber-100">
-            Agendamento nao encontrado. Verifique o link de confirmacao.
+            Agendamento não encontrado. Verifique o link de confirmação.
           </section>
         ) : (
           <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/70 p-6">

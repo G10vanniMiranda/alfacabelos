@@ -3,9 +3,11 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import {
+  createService,
   createBlockedSlot,
   createBooking,
   deleteBlockedSlot,
+  updateService,
   updateBookingStatus,
 } from "@/lib/booking-service";
 import { adminLoginSchema } from "@/lib/validators/schemas";
@@ -23,7 +25,6 @@ function isAdminPasswordValid(password: string): boolean {
 
 export async function createBookingAction(payload: {
   serviceId: string;
-  barberId: string;
   start: string;
   customerName: string;
   customerPhone: string;
@@ -52,11 +53,11 @@ export async function adminLoginAction(
   });
 
   if (!parsed.success) {
-    return { success: false, message: parsed.error.issues[0]?.message ?? "Senha invalida" };
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Senha inválida" };
   }
 
   if (!isAdminPasswordValid(parsed.data.password)) {
-    return { success: false, message: "Senha incorreta ou ADMIN_PASSWORD nao configurada" };
+    return { success: false, message: "Senha incorreta ou ADMIN_PASSWORD não configurada" };
   }
 
   const cookieStore = await cookies();
@@ -78,7 +79,7 @@ export async function adminLogoutAction() {
 
 export async function updateBookingStatusAction(payload: { bookingId: string; status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" }) {
   await updateBookingStatus(payload);
-  revalidatePath("/admin");
+  revalidatePath("/admin/agenda");
 }
 
 export async function createBlockedSlotAction(payload: {
@@ -88,12 +89,35 @@ export async function createBlockedSlotAction(payload: {
   reason: string;
 }) {
   await createBlockedSlot(payload);
-  revalidatePath("/admin");
+  revalidatePath("/admin/bloqueios");
+  revalidatePath("/admin/agenda");
 }
 
 export async function deleteBlockedSlotAction(payload: { blockedSlotId: string }) {
   await deleteBlockedSlot(payload.blockedSlotId);
-  revalidatePath("/admin");
+  revalidatePath("/admin/bloqueios");
+  revalidatePath("/admin/agenda");
+}
+
+export async function updateServiceAction(payload: {
+  serviceId: string;
+  name: string;
+  priceCents: number;
+}) {
+  await updateService(payload);
+  revalidatePath("/admin/servicos");
+  revalidatePath("/");
+  revalidatePath("/agendar");
+}
+
+export async function createServiceAction(payload: {
+  name: string;
+  priceCents: number;
+}) {
+  await createService(payload);
+  revalidatePath("/admin/servicos");
+  revalidatePath("/");
+  revalidatePath("/agendar");
 }
 
 export async function isAdminAuthenticated() {

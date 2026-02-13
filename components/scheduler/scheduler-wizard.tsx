@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createBookingAction } from "@/lib/actions/booking-actions";
+import { DEFAULT_BARBER_ID, DEFAULT_BARBER_NAME } from "@/lib/constants/barber";
 import { formatDateInput, formatPhone } from "@/lib/utils";
-import { Barber, Service } from "@/types/domain";
+import { Service } from "@/types/domain";
 import { AvailableSlot, SchedulerDraft } from "@/types/scheduler";
 import { useToast } from "@/components/ui/toast";
 import { AvailableSlots } from "./available-slots";
@@ -14,18 +15,16 @@ const STORAGE_KEY = "scheduler-draft";
 
 export function SchedulerWizard({
   services,
-  barbers,
   initialCustomer,
 }: {
   services: Service[];
-  barbers: Barber[];
   initialCustomer?: { name: string; phone: string };
 }) {
   const router = useRouter();
   const { pushToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [step, setStep] = useState(1);
-  const [draft, setDraft] = useState<SchedulerDraft>({});
+  const [draft, setDraft] = useState<SchedulerDraft>({ barberId: DEFAULT_BARBER_ID });
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
 
@@ -37,6 +36,7 @@ export function SchedulerWizard({
       const fromStorage = JSON.parse(raw) as SchedulerDraft;
       setDraft({
         ...fromStorage,
+        barberId: DEFAULT_BARBER_ID,
         customerName: fromStorage.customerName || initialCustomer?.name,
         customerPhone: fromStorage.customerPhone || initialCustomer?.phone,
       });
@@ -44,6 +44,7 @@ export function SchedulerWizard({
     }
     setDraft((prev) => ({
       ...prev,
+      barberId: DEFAULT_BARBER_ID,
       customerName: initialCustomer?.name,
       customerPhone: initialCustomer?.phone,
     }));
@@ -53,58 +54,57 @@ export function SchedulerWizard({
     localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
   }, [draft]);
 
-  const loadSlots = useCallback(async (date: string, barberId?: string, serviceId?: string) => {
-    if (!date || !barberId || !serviceId) {
-      setSlots([]);
-      return;
-    }
-
-    setSlotsLoading(true);
-    try {
-      const response = await fetch(
-        `/api/available-slots?date=${date}&barberId=${barberId}&serviceId=${serviceId}`,
-      );
-      const data = (await response.json()) as AvailableSlot[] | { message: string };
-      if (!response.ok || !Array.isArray(data)) {
-        throw new Error((data as { message: string }).message ?? "Falha ao carregar horarios");
+  const loadSlots = useCallback(
+    async (date: string, serviceId?: string) => {
+      if (!date || !serviceId) {
+        setSlots([]);
+        return;
       }
-      setSlots(data);
-    } catch (error) {
-      setSlots([]);
-      pushToast(error instanceof Error ? error.message : "Erro ao carregar horarios", "error");
-    } finally {
-      setSlotsLoading(false);
-    }
-  }, [pushToast]);
+
+      setSlotsLoading(true);
+      try {
+        const response = await fetch(
+          `/api/available-slots?date=${date}&barberId=${DEFAULT_BARBER_ID}&serviceId=${serviceId}`,
+        );
+        const data = (await response.json()) as AvailableSlot[] | { message: string };
+        if (!response.ok || !Array.isArray(data)) {
+          throw new Error((data as { message: string }).message ?? "Falha ao carregar horários");
+        }
+        setSlots(data);
+      } catch (error) {
+        setSlots([]);
+        pushToast(error instanceof Error ? error.message : "Erro ao carregar horários", "error");
+      } finally {
+        setSlotsLoading(false);
+      }
+    },
+    [pushToast],
+  );
 
   useEffect(() => {
-    if (step === 3 && draft.date && draft.barberId && draft.serviceId) {
-      loadSlots(draft.date, draft.barberId, draft.serviceId);
+    if (step === 2 && draft.date && draft.serviceId) {
+      loadSlots(draft.date, draft.serviceId);
     }
-  }, [step, draft.date, draft.barberId, draft.serviceId, loadSlots]);
+  }, [step, draft.date, draft.serviceId, loadSlots]);
 
   function canAdvance(): boolean {
     if (step === 1) {
       return Boolean(draft.serviceId);
     }
     if (step === 2) {
-      return Boolean(draft.barberId);
-    }
-    if (step === 3) {
       return Boolean(draft.date && draft.time);
     }
     return Boolean(draft.customerName && draft.customerPhone);
   }
 
   function submitBooking() {
-    if (!draft.serviceId || !draft.barberId || !draft.time || !draft.customerName || !draft.customerPhone) {
+    if (!draft.serviceId || !draft.time || !draft.customerName || !draft.customerPhone) {
       pushToast("Preencha todos os campos para confirmar", "error");
       return;
     }
 
     const payload = {
       serviceId: draft.serviceId,
-      barberId: draft.barberId,
       start: draft.time,
       customerName: draft.customerName,
       customerPhone: draft.customerPhone,
@@ -125,7 +125,6 @@ export function SchedulerWizard({
   }
 
   const selectedService = services.find((item) => item.id === draft.serviceId);
-  const selectedBarber = barbers.find((item) => item.id === draft.barberId);
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-8">
@@ -138,14 +137,12 @@ export function SchedulerWizard({
               type="button"
               key={service.id}
               onClick={() => setDraft((prev) => ({ ...prev, serviceId: service.id }))}
-              className={`rounded-lg border p-4 text-left transition ${
-                draft.serviceId === service.id
+              className={`rounded-lg border p-4 text-left transition ${draft.serviceId === service.id
                   ? "border-cyan-300 bg-cyan-500/10"
                   : "border-zinc-700 bg-zinc-900 hover:border-cyan-500"
-              }`}
+                }`}
             >
               <p className="font-semibold text-zinc-50">{service.name}</p>
-              <p className="text-sm text-zinc-400">{service.durationMinutes} minutos</p>
               <p className="text-sm text-cyan-200">R$ {(service.priceCents / 100).toFixed(2)}</p>
             </button>
           ))}
@@ -153,26 +150,6 @@ export function SchedulerWizard({
       )}
 
       {step === 2 && (
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-          {barbers.map((barber) => (
-            <button
-              type="button"
-              key={barber.id}
-              onClick={() => setDraft((prev) => ({ ...prev, barberId: barber.id }))}
-              className={`rounded-lg border p-4 text-left transition ${
-                draft.barberId === barber.id
-                  ? "border-cyan-300 bg-cyan-500/10"
-                  : "border-zinc-700 bg-zinc-900 hover:border-cyan-500"
-              }`}
-            >
-              <p className="font-semibold text-zinc-100">{barber.name}</p>
-              <p className="text-sm text-zinc-400">Barbeiro especialista</p>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {step === 3 && (
         <div className="mt-6">
           <label className="text-sm text-zinc-300">Selecione a data</label>
           <input
@@ -182,7 +159,7 @@ export function SchedulerWizard({
             onChange={(event) => {
               const date = event.target.value;
               setDraft((prev) => ({ ...prev, date, time: undefined }));
-              loadSlots(date, draft.barberId, draft.serviceId);
+              loadSlots(date, draft.serviceId);
             }}
             className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
           />
@@ -195,11 +172,11 @@ export function SchedulerWizard({
         </div>
       )}
 
-      {step === 4 && (
+      {step === 3 && (
         <div className="mt-6 space-y-4">
           <div className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-4 text-sm text-zinc-300">
             <p>Servico: {selectedService?.name}</p>
-            <p>Barbeiro: {selectedBarber?.name}</p>
+            <p>Barbeiro: {DEFAULT_BARBER_NAME}</p>
             <p>Horario: {draft.time ? new Date(draft.time).toLocaleString("pt-BR") : "-"}</p>
           </div>
 
@@ -238,7 +215,7 @@ export function SchedulerWizard({
           Voltar
         </button>
 
-        {step < 4 ? (
+        {step < 3 ? (
           <button
             type="button"
             onClick={() => {
@@ -246,7 +223,7 @@ export function SchedulerWizard({
                 pushToast("Conclua o passo atual para avancar", "error");
                 return;
               }
-              setStep((prev) => Math.min(4, prev + 1));
+              setStep((prev) => Math.min(3, prev + 1));
             }}
             className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950"
           >

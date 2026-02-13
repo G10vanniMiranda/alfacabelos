@@ -9,32 +9,32 @@ export const phoneSchema = z
   });
 
 export const createBookingSchema = z.object({
-  serviceId: z.string().min(1, "Servico e obrigatorio"),
-  barberId: z.string().min(1, "Barbeiro e obrigatorio"),
-  start: z.string().datetime("Data/hora invalida"),
+  serviceId: z.string().min(1, "Serviço é obrigatório"),
+  barberId: z.string().min(1, "Barbeiro é obrigatório").optional(),
+  start: z.string().datetime("Data/hora inválida"),
   customerName: z.string().trim().min(2, "Informe o nome completo"),
   customerPhone: phoneSchema,
 });
 
 export const clientRegisterSchema = z
   .object({
-    name: z.string().trim().min(2, "Nome e obrigatorio"),
+    name: z.string().trim().min(2, "Nome é obrigatório"),
     phone: phoneSchema,
     password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
-    confirmPassword: z.string().min(6, "Confirmacao obrigatoria"),
+    confirmPassword: z.string().min(6, "Confirmação obrigatória"),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "As senhas nao conferem",
+    message: "As senhas não conferem",
     path: ["confirmPassword"],
   });
 
 export const clientLoginSchema = z.object({
   phone: phoneSchema,
-  password: z.string().min(1, "Senha e obrigatoria"),
+  password: z.string().min(1, "Senha é obrigatória"),
 });
 
 export const adminLoginSchema = z.object({
-  password: z.string().min(1, "Senha e obrigatoria"),
+  password: z.string().min(1, "Senha é obrigatória"),
 });
 
 export const updateBookingStatusSchema = z.object({
@@ -44,11 +44,22 @@ export const updateBookingStatusSchema = z.object({
 
 export const createBlockedSlotSchema = z.object({
   barberId: z.string().optional(),
-  dateTimeStart: z.string().datetime("Inicio invalido"),
-  dateTimeEnd: z.string().datetime("Fim invalido"),
-  reason: z.string().trim().min(2, "Motivo e obrigatorio"),
+  dateTimeStart: z.string().datetime("Início inválido"),
+  dateTimeEnd: z.string().datetime("Fim inválido"),
+  reason: z.string().trim().min(2, "Motivo é obrigatório"),
 });
 
 export const deleteBlockedSlotSchema = z.object({
   blockedSlotId: z.string().min(1),
+});
+
+export const createServiceSchema = z.object({
+  name: z.string().trim().min(2, "Nome do serviço é obrigatório"),
+  priceCents: z.number().int().positive("Preço deve ser maior que zero"),
+});
+
+export const updateServiceSchema = z.object({
+  serviceId: z.string().min(1, "Serviço inválido"),
+  name: z.string().trim().min(2, "Nome do serviço é obrigatório"),
+  priceCents: z.number().int().positive("Preço deve ser maior que zero"),
 });

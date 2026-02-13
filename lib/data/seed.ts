@@ -1,22 +1,11 @@
+import { DEFAULT_BARBER_ID, DEFAULT_BARBER_NAME } from "@/lib/constants/barber";
 import { Barber, Service } from "@/types/domain";
 
 export const barbersSeed: Barber[] = [
   {
-    id: "barber-caio",
-    name: "Caio Fernandes",
+    id: DEFAULT_BARBER_ID,
+    name: DEFAULT_BARBER_NAME,
     avatarUrl: "https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=200&q=80",
-    isActive: true,
-  },
-  {
-    id: "barber-mateus",
-    name: "Mateus Silva",
-    avatarUrl: "https://images.unsplash.com/photo-1521119989659-a83eee488004?auto=format&fit=crop&w=200&q=80",
-    isActive: true,
-  },
-  {
-    id: "barber-rodrigo",
-    name: "Rodrigo Lima",
-    avatarUrl: "https://images.unsplash.com/photo-1622287162716-f311baa1a2b8?auto=format&fit=crop&w=200&q=80",
     isActive: true,
   },
 ];
@@ -42,16 +31,15 @@ export const servicesSeed: Service[] = [
 
 export const testimonials = [
   {
-    name: "Andr\u00e9 P.",
-    text: "Melhor atendimento da regi\u00e3o. Agenda online muito r\u00e1pida.",
+    name: "Andre P.",
+    text: "Melhor atendimento da região. Agenda online muito rápida.",
   },
   {
     name: "Lucas M.",
-    text: "Ambiente premium, barbeiros pontuais e corte impec\u00e1vel.",
+    text: "Ambiente premium, barbeiro pontual e corte impecável.",
   },
   {
     name: "Diego F.",
-    text: "Consegui reservar em 2 minutos e fui atendido no hor\u00e1rio.",
+    text: "Consegui reservar em 2 minutos e fui atendido no horário.",
   },
 ];
-

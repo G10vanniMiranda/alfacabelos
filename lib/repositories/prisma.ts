@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { barbersSeed, servicesSeed } from "@/lib/data/seed";
 import { Barber, Booking, BookingWithRelations, BlockedSlot } from "@/types/domain";
 import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput } from "./types";
 
@@ -58,15 +59,82 @@ function toBarber(row: {
   };
 }
 
+let defaultsEnsured = false;
+
+async function ensureDefaultCatalog() {
+  if (defaultsEnsured) {
+    return;
+  }
+
+  const [servicesCount, barbersCount] = await Promise.all([prisma.service.count(), prisma.barber.count()]);
+
+  if (servicesCount === 0) {
+    await prisma.service.createMany({
+      data: servicesSeed.map((service) => ({
+        id: service.id,
+        name: service.name,
+        durationMinutes: service.durationMinutes,
+        priceCents: service.priceCents,
+        isActive: service.isActive,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  if (barbersCount === 0) {
+    await prisma.barber.createMany({
+      data: barbersSeed.map((barber) => ({
+        id: barber.id,
+        name: barber.name,
+        avatarUrl: barber.avatarUrl ?? null,
+        isActive: barber.isActive,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  defaultsEnsured = true;
+}
+
 export const prismaRepository: BookingRepository = {
   async getServices() {
+    await ensureDefaultCatalog();
     return prisma.service.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     });
   },
 
+  async createService(input) {
+    return prisma.service.create({
+      data: {
+        name: input.name,
+        priceCents: input.priceCents,
+        durationMinutes: input.durationMinutes,
+        isActive: true,
+      },
+    });
+  },
+
+  async updateService(serviceId, input) {
+    const existing = await prisma.service.findUnique({
+      where: { id: serviceId },
+    });
+    if (!existing) {
+      return undefined;
+    }
+
+    return prisma.service.update({
+      where: { id: serviceId },
+      data: {
+        name: input.name,
+        priceCents: input.priceCents,
+      },
+    });
+  },
+
   async getBarbers() {
+    await ensureDefaultCatalog();
     const rows = await prisma.barber.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -75,6 +143,7 @@ export const prismaRepository: BookingRepository = {
   },
 
   async getServiceById(id: string) {
+    await ensureDefaultCatalog();
     const service = await prisma.service.findFirst({
       where: { id, isActive: true },
     });

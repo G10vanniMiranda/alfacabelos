@@ -1,10 +1,10 @@
 "use client";
 
 export function Stepper({ currentStep }: { currentStep: number }) {
-  const steps = ["Servico", "Barbeiro", "Data e horario", "Seus dados"];
+  const steps = ["Servico", "Data e horario", "Seus dados"];
 
   return (
-    <ol className="grid gap-3 sm:grid-cols-4">
+    <ol className="grid gap-3 sm:grid-cols-3">
       {steps.map((step, index) => {
         const number = index + 1;
         const active = number === currentStep;

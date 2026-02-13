@@ -3,9 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function MobileCta() {
+type MobileCtaProps = {
+  isLoggedIn: boolean;
+};
+
+export function MobileCta({ isLoggedIn }: MobileCtaProps) {
   const pathname = usePathname();
-  if (pathname === "/agendar") {
+
+  if (!isLoggedIn || pathname === "/agendar") {
     return null;
   }
 
@@ -20,4 +25,3 @@ export function MobileCta() {
     </div>
   );
 }
-

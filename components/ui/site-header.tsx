@@ -13,7 +13,7 @@ export async function SiteHeader() {
         <nav className="hidden items-center gap-6 text-sm text-zinc-300 sm:flex">
           <a href="#servicos" className="hover:text-cyan-300">Serviços</a>
           <a href="#equipe" className="hover:text-cyan-300">Equipe</a>
-          <a href="#preços" className="hover:text-cyan-300">Preços</a>
+          <a href="#precos" className="hover:text-cyan-300">Preços</a>
           <a href="#faq" className="hover:text-cyan-300">FAQ</a>
         </nav>
 
@@ -21,6 +21,12 @@ export async function SiteHeader() {
           {client ? (
             <>
               <span className="hidden text-xs text-zinc-400 sm:block">Olá, {client.name.split(" ")[0]}</span>
+              <Link
+                href="/agendar"
+                className="rounded-md bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300"
+              >
+                Agendar
+              </Link>
               <form action={logoutClientAction}>
                 <button
                   type="submit"
@@ -38,12 +44,6 @@ export async function SiteHeader() {
               Entrar
             </Link>
           )}
-          <Link
-            href="/agendar"
-            className="rounded-md bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300"
-          >
-            Agendar
-          </Link>
         </div>
       </div>
     </header>

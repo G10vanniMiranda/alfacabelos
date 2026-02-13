@@ -40,7 +40,7 @@ export async function registerClientAction(
   });
 
   if (!parsed.success) {
-    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados invalidos" };
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
   try {
@@ -59,7 +59,7 @@ export async function loginClientAction(_prev: ActionState, formData: FormData):
   });
 
   if (!parsed.success) {
-    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados invalidos" };
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
   const client = await authenticateClient(parsed.data.phone, parsed.data.password);

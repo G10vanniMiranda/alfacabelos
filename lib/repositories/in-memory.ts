@@ -15,7 +15,7 @@ function withRelations(booking: Booking): BookingWithRelations {
   const service = data.services.find((item) => item.id === booking.serviceId);
 
   if (!barber || !service) {
-    throw new Error("Relacionamentos invalidos no agendamento");
+    throw new Error("Relacionamentos inválidos no agendamento");
   }
 
   return { ...booking, barber, service };
@@ -28,6 +28,30 @@ function createId(prefix: string) {
 export const inMemoryRepository: BookingRepository = {
   async getServices() {
     return data.services.filter((item) => item.isActive);
+  },
+
+  async createService(input) {
+    const service: Service = {
+      id: createId("service"),
+      name: input.name,
+      priceCents: input.priceCents,
+      durationMinutes: input.durationMinutes,
+      isActive: true,
+    };
+
+    data.services.push(service);
+    return service;
+  },
+
+  async updateService(serviceId, input) {
+    const service = data.services.find((item) => item.id === serviceId);
+    if (!service) {
+      return undefined;
+    }
+
+    service.name = input.name;
+    service.priceCents = input.priceCents;
+    return service;
   },
 
   async getBarbers() {
