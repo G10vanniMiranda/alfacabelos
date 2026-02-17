@@ -91,11 +91,15 @@ Crie `.env.local`:
 ```env
 ADMIN_PASSWORD=admin123
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/alfa_barber
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key
+SUPABASE_STORAGE_BUCKET=galeria
 ```
 
 Observacao:
 - `DATABASE_URL` e obrigatoria no ambiente.
 - Defina `ADMIN_PASSWORD` forte em producao.
+- Em producao, configure `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` para upload persistente da galeria.
 
 ## Como Rodar
 

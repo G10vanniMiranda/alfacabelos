@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listAdminBookings, updateBookingStatus } from "@/lib/booking-service";
 
+function isAuthorized(request: NextRequest): boolean {
+  return request.cookies.get("barber_admin")?.value === "ok";
+}
+
 export async function GET(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
+  }
+
   const date = request.nextUrl.searchParams.get("date") ?? undefined;
   const barberId = request.nextUrl.searchParams.get("barberId") ?? undefined;
   const status = (request.nextUrl.searchParams.get("status") ?? "TODOS") as
@@ -15,6 +23,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
+  }
+
   try {
     const payload = await request.json();
     const updated = await updateBookingStatus(payload);
