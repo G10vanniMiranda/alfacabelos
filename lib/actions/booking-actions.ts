@@ -2,10 +2,15 @@
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
 import {
+  createGalleryImage,
   createService,
   createBlockedSlot,
   createBooking,
+  deleteGalleryImage,
   deleteService,
   deleteBlockedSlot,
   updateService,
@@ -126,6 +131,67 @@ export async function deleteServiceAction(payload: { serviceId: string }) {
   revalidatePath("/admin/servicos");
   revalidatePath("/");
   revalidatePath("/agendar");
+}
+
+export async function createGalleryImageAction(payload: {
+  imageUrl: string;
+  altText?: string;
+}) {
+  await createGalleryImage(payload);
+  revalidatePath("/admin/galeria");
+  revalidatePath("/");
+}
+
+const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+function extensionFromMime(mime: string): string {
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  if (mime === "image/avif") return "avif";
+  return "jpg";
+}
+
+export async function uploadGalleryImageAction(formData: FormData) {
+  const fileValue = formData.get("file");
+  const altRaw = String(formData.get("altText") ?? "").trim();
+  const altText = altRaw.length > 0 ? altRaw : undefined;
+
+  if (!(fileValue instanceof File)) {
+    throw new Error("Selecione uma imagem para upload");
+  }
+  if (!ACCEPTED_IMAGE_TYPES.has(fileValue.type)) {
+    throw new Error("Formato inválido. Use JPG, PNG, WEBP ou AVIF");
+  }
+  if (fileValue.size === 0 || fileValue.size > MAX_IMAGE_BYTES) {
+    throw new Error("Imagem deve ter até 5MB");
+  }
+
+  const ext = extensionFromMime(fileValue.type);
+  const filename = `${Date.now()}-${randomUUID()}.${ext}`;
+  const relativePath = `/uploads/galeria/${filename}`;
+  const uploadDir = path.join(process.cwd(), "public", "uploads", "galeria");
+  const absolutePath = path.join(uploadDir, filename);
+
+  await mkdir(uploadDir, { recursive: true });
+  const buffer = Buffer.from(await fileValue.arrayBuffer());
+  await writeFile(absolutePath, buffer);
+
+  await createGalleryImage({ imageUrl: relativePath, altText });
+  revalidatePath("/admin/galeria");
+  revalidatePath("/");
+}
+
+export async function deleteGalleryImageAction(payload: { galleryImageId: string; imageUrl?: string }) {
+  await deleteGalleryImage(payload);
+
+  if (payload.imageUrl?.startsWith("/uploads/galeria/")) {
+    const absolutePath = path.join(process.cwd(), "public", payload.imageUrl);
+    await unlink(absolutePath).catch(() => undefined);
+  }
+
+  revalidatePath("/admin/galeria");
+  revalidatePath("/");
 }
 
 export async function isAdminAuthenticated() {

@@ -43,6 +43,13 @@ export type ClientUser = {
   createdAt: string;
 };
 
+export type GalleryImage = {
+  id: string;
+  imageUrl: string;
+  altText?: string;
+  createdAt: string;
+};
+
 export type BookingWithRelations = Booking & {
   barber: Barber;
   service: Service;

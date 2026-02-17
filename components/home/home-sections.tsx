@@ -1,9 +1,9 @@
-import { listBarbers, listServices } from "@/lib/booking-service";
+import { listBarbers, listGalleryImages, listServices } from "@/lib/booking-service";
 import { testimonials } from "@/lib/data/seed";
 import { formatBRLFromCents } from "@/lib/utils";
 
 export async function HomeSections() {
-  const [services, barbers] = await Promise.all([listServices(), listBarbers()]);
+  const [services, barbers, galleryImages] = await Promise.all([listServices(), listBarbers(), listGalleryImages()]);
 
   return (
     <>
@@ -49,12 +49,23 @@ export async function HomeSections() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <h2 className="text-3xl font-bold text-zinc-100">Galeria</h2>
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map((item) => (
-              <div
-                key={item}
-                className="aspect-square rounded-lg border border-zinc-800 bg-linear-to-br from-zinc-900 via-zinc-800 to-cyan-950"
-              />
-            ))}
+            {galleryImages.length > 0
+              ? galleryImages.map((image) => (
+                  <article key={image.id} className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
+                    <img
+                      src={image.imageUrl}
+                      alt={image.altText ?? "Foto da galeria da barbearia"}
+                      className="aspect-square w-full object-cover transition duration-300 hover:scale-105"
+                      loading="lazy"
+                    />
+                  </article>
+                ))
+              : [1, 2, 3, 4].map((item) => (
+                  <div
+                    key={item}
+                    className="aspect-square rounded-lg border border-zinc-800 bg-linear-to-br from-zinc-900 via-zinc-800 to-cyan-950"
+                  />
+                ))}
           </div>
         </div>
       </section>
@@ -79,12 +90,45 @@ export async function HomeSections() {
 
       <section id="faq" className="border-y border-zinc-800 bg-zinc-900/40 py-16">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="text-3xl font-bold text-zinc-100">FAQ</h2>
-          <ul className="mt-4 space-y-2 text-sm text-zinc-300">
-            <li>Posso reagendar? Sim, pela area admin.</li>
-            <li>Tem encaixe sem horario? Depende da agenda do dia.</li>
-            <li>Quais formas de pagamento? Pix, debito e credito.</li>
-          </ul>
+          <div className="max-w-3xl">
+            <p className="text-xs uppercase tracking-[0.22em] text-cyan-300">Dúvidas frequentes</p>
+            <h2 className="mt-3 text-3xl font-bold text-zinc-100">FAQ</h2>
+            <p className="mt-3 text-sm text-zinc-400">
+              Respostas objetivas sobre agendamento, atendimento e formas de pagamento.
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-3">
+            <details className="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 open:border-cyan-400/40 open:bg-cyan-500/5">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-zinc-100">
+                Posso reagendar meu horário?
+                <span className="text-zinc-400 transition group-open:rotate-45 group-open:text-cyan-300">+</span>
+              </summary>
+              <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+                Sim. O reagendamento pode ser feito pela equipe administrativa conforme disponibilidade na agenda.
+              </p>
+            </details>
+
+            <details className="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 open:border-cyan-400/40 open:bg-cyan-500/5">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-zinc-100">
+                Vocês atendem por encaixe?
+                <span className="text-zinc-400 transition group-open:rotate-45 group-open:text-cyan-300">+</span>
+              </summary>
+              <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+                Atendemos encaixes quando há janela livre no dia. Para garantir horário, o ideal é agendar antecipadamente.
+              </p>
+            </details>
+
+            <details className="group rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 open:border-cyan-400/40 open:bg-cyan-500/5">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-zinc-100">
+                Quais formas de pagamento são aceitas?
+                <span className="text-zinc-400 transition group-open:rotate-45 group-open:text-cyan-300">+</span>
+              </summary>
+              <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+                Aceitamos Pix, cartão de débito e cartão de crédito.
+              </p>
+            </details>
+          </div>
         </div>
       </section>
 

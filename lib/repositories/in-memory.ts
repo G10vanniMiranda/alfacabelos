@@ -1,13 +1,14 @@
 import { barbersSeed, servicesSeed } from "@/lib/data/seed";
 import { overlaps } from "@/lib/utils";
-import { Barber, BlockedSlot, Booking, BookingFilters, BookingStatus, BookingWithRelations, Service } from "@/types/domain";
-import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput } from "./types";
+import { Barber, BlockedSlot, Booking, BookingFilters, BookingStatus, BookingWithRelations, GalleryImage, Service } from "@/types/domain";
+import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput } from "./types";
 
 const data = {
   barbers: [...barbersSeed] as Barber[],
   services: [...servicesSeed] as Service[],
   bookings: [] as Booking[],
   blockedSlots: [] as BlockedSlot[],
+  galleryImages: [] as GalleryImage[],
 };
 
 function withRelations(booking: Booking): BookingWithRelations {
@@ -170,6 +171,32 @@ export const inMemoryRepository: BookingRepository = {
       return false;
     }
     data.blockedSlots.splice(index, 1);
+    return true;
+  },
+
+  async listGalleryImages() {
+    return [...data.galleryImages].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
+
+  async createGalleryImage(input: CreateGalleryImageInput) {
+    const image: GalleryImage = {
+      id: createId("gallery"),
+      imageUrl: input.imageUrl,
+      altText: input.altText,
+      createdAt: new Date().toISOString(),
+    };
+
+    data.galleryImages.push(image);
+    return image;
+  },
+
+  async deleteGalleryImage(galleryImageId: string) {
+    const index = data.galleryImages.findIndex((item) => item.id === galleryImageId);
+    if (index < 0) {
+      return false;
+    }
+
+    data.galleryImages.splice(index, 1);
     return true;
   },
 };

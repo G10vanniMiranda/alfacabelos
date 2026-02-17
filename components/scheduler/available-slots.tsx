@@ -22,7 +22,7 @@ export function AvailableSlots({
   }
 
   return (
-    <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
+    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
       {slots.map((slot) => {
         const selected = slot.start === selectedStart;
         return (
@@ -42,4 +42,3 @@ export function AvailableSlots({
     </div>
   );
 }
-

@@ -2,9 +2,11 @@ import { BUSINESS_CONFIG } from "@/lib/config";
 import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
 import { repository } from "@/lib/repositories";
 import {
+  createGalleryImageSchema,
   createBlockedSlotSchema,
   createBookingSchema,
   createServiceSchema,
+  deleteGalleryImageSchema,
   updateBookingStatusSchema,
   updateServiceSchema,
 } from "@/lib/validators/schemas";
@@ -14,6 +16,10 @@ import { addMinutesToIso, overlaps } from "./utils";
 
 export async function listServices() {
   return repository.getServices();
+}
+
+export async function listGalleryImages() {
+  return repository.listGalleryImages();
 }
 
 export async function createService(input: unknown) {
@@ -56,6 +62,32 @@ export async function deleteService(serviceId: string) {
   if (!deleted) {
     throw new Error("Servico nao encontrado");
   }
+}
+
+export async function createGalleryImage(input: unknown) {
+  const parsed = createGalleryImageSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados da foto invalidos");
+  }
+
+  return repository.createGalleryImage({
+    imageUrl: parsed.data.imageUrl,
+    altText: parsed.data.altText,
+  });
+}
+
+export async function deleteGalleryImage(input: unknown) {
+  const parsed = deleteGalleryImageSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Foto invalida");
+  }
+
+  const deleted = await repository.deleteGalleryImage(parsed.data.galleryImageId);
+  if (!deleted) {
+    throw new Error("Foto nao encontrada");
+  }
+
+  return true;
 }
 
 export async function listBarbers() {

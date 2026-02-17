@@ -109,8 +109,8 @@ export function AdminServices({ services }: AdminServicesProps) {
 
   return (
     <section className="space-y-6">
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4">
-        <h2 className="text-2xl font-semibold text-zinc-100">Serviços</h2>
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-4 sm:px-5">
+        <h2 className="text-xl font-semibold text-zinc-100 sm:text-2xl">Serviços</h2>
         <p className="mt-1 text-sm text-zinc-400">Gerencie os serviços exibidos para os clientes.</p>
       </div>
 
@@ -135,7 +135,7 @@ export function AdminServices({ services }: AdminServicesProps) {
             type="button"
             disabled={isPending}
             onClick={submitNewService}
-            className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-70"
+            className="w-full rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-70 md:w-auto"
           >
             Adicionar
           </button>
@@ -154,12 +154,12 @@ export function AdminServices({ services }: AdminServicesProps) {
                 <p className="font-semibold text-zinc-100">{service.name}</p>
                 <p className="mt-1 text-sm text-cyan-300">R$ {formatPriceInput(service.priceCents)}</p>
               </div>
-              <div className="mt-3 flex items-center gap-2 sm:mt-0">
+              <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0 sm:justify-end">
                 <button
                   type="button"
                   disabled={isPending}
                   onClick={() => openEditModal(service)}
-                  className="rounded-md border border-zinc-600 px-3 py-2 text-sm font-semibold text-zinc-100 transition hover:border-cyan-300 disabled:opacity-70"
+                  className="flex-1 rounded-md border border-zinc-600 px-3 py-2 text-sm font-semibold text-zinc-100 transition hover:border-cyan-300 disabled:opacity-70 sm:flex-none"
                 >
                   Editar
                 </button>
@@ -167,7 +167,7 @@ export function AdminServices({ services }: AdminServicesProps) {
                   type="button"
                   disabled={isPending}
                   onClick={() => deleteService(service.id)}
-                  className="rounded-md border border-red-500/60 px-3 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/10 disabled:opacity-70"
+                  className="flex-1 rounded-md border border-red-500/60 px-3 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/10 disabled:opacity-70 sm:flex-none"
                 >
                   Excluir
                 </button>
@@ -179,7 +179,7 @@ export function AdminServices({ services }: AdminServicesProps) {
 
       {editingService ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
             <h3 className="text-lg font-semibold text-zinc-100">Editar serviço</h3>
             <p className="mt-1 text-sm text-zinc-400">Atualize nome e preço do serviço.</p>
 
@@ -205,11 +205,11 @@ export function AdminServices({ services }: AdminServicesProps) {
               </div>
             </div>
 
-            <div className="mt-5 flex items-center justify-end gap-2">
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={closeEditModal}
-                className="rounded-md border border-zinc-600 px-3 py-2 text-sm font-semibold text-zinc-200"
+                className="w-full rounded-md border border-zinc-600 px-3 py-2 text-sm font-semibold text-zinc-200 sm:w-auto"
               >
                 Cancelar
               </button>
@@ -217,7 +217,7 @@ export function AdminServices({ services }: AdminServicesProps) {
                 type="button"
                 disabled={isPending}
                 onClick={submitEditService}
-                className="rounded-md bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-70"
+                className="w-full rounded-md bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-70 sm:w-auto"
               >
                 Salvar
               </button>

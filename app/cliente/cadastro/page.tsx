@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { ClientRegisterForm } from "@/components/client/client-register-form";
-import { SiteHeader } from "@/components/ui/site-header";
 
 export const metadata = {
   title: "Cadastro Cliente | ALFA Barber",
@@ -9,7 +8,6 @@ export const metadata = {
 export default function ClientRegisterPage() {
   return (
     <div className="min-h-screen pb-12">
-      <SiteHeader />
       <main className="mx-auto max-w-6xl px-4 sm:px-6">
         <Suspense fallback={<div className="mx-auto mt-12 w-full max-w-md text-sm text-zinc-400">Carregando...</div>}>
           <ClientRegisterForm />

@@ -128,7 +128,7 @@ export function SchedulerWizard({
   const selectedService = services.find((item) => item.id === draft.serviceId);
 
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-8">
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 sm:p-8">
       <Stepper currentStep={step} />
 
       {step === 1 && (
@@ -203,12 +203,12 @@ export function SchedulerWizard({
         </div>
       )}
 
-      <div className="mt-8 flex items-center justify-between">
+      <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"
           onClick={() => setStep((prev) => Math.max(1, prev - 1))}
           disabled={step === 1 || isPending}
-          className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 disabled:opacity-50"
+          className="w-full rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 disabled:opacity-50 sm:w-auto"
         >
           Voltar
         </button>
@@ -223,7 +223,7 @@ export function SchedulerWizard({
               }
               setStep((prev) => Math.min(3, prev + 1));
             }}
-            className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950"
+            className="w-full rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950 sm:w-auto"
           >
             Continuar
           </button>
@@ -232,7 +232,7 @@ export function SchedulerWizard({
             type="button"
             onClick={submitBooking}
             disabled={isPending}
-            className="rounded-lg bg-cyan-400 px-5 py-2 text-sm font-bold text-zinc-950 disabled:opacity-70"
+            className="w-full rounded-lg bg-cyan-400 px-5 py-2 text-sm font-bold text-zinc-950 disabled:opacity-70 sm:w-auto"
           >
             {isPending ? "Confirmando..." : "Confirmar agendamento"}
           </button>

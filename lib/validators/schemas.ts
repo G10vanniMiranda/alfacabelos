@@ -63,3 +63,15 @@ export const updateServiceSchema = z.object({
   name: z.string().trim().min(2, "Nome do serviço é obrigatório"),
   priceCents: z.number().int().positive("Preço deve ser maior que zero"),
 });
+
+export const createGalleryImageSchema = z.object({
+  imageUrl: z
+    .string()
+    .trim()
+    .url("Informe uma URL válida para a foto"),
+  altText: z.string().trim().max(120, "Texto alternativo muito longo").optional(),
+});
+
+export const deleteGalleryImageSchema = z.object({
+  galleryImageId: z.string().min(1, "Foto inválida"),
+});

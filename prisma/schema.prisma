@@ -70,3 +70,10 @@ model Client {
   passwordHash    String
   createdAt       DateTime @default(now())
 }
+
+model GalleryImage {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  altText   String?
+  createdAt DateTime @default(now())
+}

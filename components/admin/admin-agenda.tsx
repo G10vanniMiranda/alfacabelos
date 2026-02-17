@@ -48,8 +48,8 @@ export function AdminAgenda({ bookings, barbers }: AdminAgendaProps) {
 
   return (
     <section className="space-y-6">
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4">
-        <h2 className="text-2xl font-semibold text-zinc-100">Agenda</h2>
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-4 sm:px-5">
+        <h2 className="text-xl font-semibold text-zinc-100 sm:text-2xl">Agenda</h2>
         <p className="mt-1 text-sm text-zinc-400">Acompanhe e atualize os agendamentos.</p>
       </div>
 
@@ -84,8 +84,8 @@ export function AdminAgenda({ bookings, barbers }: AdminAgendaProps) {
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-800">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-xl border border-zinc-800">
+        <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="bg-zinc-900 text-zinc-300">
             <tr>
               <th className="px-3 py-2">Cliente</th>
@@ -105,14 +105,14 @@ export function AdminAgenda({ bookings, barbers }: AdminAgendaProps) {
                 </td>
                 <td className="px-3 py-2 text-zinc-200">{booking.service.name}</td>
                 <td className="px-3 py-2 text-zinc-200">{booking.barber.name}</td>
-                <td className="px-3 py-2 text-zinc-300">
+                <td className="whitespace-nowrap px-3 py-2 text-zinc-300">
                   {new Date(booking.dateTimeStart).toLocaleString("pt-BR")}
                 </td>
                 <td className="px-3 py-2">
                   <StatusBadge status={booking.status} />
                 </td>
                 <td className="px-3 py-2">
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       disabled={isPending}

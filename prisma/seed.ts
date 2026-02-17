@@ -7,6 +7,7 @@ async function main() {
   await prisma.client.deleteMany();
   await prisma.booking.deleteMany();
   await prisma.blockedSlot.deleteMany();
+  await prisma.galleryImage.deleteMany();
   await prisma.barber.deleteMany();
   await prisma.service.deleteMany();
 
@@ -35,6 +36,21 @@ async function main() {
       dateTimeEnd: new Date(new Date().setHours(13, 0, 0, 0)),
       reason: "Almoco",
     },
+  });
+
+  await prisma.galleryImage.createMany({
+    data: [
+      {
+        imageUrl:
+          "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?auto=format&fit=crop&w=900&q=80",
+        altText: "Cliente finalizando corte com acabamento moderno",
+      },
+      {
+        imageUrl:
+          "https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=900&q=80",
+        altText: "Ambiente da barbearia com cadeira e bancada profissional",
+      },
+    ],
   });
 
   console.log("Seed executado com sucesso", { joaoVitor: joaoVitor.id });

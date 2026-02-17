@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { barbersSeed, servicesSeed } from "@/lib/data/seed";
-import { Barber, Booking, BookingWithRelations, BlockedSlot } from "@/types/domain";
-import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput } from "./types";
+import { Barber, Booking, BookingWithRelations, BlockedSlot, GalleryImage } from "@/types/domain";
+import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput } from "./types";
 
 function toBooking(row: {
   id: string;
@@ -59,7 +59,68 @@ function toBarber(row: {
   };
 }
 
+function toGalleryImage(row: {
+  id: string;
+  imageUrl: string;
+  altText: string | null;
+  createdAt: Date;
+}): GalleryImage {
+  return {
+    id: row.id,
+    imageUrl: row.imageUrl,
+    altText: row.altText ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 let defaultsEnsured = false;
+let galleryTableChecked = false;
+let galleryTableExists = false;
+
+function getGalleryDelegate() {
+  return (prisma as unknown as { galleryImage?: {
+    findMany: (args: unknown) => Promise<Array<{ id: string; imageUrl: string; altText: string | null; createdAt: Date }>>;
+    create: (args: unknown) => Promise<{ id: string; imageUrl: string; altText: string | null; createdAt: Date }>;
+    deleteMany: (args: unknown) => Promise<{ count: number }>;
+  } }).galleryImage;
+}
+
+function isGalleryTableMissing(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybe = error as { code?: string; message?: string };
+  if (maybe.code === "P2021") {
+    return true;
+  }
+
+  return typeof maybe.message === "string" && maybe.message.includes("GalleryImage") && maybe.message.includes("does not exist");
+}
+
+async function ensureGalleryTableExists(): Promise<boolean> {
+  if (galleryTableChecked) {
+    return galleryTableExists;
+  }
+
+  try {
+    const result = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'GalleryImage'
+      ) AS "exists"
+    `;
+    galleryTableExists = result[0]?.exists === true;
+  } catch {
+    galleryTableExists = false;
+  } finally {
+    galleryTableChecked = true;
+  }
+
+  return galleryTableExists;
+}
 
 async function ensureDefaultCatalog() {
   if (defaultsEnsured) {
@@ -290,5 +351,83 @@ export const prismaRepository: BookingRepository = {
       where: { id: blockedSlotId },
     });
     return result.count > 0;
+  },
+
+  async listGalleryImages() {
+    const hasTable = await ensureGalleryTableExists();
+    if (!hasTable) {
+      return [];
+    }
+
+    const gallery = getGalleryDelegate();
+    if (!gallery) {
+      return [];
+    }
+
+    try {
+      const rows = await gallery.findMany({
+        orderBy: { createdAt: "desc" },
+      });
+      return rows.map(toGalleryImage);
+    } catch (error) {
+      if (isGalleryTableMissing(error)) {
+        galleryTableExists = false;
+        return [];
+      }
+      throw error;
+    }
+  },
+
+  async createGalleryImage(input: CreateGalleryImageInput) {
+    const hasTable = await ensureGalleryTableExists();
+    if (!hasTable) {
+      throw new Error("Galeria indisponivel. Execute a migration do banco (GalleryImage).");
+    }
+
+    const gallery = getGalleryDelegate();
+    if (!gallery) {
+      throw new Error("Galeria indisponivel. Execute a migration e regenere o Prisma Client.");
+    }
+
+    try {
+      const created = await gallery.create({
+        data: {
+          imageUrl: input.imageUrl,
+          altText: input.altText ?? null,
+        },
+      });
+      return toGalleryImage(created);
+    } catch (error) {
+      if (isGalleryTableMissing(error)) {
+        galleryTableExists = false;
+        throw new Error("Galeria indisponivel. Execute a migration do banco (GalleryImage).");
+      }
+      throw error;
+    }
+  },
+
+  async deleteGalleryImage(galleryImageId) {
+    const hasTable = await ensureGalleryTableExists();
+    if (!hasTable) {
+      throw new Error("Galeria indisponivel. Execute a migration do banco (GalleryImage).");
+    }
+
+    const gallery = getGalleryDelegate();
+    if (!gallery) {
+      throw new Error("Galeria indisponivel. Execute a migration e regenere o Prisma Client.");
+    }
+
+    try {
+      const result = await gallery.deleteMany({
+        where: { id: galleryImageId },
+      });
+      return result.count > 0;
+    } catch (error) {
+      if (isGalleryTableMissing(error)) {
+        galleryTableExists = false;
+        throw new Error("Galeria indisponivel. Execute a migration do banco (GalleryImage).");
+      }
+      throw error;
+    }
   },
 };

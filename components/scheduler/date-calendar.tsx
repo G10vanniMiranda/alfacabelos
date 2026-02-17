@@ -69,21 +69,21 @@ export function DateCalendar({
 
   return (
     <div className="mt-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 sm:p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 grid grid-cols-[auto_1fr_auto] items-center gap-2">
         <button
           type="button"
           onClick={() => canGoPrev && setView((prev) => addMonths(prev.year, prev.month, -1))}
           disabled={!canGoPrev}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-md border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 sm:text-xs"
         >
           Mes anterior
         </button>
-        <p className="text-sm font-semibold capitalize text-zinc-100">{monthLabel(view.year, view.month)}</p>
+        <p className="text-center text-xs font-semibold capitalize text-zinc-100 sm:text-sm">{monthLabel(view.year, view.month)}</p>
         <button
           type="button"
           onClick={() => canGoNext && setView((prev) => addMonths(prev.year, prev.month, 1))}
           disabled={!canGoNext}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-md border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 sm:text-xs"
         >
           Proximo mes
         </button>
@@ -128,4 +128,3 @@ export function DateCalendar({
     </div>
   );
 }
-

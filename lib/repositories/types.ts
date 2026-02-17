@@ -5,6 +5,7 @@ import {
   BookingFilters,
   BookingStatus,
   BookingWithRelations,
+  GalleryImage,
   Service,
 } from "@/types/domain";
 
@@ -24,6 +25,11 @@ export type CreateBlockedSlotInput = {
   reason: string;
 };
 
+export type CreateGalleryImageInput = {
+  imageUrl: string;
+  altText?: string;
+};
+
 export interface BookingRepository {
   getServices(): Promise<Service[]>;
   createService(data: { name: string; priceCents: number; durationMinutes: number }): Promise<Service>;
@@ -39,5 +45,8 @@ export interface BookingRepository {
   updateBookingStatus(bookingId: string, status: BookingStatus): Promise<Booking | undefined>;
   createBlockedSlot(input: CreateBlockedSlotInput): Promise<BlockedSlot>;
   deleteBlockedSlot(blockedSlotId: string): Promise<boolean>;
+  listGalleryImages(): Promise<GalleryImage[]>;
+  createGalleryImage(input: CreateGalleryImageInput): Promise<GalleryImage>;
+  deleteGalleryImage(galleryImageId: string): Promise<boolean>;
 }
 

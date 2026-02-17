@@ -31,11 +31,11 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
   const activeBlocked = blockedSlots.filter((slot) => new Date(slot.dateTimeEnd).getTime() >= now.getTime());
 
   return (
-    <section className="space-y-6">
+    <section className="min-w-0 space-y-6">
       <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
         <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-cyan-500/20 blur-3xl" />
         <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">Visao geral</p>
-        <h2 className="mt-2 text-3xl font-bold text-zinc-100">Dashboard do painel</h2>
+        <h2 className="mt-2 text-2xl font-bold text-zinc-100 sm:text-3xl">Dashboard do painel</h2>
         <p className="mt-2 text-sm text-zinc-400">
           Controle rapido de operacao, com status da agenda e atalhos para gestao.
         </p>
@@ -66,7 +66,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="text-lg font-semibold text-zinc-100">Próximos atendimentos</h3>
             <Link href="/admin/agenda" className="text-sm font-semibold text-cyan-300 hover:text-cyan-200">
               Ver agenda
@@ -108,6 +108,12 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
               >
                 Configurar bloqueios
               </Link>
+              <Link
+                href="/admin/galeria"
+                className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
+              >
+                Gerenciar galeria
+              </Link>
             </div>
           </div>
 
@@ -123,12 +129,12 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
       </div>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="text-lg font-semibold text-zinc-100">Atividade recente</h3>
           <span className="text-xs uppercase tracking-[0.16em] text-zinc-500">últimos registros</span>
         </div>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-140 text-left text-sm">
+          <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="text-zinc-400">
               <tr>
                 <th className="px-2 py-2">Cliente</th>
@@ -160,4 +166,3 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
     </section>
   );
 }
-
