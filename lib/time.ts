@@ -3,6 +3,35 @@ import { getDayRangeIso, getTimeLabel, overlaps, toMinutes } from "@/lib/utils";
 import { AvailableSlot } from "@/types/scheduler";
 import { BlockedSlot, Booking, DailyOperatingConfig } from "@/types/domain";
 
+function mergeDailyWindows(windows: DailyOperatingConfig[]): DailyOperatingConfig[] {
+  const sorted = [...windows].sort((a, b) => a.open.localeCompare(b.open));
+  if (sorted.length === 0) {
+    return [];
+  }
+
+  const merged: DailyOperatingConfig[] = [{ ...sorted[0] }];
+
+  for (let i = 1; i < sorted.length; i += 1) {
+    const current = sorted[i];
+    const last = merged[merged.length - 1];
+    if (!current || !last) {
+      continue;
+    }
+
+    // Join contiguous or overlapping ranges (e.g. 09:00-10:00 + 10:00-11:00 => 09:00-11:00).
+    if (current.open <= last.close) {
+      if (current.close > last.close) {
+        last.close = current.close;
+      }
+      continue;
+    }
+
+    merged.push({ ...current });
+  }
+
+  return merged;
+}
+
 export function generateAvailableSlots(params: {
   date: string;
   barberId: string;
@@ -13,7 +42,9 @@ export function generateAvailableSlots(params: {
 }): AvailableSlot[] {
   const { date, barberId, serviceDurationMinutes, barberBookings, blockedSlots, operatingHours } = params;
   const day = new Date(`${date}T12:00:00`).getDay();
-  const windows = (operatingHours ?? BUSINESS_CONFIG.operatingHours).filter((entry) => entry.dayOfWeek === day);
+  const windows = mergeDailyWindows(
+    (operatingHours ?? BUSINESS_CONFIG.operatingHours).filter((entry) => entry.dayOfWeek === day),
+  );
   if (windows.length === 0) {
     return [];
   }
@@ -25,7 +56,7 @@ export function generateAvailableSlots(params: {
 
     for (
       let currentMinutes = startMinutes;
-      currentMinutes + serviceDurationMinutes <= endMinutes;
+      currentMinutes < endMinutes;
       currentMinutes += BUSINESS_CONFIG.slotIntervalMinutes
     ) {
       const hours = Math.floor(currentMinutes / 60);

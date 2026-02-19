@@ -1,7 +1,7 @@
 import { DailyOperatingConfig } from "@/types/domain";
 
 export const BUSINESS_CONFIG = {
-  slotIntervalMinutes: 30,
+  slotIntervalMinutes: 60,
   bufferBetweenBookingsMinutes: 10,
   timezone: "America/Sao_Paulo",
   operatingHours: [

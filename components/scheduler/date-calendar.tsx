@@ -28,14 +28,16 @@ export function DateCalendar({
   minDate,
   selectedDate,
   onSelect,
+  maxMonthsForward = 5,
 }: {
   minDate: string;
   selectedDate?: string;
   onSelect: (isoDate: string) => void;
+  maxMonthsForward?: number;
 }) {
   const min = parseIsoDate(minDate);
   const minMonthKey = `${min.year}-${min.month}`;
-  const maxMonth = addMonths(min.year, min.month, 5);
+  const maxMonth = addMonths(min.year, min.month, maxMonthsForward);
   const maxMonthKey = `${maxMonth.year}-${maxMonth.month}`;
 
   const initialMonth = selectedDate ? parseIsoDate(selectedDate) : min;
