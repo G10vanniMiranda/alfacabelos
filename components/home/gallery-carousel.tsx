@@ -42,7 +42,7 @@ export function GalleryCarousel({ images }: GalleryCarouselProps) {
       return;
     }
 
-    slide.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+    track.scrollTo({ left: slide.offsetLeft, behavior: "smooth" });
     setActiveIndex(clamped);
   }
 
@@ -73,7 +73,7 @@ export function GalleryCarousel({ images }: GalleryCarouselProps) {
         return;
       }
 
-      slide.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+      track.scrollTo({ left: slide.offsetLeft, behavior: "smooth" });
       setActiveIndex(nextIndex);
     }, 4500);
 
