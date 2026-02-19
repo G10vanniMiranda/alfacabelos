@@ -14,10 +14,15 @@ export function AdminGallery({ images }: AdminGalleryProps) {
   const { pushToast } = useToast();
   const [form, setForm] = useState({ altText: "" });
   const [file, setFile] = useState<File | null>(null);
+  const maxImageBytes = 5 * 1024 * 1024;
 
   function submitImage() {
     if (!file) {
       pushToast("Selecione uma imagem para upload", "error");
+      return;
+    }
+    if (file.size > maxImageBytes) {
+      pushToast("Imagem deve ter no maximo 5MB", "error");
       return;
     }
 

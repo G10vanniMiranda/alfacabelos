@@ -28,7 +28,7 @@ import {
 
 const ADMIN_COOKIE = "barber_admin";
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "galeria";
 
 async function assertAdminSession() {
@@ -290,7 +290,7 @@ export async function uploadGalleryImageAction(formData: FormData) {
     await writeFile(absolutePath, buffer);
     imageUrl = relativePath;
   } else {
-    throw new Error("Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY para upload em produção");
+    throw new Error("Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY (ou SUPABASE_KEY) para upload em producao");
   }
 
   await createGalleryImage({ imageUrl, altText });
@@ -320,6 +320,7 @@ export async function isAdminAuthenticated() {
   const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
   return isAdminSessionTokenValid(token);
 }
+
 
 
 
