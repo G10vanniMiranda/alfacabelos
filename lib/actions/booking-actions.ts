@@ -346,5 +346,9 @@ export async function deleteGalleryImageAction(payload: { galleryImageId: string
 export async function isAdminAuthenticated() {
   const cookieStore = await cookies();
   const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
-  return isAdminSessionTokenValid(token);
+  try {
+    return await isAdminSessionTokenValid(token);
+  } catch {
+    return false;
+  }
 }

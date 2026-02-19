@@ -11,11 +11,11 @@ export async function HeroSection() {
         <div>
           <p className="text-sm uppercase tracking-[0.28em] text-cyan-300">Barbearia premium</p>
           <h1 className="mt-4 text-4xl font-black leading-tight text-zinc-50 sm:text-5xl">
-            Seu estilo comeca
+            Seu estilo começa
             <span className="text-cyan-300"> na cadeira certa.</span>
           </h1>
           <p className="mt-5 max-w-xl text-zinc-300">
-            Cortes modernos, acabamento impecavel e agendamento online em 4 passos.
+            Cortes modernos, acabamento impecável e agendamento online em 4 passos.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
