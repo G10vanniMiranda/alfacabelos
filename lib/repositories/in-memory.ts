@@ -1,6 +1,17 @@
 import { barbersSeed, servicesSeed } from "@/lib/data/seed";
+import { BUSINESS_CONFIG } from "@/lib/config";
 import { overlaps } from "@/lib/utils";
-import { Barber, BlockedSlot, Booking, BookingFilters, BookingStatus, BookingWithRelations, GalleryImage, Service } from "@/types/domain";
+import {
+  Barber,
+  BarberAvailability,
+  BlockedSlot,
+  Booking,
+  BookingFilters,
+  BookingStatus,
+  BookingWithRelations,
+  GalleryImage,
+  Service,
+} from "@/types/domain";
 import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput } from "./types";
 
 const data = {
@@ -8,6 +19,7 @@ const data = {
   services: [...servicesSeed] as Service[],
   bookings: [] as Booking[],
   blockedSlots: [] as BlockedSlot[],
+  availabilities: [] as BarberAvailability[],
   galleryImages: [] as GalleryImage[],
 };
 
@@ -172,6 +184,45 @@ export const inMemoryRepository: BookingRepository = {
     }
     data.blockedSlots.splice(index, 1);
     return true;
+  },
+
+  async listBarberAvailabilities(barberId: string) {
+    const saved = data.availabilities
+      .filter((item) => item.barberId === barberId)
+      .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.openTime.localeCompare(b.openTime));
+    if (saved.length > 0) {
+      return saved;
+    }
+
+    return BUSINESS_CONFIG.operatingHours.map((slot) => ({
+      id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
+      barberId,
+      dayOfWeek: slot.dayOfWeek,
+      openTime: slot.open,
+      closeTime: slot.close,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+  },
+
+  async replaceBarberDayAvailabilities(input) {
+    const now = new Date().toISOString();
+    const remaining = data.availabilities.filter(
+      (item) => !(item.barberId === input.barberId && item.dayOfWeek === input.dayOfWeek),
+    );
+
+    const created = input.ranges.map((range) => ({
+      id: createId("availability"),
+      barberId: input.barberId,
+      dayOfWeek: input.dayOfWeek,
+      openTime: range.openTime,
+      closeTime: range.closeTime,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    data.availabilities = [...remaining, ...created];
+    return created;
   },
 
   async listGalleryImages() {

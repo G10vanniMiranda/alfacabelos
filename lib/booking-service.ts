@@ -7,6 +7,7 @@ import {
   createBookingSchema,
   createServiceSchema,
   deleteGalleryImageSchema,
+  replaceBarberDayAvailabilitySchema,
   updateBookingStatusSchema,
   updateServiceSchema,
 } from "@/lib/validators/schemas";
@@ -102,8 +103,11 @@ export async function getAvailableSlots(params: { date: string; barberId?: strin
 
   const { start, end } = getDayRange(params.date);
   const barberId = params.barberId || DEFAULT_BARBER_ID;
-  const bookings = await repository.listBookingsInRange(start, end, barberId);
-  const blockedSlots = await repository.listBlockedSlots(params.date);
+  const [bookings, blockedSlots, availabilities] = await Promise.all([
+    repository.listBookingsInRange(start, end, barberId),
+    repository.listBlockedSlots(params.date),
+    repository.listBarberAvailabilities(barberId),
+  ]);
 
   return generateAvailableSlots({
     date: params.date,
@@ -111,6 +115,11 @@ export async function getAvailableSlots(params: { date: string; barberId?: strin
     serviceDurationMinutes: service.durationMinutes,
     barberBookings: bookings,
     blockedSlots,
+    operatingHours: availabilities.map((item) => ({
+      dayOfWeek: item.dayOfWeek,
+      open: item.openTime,
+      close: item.closeTime,
+    })),
   });
 }
 
@@ -239,3 +248,18 @@ export async function deleteBlockedSlot(blockedSlotId: string) {
   return true;
 }
 
+export async function listBarberAvailabilities(barberId: string) {
+  if (!barberId) {
+    throw new Error("Barbeiro invalido");
+  }
+  return repository.listBarberAvailabilities(barberId);
+}
+
+export async function replaceBarberDayAvailability(input: unknown) {
+  const parsed = replaceBarberDayAvailabilitySchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Disponibilidade invalida");
+  }
+
+  return repository.replaceBarberDayAvailabilities(parsed.data);
+}

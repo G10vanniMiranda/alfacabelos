@@ -7,7 +7,8 @@ import { adminLogoutAction } from "@/lib/actions/booking-actions";
 
 const items = [
   { href: "/admin/dashboard", label: "Dashboard" },
-  { href: "/admin/servicos", label: "Serviços" },
+  { href: "/admin/servicos", label: "Servicos" },
+  { href: "/admin/horarios", label: "Horarios" },
   { href: "/admin/agenda", label: "Agenda" },
   { href: "/admin/ganhos", label: "Ganhos" },
   { href: "/admin/bloqueios", label: "Bloqueios" },
@@ -118,6 +119,7 @@ export function AdminSidebar() {
     </>
   );
 }
+
 
 
 

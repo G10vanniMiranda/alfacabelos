@@ -20,6 +20,7 @@ model Barber {
   isActive   Boolean      @default(true)
   bookings   Booking[]
   blocked    BlockedSlot[]
+  availability BarberAvailability[]
 }
 
 model Service {
@@ -109,4 +110,19 @@ model GalleryImage {
   imageUrl  String
   altText   String?
   createdAt DateTime @default(now())
+}
+
+model BarberAvailability {
+  id        String   @id @default(cuid())
+  barberId  String
+  dayOfWeek Int
+  openTime  String
+  closeTime String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  barber Barber @relation(fields: [barberId], references: [id], onDelete: Cascade)
+
+  @@unique([barberId, dayOfWeek, openTime, closeTime])
+  @@index([barberId])
 }

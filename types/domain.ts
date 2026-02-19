@@ -36,6 +36,16 @@ export type BlockedSlot = {
   createdAt: string;
 };
 
+export type BarberAvailability = {
+  id: string;
+  barberId: string;
+  dayOfWeek: number;
+  openTime: string;
+  closeTime: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ClientUser = {
   id: string;
   name: string;

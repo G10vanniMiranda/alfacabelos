@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { barbersSeed, servicesSeed } from "@/lib/data/seed";
-import { Barber, Booking, BookingWithRelations, BlockedSlot, GalleryImage } from "@/types/domain";
+import { BUSINESS_CONFIG } from "@/lib/config";
+import { Barber, BarberAvailability, Booking, BookingWithRelations, BlockedSlot, GalleryImage } from "@/types/domain";
 import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput } from "./types";
 
 function toBooking(row: {
@@ -73,8 +74,30 @@ function toGalleryImage(row: {
   };
 }
 
+function toBarberAvailability(row: {
+  id: string;
+  barberId: string;
+  dayOfWeek: number;
+  openTime: string;
+  closeTime: string;
+  createdAt: Date;
+  updatedAt: Date;
+}): BarberAvailability {
+  return {
+    id: row.id,
+    barberId: row.barberId,
+    dayOfWeek: row.dayOfWeek,
+    openTime: row.openTime,
+    closeTime: row.closeTime,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 let galleryTableChecked = false;
 let galleryTableExists = false;
+let availabilityTableChecked = false;
+let availabilityTableExists = false;
 
 function getGalleryDelegate() {
   return (prisma as unknown as {
@@ -84,6 +107,26 @@ function getGalleryDelegate() {
       deleteMany: (args: unknown) => Promise<{ count: number }>;
     }
   }).galleryImage;
+}
+
+function getBarberAvailabilityDelegate() {
+  return (prisma as unknown as {
+    barberAvailability?: {
+      findMany: (args: unknown) => Promise<
+        Array<{
+          id: string;
+          barberId: string;
+          dayOfWeek: number;
+          openTime: string;
+          closeTime: string;
+          createdAt: Date;
+          updatedAt: Date;
+        }>
+      >;
+      createMany: (args: unknown) => Promise<{ count: number }>;
+      deleteMany: (args: unknown) => Promise<{ count: number }>;
+    };
+  }).barberAvailability;
 }
 
 function isGalleryTableMissing(error: unknown): boolean {
@@ -97,6 +140,23 @@ function isGalleryTableMissing(error: unknown): boolean {
   }
 
   return typeof maybe.message === "string" && maybe.message.includes("GalleryImage") && maybe.message.includes("does not exist");
+}
+
+function isBarberAvailabilityTableMissing(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybe = error as { code?: string; message?: string };
+  if (maybe.code === "P2021") {
+    return true;
+  }
+
+  return (
+    typeof maybe.message === "string" &&
+    maybe.message.includes("BarberAvailability") &&
+    maybe.message.includes("does not exist")
+  );
 }
 
 async function ensureGalleryTableExists(): Promise<boolean> {
@@ -121,6 +181,30 @@ async function ensureGalleryTableExists(): Promise<boolean> {
   }
 
   return galleryTableExists;
+}
+
+async function ensureBarberAvailabilityTableExists(): Promise<boolean> {
+  if (availabilityTableChecked) {
+    return availabilityTableExists;
+  }
+
+  try {
+    const result = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'BarberAvailability'
+      ) AS "exists"
+    `;
+    availabilityTableExists = result[0]?.exists === true;
+  } catch {
+    availabilityTableExists = false;
+  } finally {
+    availabilityTableChecked = true;
+  }
+
+  return availabilityTableExists;
 }
 
 export const prismaRepository: BookingRepository = {
@@ -336,6 +420,130 @@ export const prismaRepository: BookingRepository = {
       where: { id: blockedSlotId },
     });
     return result.count > 0;
+  },
+
+  async listBarberAvailabilities(barberId) {
+    const hasTable = await ensureBarberAvailabilityTableExists();
+    if (!hasTable) {
+      return BUSINESS_CONFIG.operatingHours.map((slot) => ({
+        id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
+        barberId,
+        dayOfWeek: slot.dayOfWeek,
+        openTime: slot.open,
+        closeTime: slot.close,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+    }
+
+    const availability = getBarberAvailabilityDelegate();
+    if (!availability) {
+      return BUSINESS_CONFIG.operatingHours.map((slot) => ({
+        id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
+        barberId,
+        dayOfWeek: slot.dayOfWeek,
+        openTime: slot.open,
+        closeTime: slot.close,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+    }
+
+    try {
+      const rows = await availability.findMany({
+        where: { barberId },
+        orderBy: [{ dayOfWeek: "asc" }, { openTime: "asc" }],
+      });
+
+      if (rows.length > 0) {
+        return rows.map(toBarberAvailability);
+      }
+
+      return BUSINESS_CONFIG.operatingHours.map((slot) => ({
+        id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
+        barberId,
+        dayOfWeek: slot.dayOfWeek,
+        openTime: slot.open,
+        closeTime: slot.close,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch (error) {
+      if (isBarberAvailabilityTableMissing(error)) {
+        availabilityTableExists = false;
+        return BUSINESS_CONFIG.operatingHours.map((slot) => ({
+          id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
+          barberId,
+          dayOfWeek: slot.dayOfWeek,
+          openTime: slot.open,
+          closeTime: slot.close,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+      }
+      throw error;
+    }
+  },
+
+  async replaceBarberDayAvailabilities(input) {
+    const hasTable = await ensureBarberAvailabilityTableExists();
+    if (!hasTable) {
+      throw new Error("Disponibilidade indisponivel. Execute a migration do banco (BarberAvailability).");
+    }
+
+    const availability = getBarberAvailabilityDelegate();
+    if (!availability) {
+      throw new Error("Disponibilidade indisponivel. Execute a migration e regenere o Prisma Client.");
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        const txAvailability = (tx as unknown as {
+          barberAvailability?: {
+            deleteMany: (args: unknown) => Promise<{ count: number }>;
+            createMany: (args: unknown) => Promise<{ count: number }>;
+          };
+        }).barberAvailability;
+
+        if (!txAvailability) {
+          throw new Error("Disponibilidade indisponivel. Execute a migration e regenere o Prisma Client.");
+        }
+
+        await txAvailability.deleteMany({
+          where: {
+            barberId: input.barberId,
+            dayOfWeek: input.dayOfWeek,
+          },
+        });
+
+        if (input.ranges.length > 0) {
+          await txAvailability.createMany({
+            data: input.ranges.map((range) => ({
+              barberId: input.barberId,
+              dayOfWeek: input.dayOfWeek,
+              openTime: range.openTime,
+              closeTime: range.closeTime,
+            })),
+          });
+        }
+      });
+
+      const rows = await availability.findMany({
+        where: {
+          barberId: input.barberId,
+          dayOfWeek: input.dayOfWeek,
+        },
+        orderBy: { openTime: "asc" },
+      });
+
+      return rows.map(toBarberAvailability);
+    } catch (error) {
+      if (isBarberAvailabilityTableMissing(error)) {
+        availabilityTableExists = false;
+        throw new Error("Disponibilidade indisponivel. Execute a migration do banco (BarberAvailability).");
+      }
+      throw error;
+    }
   },
 
   async listGalleryImages() {

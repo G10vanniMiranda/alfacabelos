@@ -5,6 +5,7 @@ import {
   BookingFilters,
   BookingStatus,
   BookingWithRelations,
+  BarberAvailability,
   GalleryImage,
   Service,
 } from "@/types/domain";
@@ -30,6 +31,15 @@ export type CreateGalleryImageInput = {
   altText?: string;
 };
 
+export type UpsertBarberAvailabilityInput = {
+  barberId: string;
+  dayOfWeek: number;
+  ranges: Array<{
+    openTime: string;
+    closeTime: string;
+  }>;
+};
+
 export interface BookingRepository {
   getServices(): Promise<Service[]>;
   createService(data: { name: string; priceCents: number; durationMinutes: number }): Promise<Service>;
@@ -45,6 +55,8 @@ export interface BookingRepository {
   updateBookingStatus(bookingId: string, status: BookingStatus): Promise<Booking | undefined>;
   createBlockedSlot(input: CreateBlockedSlotInput): Promise<BlockedSlot>;
   deleteBlockedSlot(blockedSlotId: string): Promise<boolean>;
+  listBarberAvailabilities(barberId: string): Promise<BarberAvailability[]>;
+  replaceBarberDayAvailabilities(input: UpsertBarberAvailabilityInput): Promise<BarberAvailability[]>;
   listGalleryImages(): Promise<GalleryImage[]>;
   createGalleryImage(input: CreateGalleryImageInput): Promise<GalleryImage>;
   deleteGalleryImage(galleryImageId: string): Promise<boolean>;

@@ -65,6 +65,37 @@ export const deleteBlockedSlotSchema = z.object({
   blockedSlotId: z.string().min(1),
 });
 
+const timeStringRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+export const replaceBarberDayAvailabilitySchema = z
+  .object({
+    barberId: z.string().min(1, "Barbeiro e obrigatorio"),
+    dayOfWeek: z.number().int().min(0).max(6),
+    ranges: z.array(
+      z
+        .object({
+          openTime: z.string().regex(timeStringRegex, "Horario inicial invalido"),
+          closeTime: z.string().regex(timeStringRegex, "Horario final invalido"),
+        })
+        .refine((data) => data.openTime < data.closeTime, {
+          message: "Horario final deve ser maior que o inicial",
+          path: ["closeTime"],
+        }),
+    ),
+  })
+  .refine((data) => {
+    const sorted = [...data.ranges].sort((a, b) => a.openTime.localeCompare(b.openTime));
+    for (let i = 1; i < sorted.length; i += 1) {
+      if (sorted[i - 1] && sorted[i - 1].closeTime > sorted[i].openTime) {
+        return false;
+      }
+    }
+    return true;
+  }, {
+    message: "As faixas de horario nao podem se sobrepor",
+    path: ["ranges"],
+  });
+
 export const createServiceSchema = z.object({
   name: z.string().trim().min(2, "Nome do serviço é obrigatório"),
   priceCents: z.number().int().positive("Preço deve ser maior que zero"),
@@ -87,4 +118,3 @@ export const createGalleryImageSchema = z.object({
 export const deleteGalleryImageSchema = z.object({
   galleryImageId: z.string().min(1, "Foto inválida"),
 });
-

@@ -13,6 +13,7 @@ import {
   deleteGalleryImage,
   deleteService,
   deleteBlockedSlot,
+  replaceBarberDayAvailability,
   updateService,
   updateBookingStatus,
 } from "@/lib/booking-service";
@@ -207,6 +208,20 @@ export async function deleteBlockedSlotAction(payload: { blockedSlotId: string }
   await deleteBlockedSlot(payload.blockedSlotId);
   revalidatePath("/admin/bloqueios");
   revalidatePath("/admin/agenda");
+}
+
+export async function replaceBarberDayAvailabilityAction(payload: {
+  barberId: string;
+  dayOfWeek: number;
+  ranges: Array<{
+    openTime: string;
+    closeTime: string;
+  }>;
+}) {
+  await assertAdminSession();
+  await replaceBarberDayAvailability(payload);
+  revalidatePath("/admin/horarios");
+  revalidatePath("/agendar");
 }
 
 export async function updateServiceAction(payload: {
