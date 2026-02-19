@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: https:",
               "font-src 'self' data: https:",
               "connect-src 'self' https:",
+              "frame-src 'self' https://www.google.com https://maps.google.com https://www.google.com/maps",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
