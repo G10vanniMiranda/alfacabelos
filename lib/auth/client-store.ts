@@ -76,7 +76,7 @@ export async function createClient(input: {
     });
     return toClientUser(created);
   } catch {
-    throw new Error("Ja existe cadastro com este telefone");
+    throw new Error("Já existe cadastro com este telefone");
   }
 }
 

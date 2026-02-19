@@ -5,7 +5,7 @@ import { cancelMyBookingAction, getCurrentClient, logoutClientAction } from "@/l
 import { listClientBookings } from "@/lib/booking-service";
 
 export const metadata = {
-  title: "Minha Area | ALFA Barber",
+  title: "Minha Área | ALFA Barber",
 };
 
 function formatDateTime(iso: string) {
@@ -41,7 +41,7 @@ export default async function ClientAreaPage() {
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Area do cliente</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Área do cliente</p>
               <h1 className="mt-2 text-3xl font-bold text-zinc-100 sm:text-4xl">Minha agenda</h1>
               <p className="mt-2 text-zinc-400">Acompanhe, confirme e gerencie seus horários em um só lugar.</p>
               <p className="mt-2 text-sm text-zinc-500">{client.name}</p>
@@ -74,7 +74,7 @@ export default async function ClientAreaPage() {
 
         <section className="mt-6 grid gap-3 sm:grid-cols-3">
           <article className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-zinc-400">Proximos</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-zinc-400">Próximos</p>
             <p className="mt-2 text-3xl font-black text-zinc-100">{upcoming.length}</p>
           </article>
           <article className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
@@ -88,10 +88,10 @@ export default async function ClientAreaPage() {
         </section>
 
         <section className="mt-10">
-          <h2 className="text-2xl font-semibold text-zinc-100">Proximos agendamentos</h2>
+          <h2 className="text-2xl font-semibold text-zinc-100">Próximos agendamentos</h2>
           {upcoming.length === 0 ? (
             <p className="mt-4 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/40 p-4 text-sm text-zinc-400">
-              Voce nao tem agendamentos futuros.
+              Você não tem agendamentos futuros.
             </p>
           ) : (
             <div className="mt-4 grid gap-3">
@@ -124,7 +124,7 @@ export default async function ClientAreaPage() {
         </section>
 
         <section className="mt-10">
-          <h2 className="text-2xl font-semibold text-zinc-100">Historico</h2>
+          <h2 className="text-2xl font-semibold text-zinc-100">Histórico</h2>
           {history.length === 0 ? (
             <p className="mt-4 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/40 p-4 text-sm text-zinc-400">
               Nenhum atendimento anterior encontrado.

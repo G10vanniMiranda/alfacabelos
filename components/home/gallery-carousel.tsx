@@ -126,11 +126,11 @@ export function GalleryCarousel({ images }: GalleryCarouselProps) {
               <img
                 src={slide.imageUrl}
                 alt={slide.alt}
-                className="aspect-[4/5] w-full object-cover transition duration-300 hover:scale-[1.02]"
+                className="aspect-4/5 w-full object-cover transition duration-300 hover:scale-[1.02]"
                 loading="lazy"
               />
             ) : (
-              <div className="aspect-[4/5] w-full bg-linear-to-br from-zinc-900 via-zinc-800 to-cyan-950" />
+              <div className="aspect-4/5 w-full bg-linear-to-br from-zinc-900 via-zinc-800 to-cyan-950" />
             )}
           </article>
         ))}
@@ -144,9 +144,8 @@ export function GalleryCarousel({ images }: GalleryCarouselProps) {
               type="button"
               onClick={() => goTo(index)}
               aria-label={`Ir para slide ${index + 1}`}
-              className={`h-2.5 rounded-full transition ${
-                index === activeIndex ? "w-7 bg-cyan-300" : "w-2.5 bg-zinc-600 hover:bg-zinc-500"
-              }`}
+              className={`h-2.5 rounded-full transition ${index === activeIndex ? "w-7 bg-cyan-300" : "w-2.5 bg-zinc-600 hover:bg-zinc-500"
+                }`}
             />
           ))}
         </div>

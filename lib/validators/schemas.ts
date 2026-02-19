@@ -34,18 +34,18 @@ export const clientLoginSchema = z.object({
 });
 
 export const adminLoginSchema = z.object({
-  email: z.string().trim().email("Email invalido"),
-  password: z.string().min(1, "Senha obrigatoria"),
+  email: z.string().trim().email("Email inválido"),
+  password: z.string().min(1, "Senha obrigatória"),
 });
 
 export const createAdminAccessSchema = z
   .object({
-    email: z.string().trim().email("Email invalido"),
+    email: z.string().trim().email("Email inválido"),
     password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
     confirmPassword: z.string().min(8, "Confirme a senha"),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "As senhas nao conferem",
+    message: "As senhas não conferem",
     path: ["confirmPassword"],
   });
 

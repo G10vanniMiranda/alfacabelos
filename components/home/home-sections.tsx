@@ -13,7 +13,7 @@ export async function HomeSections() {
   return (
     <>
       <section id="servicos" className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <h2 className="text-3xl font-bold text-zinc-100">Servicos</h2>
+        <h2 className="text-3xl font-bold text-zinc-100">Serviços</h2>
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           {services.map((service) => (
             <article key={service.id} className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">

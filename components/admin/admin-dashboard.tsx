@@ -91,13 +91,13 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
   function submitService(serviceId: string) {
     const form = serviceForm[serviceId];
     if (!form) {
-      pushToast("Servico invalido", "error");
+      pushToast("Serviço inválido", "error");
       return;
     }
 
     const priceCents = parsePriceToCents(form.price);
     if (!form.name.trim() || !Number.isFinite(priceCents)) {
-      pushToast("Preencha nome e preco valido", "error");
+      pushToast("Preencha nome e preço válido", "error");
       return;
     }
 
@@ -108,10 +108,10 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
           name: form.name.trim(),
           priceCents,
         });
-        pushToast("Servico atualizado", "success");
+        pushToast("Serviço atualizado", "success");
         window.location.reload();
       } catch (error) {
-        pushToast(error instanceof Error ? error.message : "Erro ao atualizar servico", "error");
+        pushToast(error instanceof Error ? error.message : "Erro ao atualizar serviço", "error");
       }
     });
   }
@@ -151,12 +151,12 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
         <div className="rounded-xl border border-zinc-700/80 bg-zinc-950/80 p-4">
           <p className="text-xs uppercase tracking-[0.22em] text-cyan-300">ALFA BARBER</p>
           <h1 className="mt-2 text-xl font-semibold text-zinc-100">Painel Admin</h1>
-          <p className="mt-1 text-xs text-zinc-400">Gestao operacional</p>
+          <p className="mt-1 text-xs text-zinc-400">Gestão operacional</p>
         </div>
 
         <nav className="mt-4 space-y-2 text-sm">
           <a href="#servicos" className="block rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-zinc-200 transition hover:border-cyan-400/50 hover:text-cyan-200">
-            Servicos
+            Serviços
           </a>
           <a href="#agenda" className="block rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-zinc-200 transition hover:border-cyan-400/50 hover:text-cyan-200">
             Agenda
@@ -179,12 +179,12 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
       <section className="space-y-6">
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-4 sm:px-5">
           <h2 className="text-xl font-semibold text-zinc-100 sm:text-2xl">Dashboard Admin</h2>
-          <p className="mt-1 text-sm text-zinc-400">Gerencie servicos, acompanhe agendamentos e controle bloqueios de agenda.</p>
+          <p className="mt-1 text-sm text-zinc-400">Gerencie serviços, acompanhe agendamentos e controle bloqueios de agenda.</p>
         </div>
 
         <section id="servicos" className="scroll-mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-          <h3 className="text-xl font-semibold text-zinc-100">Servicos</h3>
-          <p className="mt-1 text-sm text-zinc-400">Edite nome e preco dos servicos exibidos para os clientes.</p>
+          <h3 className="text-xl font-semibold text-zinc-100">Serviços</h3>
+          <p className="mt-1 text-sm text-zinc-400">Edite nome e preço dos serviços exibidos para os clientes.</p>
 
           <div className="mt-4 space-y-3">
             {services.map((service) => (
@@ -266,15 +266,15 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-zinc-800">
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-190 text-left text-sm">
               <thead className="bg-zinc-900 text-zinc-300">
                 <tr>
                   <th className="px-3 py-2">Cliente</th>
-                  <th className="px-3 py-2">Servico</th>
+                  <th className="px-3 py-2">Serviço</th>
                   <th className="px-3 py-2">Barbeiro</th>
-                  <th className="px-3 py-2">Horario</th>
+                  <th className="px-3 py-2">Horário</th>
                   <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Acoes</th>
+                  <th className="px-3 py-2">Ações</th>
                 </tr>
               </thead>
               <tbody>

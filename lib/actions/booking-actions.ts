@@ -36,7 +36,7 @@ async function assertAdminSession() {
   const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
   const authorized = await isAdminSessionTokenValid(token);
   if (!authorized) {
-    throw new Error("Nao autorizado");
+    throw new Error("Não autorizado");
   }
 }
 
@@ -139,7 +139,7 @@ export async function adminLoginAction(
   });
 
   if (!parsed.success) {
-    return { success: false, message: parsed.error.issues[0]?.message ?? "Credenciais invalidas" };
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Credenciais inválidas" };
   }
 
   const blockStatus = await getAdminLoginBlockStatus(parsed.data.email);
@@ -271,10 +271,10 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
       return { success: false, message: "Selecione uma imagem para upload" };
     }
     if (!ACCEPTED_IMAGE_TYPES.has(fileValue.type)) {
-      return { success: false, message: "Formato invalido. Use JPG, PNG, WEBP ou AVIF" };
+      return { success: false, message: "Formato inválido. Use JPG, PNG, WEBP ou AVIF" };
     }
     if (fileValue.size === 0 || fileValue.size > MAX_IMAGE_BYTES) {
-      return { success: false, message: "Imagem deve ter ate 5MB" };
+      return { success: false, message: "Imagem deve ter até 5MB" };
     }
 
     const ext = extensionFromMime(fileValue.type);
@@ -333,10 +333,3 @@ export async function isAdminAuthenticated() {
   const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
   return isAdminSessionTokenValid(token);
 }
-
-
-
-
-
-
-

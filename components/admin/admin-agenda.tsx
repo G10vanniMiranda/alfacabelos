@@ -85,15 +85,15 @@ export function AdminAgenda({ bookings, barbers }: AdminAgendaProps) {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-zinc-800">
-        <table className="w-full min-w-[760px] text-left text-sm">
+        <table className="w-full min-w-190 text-left text-sm">
           <thead className="bg-zinc-900 text-zinc-300">
             <tr>
               <th className="px-3 py-2">Cliente</th>
-              <th className="px-3 py-2">Servico</th>
+              <th className="px-3 py-2">Serviço</th>
               <th className="px-3 py-2">Barbeiro</th>
-              <th className="px-3 py-2">Horario</th>
+              <th className="px-3 py-2">Horário</th>
               <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Acoes</th>
+              <th className="px-3 py-2">Ações</th>
             </tr>
           </thead>
           <tbody>

@@ -34,10 +34,10 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
     <section className="min-w-0 space-y-6">
       <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
         <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-cyan-500/20 blur-3xl" />
-        <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">Visao geral</p>
+        <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">Visão geral</p>
         <h2 className="mt-2 text-2xl font-bold text-zinc-100 sm:text-3xl">Dashboard do painel</h2>
         <p className="mt-2 text-sm text-zinc-400">
-          Controle rapido de operacao, com status da agenda e atalhos para gestao.
+          Controle rápido de operação, com status da agenda e atalhos para gestão.
         </p>
       </div>
 
@@ -94,7 +94,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
                 href="/admin/servicos"
                 className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
               >
-                Gerenciar servicos
+                Gerenciar serviços
               </Link>
               <Link
                 href="/admin/agenda"
@@ -130,11 +130,11 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <h3 className="text-lg font-semibold text-zinc-100">Resumo rapido</h3>
+            <h3 className="text-lg font-semibold text-zinc-100">Resumo rápido</h3>
             <ul className="mt-3 space-y-2 text-sm text-zinc-300">
               <li>Barbeiros ativos: {barbers.length}</li>
               <li>Agendamentos totais: {bookings.length}</li>
-              <li>Ultimos cadastros: {recentBookings.length}</li>
+              <li>Últimos cadastros: {recentBookings.length}</li>
             </ul>
           </div>
         </section>
@@ -146,7 +146,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
           <span className="text-xs uppercase tracking-[0.16em] text-zinc-500">últimos registros</span>
         </div>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-sm">
+          <table className="w-full min-w-160 text-left text-sm">
             <thead className="text-zinc-400">
               <tr>
                 <th className="px-2 py-2">Cliente</th>

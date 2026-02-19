@@ -55,7 +55,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4">
         <h2 className="text-2xl font-semibold text-zinc-100">Bloqueios</h2>
         <p className="mt-1 text-sm text-zinc-400">
-          Controle periodos indisponiveis para evitar novos agendamentos nesses horarios.
+          Controle períodos indisponíveis para evitar novos agendamentos nesses horários.
         </p>
       </div>
 

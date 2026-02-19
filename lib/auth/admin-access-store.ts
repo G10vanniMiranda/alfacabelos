@@ -148,7 +148,7 @@ export async function createAdminAccess(input: { email: string; password: string
     `;
 
     if (existing.length > 0) {
-      throw new Error("Ja existe um acesso admin com este email");
+      throw new Error("Já existe um acesso admin com este email");
     }
 
     const id = randomUUID();
@@ -173,7 +173,7 @@ export async function createAdminAccess(input: { email: string; password: string
 
     return toAdminAccessUser(stripPasswordHash(created));
   } catch (error) {
-    if (error instanceof Error && error.message === "Ja existe um acesso admin com este email") {
+    if (error instanceof Error && error.message === "Já existe um acesso admin com este email") {
       throw error;
     }
 

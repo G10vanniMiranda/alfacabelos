@@ -14,7 +14,7 @@ async function assertAdminSession() {
   const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
   const authorized = await isAdminSessionTokenValid(token);
   if (!authorized) {
-    throw new Error("Nao autorizado");
+    throw new Error("Não autorizado");
   }
 }
 
@@ -31,7 +31,7 @@ export async function createAdminAccessAction(
   });
 
   if (!parsed.success) {
-    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados invalidos" };
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
   try {

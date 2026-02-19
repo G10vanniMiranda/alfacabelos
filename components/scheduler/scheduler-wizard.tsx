@@ -139,8 +139,8 @@ export function SchedulerWizard({
               key={service.id}
               onClick={() => setDraft((prev) => ({ ...prev, serviceId: service.id }))}
               className={`rounded-lg border p-4 text-left transition ${draft.serviceId === service.id
-                  ? "border-cyan-300 bg-cyan-500/10"
-                  : "border-zinc-700 bg-zinc-900 hover:border-cyan-500"
+                ? "border-cyan-300 bg-cyan-500/10"
+                : "border-zinc-700 bg-zinc-900 hover:border-cyan-500"
                 }`}
             >
               <p className="font-semibold text-zinc-50">{service.name}</p>
@@ -173,9 +173,9 @@ export function SchedulerWizard({
       {step === 3 && (
         <div className="mt-6 space-y-4">
           <div className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-4 text-sm text-zinc-300">
-            <p>Servico: {selectedService?.name}</p>
+            <p>Serviço: {selectedService?.name}</p>
             <p>Barbeiro: {DEFAULT_BARBER_NAME}</p>
-            <p>Horario: {draft.time ? new Date(draft.time).toLocaleString("pt-BR") : "-"}</p>
+            <p>Horário: {draft.time ? new Date(draft.time).toLocaleString("pt-BR") : "-"}</p>
           </div>
 
           <div>

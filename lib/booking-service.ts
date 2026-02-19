@@ -25,7 +25,7 @@ export async function listGalleryImages() {
 export async function createService(input: unknown) {
   const parsed = createServiceSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Dados do servico invalidos");
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados do serviço inválidos");
   }
 
   return repository.createService({
@@ -38,7 +38,7 @@ export async function createService(input: unknown) {
 export async function updateService(input: unknown) {
   const parsed = updateServiceSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Dados do servico invalidos");
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados do serviço inválidos");
   }
 
   const updated = await repository.updateService(parsed.data.serviceId, {
@@ -47,7 +47,7 @@ export async function updateService(input: unknown) {
   });
 
   if (!updated) {
-    throw new Error("Servico nao encontrado");
+    throw new Error("Serviço não encontrado");
   }
 
   return updated;
@@ -55,19 +55,19 @@ export async function updateService(input: unknown) {
 
 export async function deleteService(serviceId: string) {
   if (!serviceId) {
-    throw new Error("Servico invalido");
+    throw new Error("Serviço inválido");
   }
 
   const deleted = await repository.deleteService(serviceId);
   if (!deleted) {
-    throw new Error("Servico nao encontrado");
+    throw new Error("Serviço não encontrado");
   }
 }
 
 export async function createGalleryImage(input: unknown) {
   const parsed = createGalleryImageSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Dados da foto invalidos");
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados da foto inválidos");
   }
 
   return repository.createGalleryImage({
@@ -79,12 +79,12 @@ export async function createGalleryImage(input: unknown) {
 export async function deleteGalleryImage(input: unknown) {
   const parsed = deleteGalleryImageSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Foto invalida");
+    throw new Error(parsed.error.issues[0]?.message ?? "Foto inválida");
   }
 
   const deleted = await repository.deleteGalleryImage(parsed.data.galleryImageId);
   if (!deleted) {
-    throw new Error("Foto nao encontrada");
+    throw new Error("Foto não encontrada");
   }
 
   return true;
@@ -97,7 +97,7 @@ export async function listBarbers() {
 export async function getAvailableSlots(params: { date: string; barberId?: string; serviceId: string }) {
   const service = await repository.getServiceById(params.serviceId);
   if (!service) {
-    throw new Error("Servico nao encontrado");
+    throw new Error("Serviço não encontrado");
   }
 
   const { start, end } = getDayRange(params.date);
@@ -117,14 +117,14 @@ export async function getAvailableSlots(params: { date: string; barberId?: strin
 export async function createBooking(input: unknown) {
   const parsed = createBookingSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Dados do agendamento invalidos");
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados do agendamento inválidos");
   }
 
   const data = parsed.data;
   const barberId = data.barberId ?? DEFAULT_BARBER_ID;
   const service = await repository.getServiceById(data.serviceId);
   if (!service) {
-    throw new Error("Servico nao encontrado");
+    throw new Error("Serviço não encontrado");
   }
 
   const computedEnd = addMinutesToIso(
@@ -134,7 +134,7 @@ export async function createBooking(input: unknown) {
 
   const conflicts = await repository.listBookingsInRange(data.start, computedEnd, barberId);
   if (conflicts.length > 0) {
-    throw new Error("Este horario acabou de ser reservado. Escolha outro horario.");
+    throw new Error("Este horário acabou de ser reservado. Escolha outro horário.");
   }
 
   const blockedSlots = await repository.listBlockedSlots(data.start.slice(0, 10));
@@ -146,7 +146,7 @@ export async function createBooking(input: unknown) {
   });
 
   if (blockedConflict) {
-    throw new Error("Este horario esta bloqueado para atendimento.");
+    throw new Error("Este horário está bloqueado para atendimento.");
   }
 
   return repository.createBooking({
@@ -180,11 +180,11 @@ export async function listClientBookings(customerPhone: string) {
 export async function cancelClientBooking(input: { bookingId: string; customerPhone: string }) {
   const booking = await repository.getBookingById(input.bookingId);
   if (!booking) {
-    throw new Error("Agendamento nao encontrado");
+    throw new Error("Agendamento não encontrado");
   }
 
   if (normalizePhone(booking.customerPhone) !== normalizePhone(input.customerPhone)) {
-    throw new Error("Voce nao tem permissao para cancelar este agendamento");
+    throw new Error("Você não tem permissão para cancelar este agendamento");
   }
 
   if (booking.status === "CANCELADO") {
@@ -197,12 +197,12 @@ export async function cancelClientBooking(input: { bookingId: string; customerPh
 export async function updateBookingStatus(input: unknown) {
   const parsed = updateBookingStatusSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Status invalido");
+    throw new Error(parsed.error.issues[0]?.message ?? "Status inválido");
   }
 
   const updated = await repository.updateBookingStatus(parsed.data.bookingId, parsed.data.status);
   if (!updated) {
-    throw new Error("Agendamento nao encontrado");
+    throw new Error("Agendamento não encontrado");
   }
 
   return updated;
@@ -215,12 +215,12 @@ export async function listBlockedSlots(date?: string) {
 export async function createBlockedSlot(input: unknown) {
   const parsed = createBlockedSlotSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Bloqueio invalido");
+    throw new Error(parsed.error.issues[0]?.message ?? "Bloqueio inválido");
   }
 
   const { barberId, dateTimeStart, dateTimeEnd, reason } = parsed.data;
   if (new Date(dateTimeStart) >= new Date(dateTimeEnd)) {
-    throw new Error("O horario final precisa ser maior que o horario inicial");
+    throw new Error("O horário final precisa ser maior que o horário inicial");
   }
 
   return repository.createBlockedSlot({
@@ -234,7 +234,7 @@ export async function createBlockedSlot(input: unknown) {
 export async function deleteBlockedSlot(blockedSlotId: string) {
   const deleted = await repository.deleteBlockedSlot(blockedSlotId);
   if (!deleted) {
-    throw new Error("Bloqueio nao encontrado");
+    throw new Error("Bloqueio não encontrado");
   }
   return true;
 }

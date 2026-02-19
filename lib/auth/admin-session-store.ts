@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 
 const ADMIN_SESSION_TTL_SECONDS = 60 * 60 * 8;
-const ADMIN_SESSION_TABLE_ERROR = "Sessao admin indisponivel. Execute as migrations do banco.";
+const ADMIN_SESSION_TABLE_ERROR = "Sessão admin indisponível. Execute as migrations do banco.";
 
 let adminSessionTableChecked = false;
 let adminSessionTableExists = false;

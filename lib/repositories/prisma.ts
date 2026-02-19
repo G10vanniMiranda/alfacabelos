@@ -77,11 +77,13 @@ let galleryTableChecked = false;
 let galleryTableExists = false;
 
 function getGalleryDelegate() {
-  return (prisma as unknown as { galleryImage?: {
-    findMany: (args: unknown) => Promise<Array<{ id: string; imageUrl: string; altText: string | null; createdAt: Date }>>;
-    create: (args: unknown) => Promise<{ id: string; imageUrl: string; altText: string | null; createdAt: Date }>;
-    deleteMany: (args: unknown) => Promise<{ count: number }>;
-  } }).galleryImage;
+  return (prisma as unknown as {
+    galleryImage?: {
+      findMany: (args: unknown) => Promise<Array<{ id: string; imageUrl: string; altText: string | null; createdAt: Date }>>;
+      create: (args: unknown) => Promise<{ id: string; imageUrl: string; altText: string | null; createdAt: Date }>;
+      deleteMany: (args: unknown) => Promise<{ count: number }>;
+    }
+  }).galleryImage;
 }
 
 function isGalleryTableMissing(error: unknown): boolean {
@@ -231,11 +233,11 @@ export const prismaRepository: BookingRepository = {
       ...(filters?.status && filters.status !== "TODOS" ? { status: filters.status } : {}),
       ...(filters?.date
         ? {
-            dateTimeStart: {
-              gte: new Date(`${filters.date}T00:00:00`),
-              lte: new Date(`${filters.date}T23:59:59.999`),
-            },
-          }
+          dateTimeStart: {
+            gte: new Date(`${filters.date}T00:00:00`),
+            lte: new Date(`${filters.date}T23:59:59.999`),
+          },
+        }
         : {}),
     };
 
@@ -259,11 +261,11 @@ export const prismaRepository: BookingRepository = {
     const rows = await prisma.blockedSlot.findMany({
       where: date
         ? {
-            dateTimeStart: {
-              gte: new Date(`${date}T00:00:00`),
-              lte: new Date(`${date}T23:59:59.999`),
-            },
-          }
+          dateTimeStart: {
+            gte: new Date(`${date}T00:00:00`),
+            lte: new Date(`${date}T23:59:59.999`),
+          },
+        }
         : undefined,
       orderBy: { dateTimeStart: "asc" },
     });
@@ -364,12 +366,12 @@ export const prismaRepository: BookingRepository = {
   async createGalleryImage(input: CreateGalleryImageInput) {
     const hasTable = await ensureGalleryTableExists();
     if (!hasTable) {
-      throw new Error("Galeria indisponivel. Execute a migration do banco (GalleryImage).");
+      throw new Error("Galeria indisponível. Execute a migration do banco (GalleryImage).");
     }
 
     const gallery = getGalleryDelegate();
     if (!gallery) {
-      throw new Error("Galeria indisponivel. Execute a migration e regenere o Prisma Client.");
+      throw new Error("Galeria indisponível. Execute a migration e regenere o Prisma Client.");
     }
 
     try {
@@ -383,7 +385,7 @@ export const prismaRepository: BookingRepository = {
     } catch (error) {
       if (isGalleryTableMissing(error)) {
         galleryTableExists = false;
-        throw new Error("Galeria indisponivel. Execute a migration do banco (GalleryImage).");
+        throw new Error("Galeria indisponível. Execute a migration do banco (GalleryImage).");
       }
       throw error;
     }
@@ -392,12 +394,12 @@ export const prismaRepository: BookingRepository = {
   async deleteGalleryImage(galleryImageId) {
     const hasTable = await ensureGalleryTableExists();
     if (!hasTable) {
-      throw new Error("Galeria indisponivel. Execute a migration do banco (GalleryImage).");
+      throw new Error("Galeria indisponível. Execute a migration do banco (GalleryImage).");
     }
 
     const gallery = getGalleryDelegate();
     if (!gallery) {
-      throw new Error("Galeria indisponivel. Execute a migration e regenere o Prisma Client.");
+      throw new Error("Galeria indisponível. Execute a migration e regenere o Prisma Client.");
     }
 
     try {
@@ -408,7 +410,7 @@ export const prismaRepository: BookingRepository = {
     } catch (error) {
       if (isGalleryTableMissing(error)) {
         galleryTableExists = false;
-        throw new Error("Galeria indisponivel. Execute a migration do banco (GalleryImage).");
+        throw new Error("Galeria indisponível. Execute a migration do banco (GalleryImage).");
       }
       throw error;
     }

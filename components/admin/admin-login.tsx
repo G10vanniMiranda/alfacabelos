@@ -22,7 +22,7 @@ export function AdminLogin() {
 
   return (
     <section className="mx-auto mt-16 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl shadow-cyan-950/30">
-      <h1 className="text-2xl font-bold text-zinc-100">Area Admin</h1>
+      <h1 className="text-2xl font-bold text-zinc-100">Área Admin</h1>
       <p className="mt-2 text-sm text-zinc-400">Entre com email e senha para acessar o painel administrativo.</p>
       <form action={formAction} className="mt-5 space-y-4">
         <div className="space-y-2">

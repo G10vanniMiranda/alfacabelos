@@ -76,7 +76,7 @@ export function DateCalendar({
           disabled={!canGoPrev}
           className="rounded-md border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 sm:text-xs"
         >
-          Mes anterior
+          Mês anterior
         </button>
         <p className="text-center text-xs font-semibold capitalize text-zinc-100 sm:text-sm">{monthLabel(view.year, view.month)}</p>
         <button
@@ -85,7 +85,7 @@ export function DateCalendar({
           disabled={!canGoNext}
           className="rounded-md border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 sm:text-xs"
         >
-          Proximo mes
+          Próximo mês
         </button>
       </div>
 
@@ -112,13 +112,12 @@ export function DateCalendar({
               key={cell.key}
               disabled={disabled}
               onClick={() => onSelect(cell.iso!)}
-              className={`h-10 rounded-md border text-sm font-semibold transition ${
-                selected
+              className={`h-10 rounded-md border text-sm font-semibold transition ${selected
                   ? "border-cyan-300 bg-cyan-400 text-zinc-950"
                   : disabled
                     ? "border-zinc-800 bg-zinc-900 text-zinc-600"
                     : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-cyan-300"
-              }`}
+                }`}
             >
               {cell.label}
             </button>

@@ -58,7 +58,7 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
 
       {loadError ? (
         <div className="rounded-2xl border border-amber-600/50 bg-amber-500/10 p-4 text-sm text-amber-100">
-          <p className="font-semibold">A secao de acessos precisa de migration</p>
+          <p className="font-semibold">A seção de acessos precisa de migration</p>
           <p className="mt-1">{loadError}</p>
           <p className="mt-2 text-amber-200">Execute: npm run prisma:migrate:deploy</p>
         </div>
@@ -98,13 +98,13 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
         <h3 className="text-lg font-semibold text-zinc-100">Acessos cadastrados</h3>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-180 text-left text-sm">
             <thead className="text-zinc-400">
               <tr>
                 <th className="px-2 py-2">Email</th>
                 <th className="px-2 py-2">Criado em</th>
-                <th className="px-2 py-2">Ultimo login</th>
-                <th className="px-2 py-2">Acoes</th>
+                <th className="px-2 py-2">Último login</th>
+                <th className="px-2 py-2">Ações</th>
               </tr>
             </thead>
             <tbody>

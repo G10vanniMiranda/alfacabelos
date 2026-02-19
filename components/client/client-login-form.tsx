@@ -29,7 +29,7 @@ export function ClientLoginForm() {
   return (
     <section className="mx-auto mt-12 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
       <h1 className="text-3xl font-bold text-zinc-100">Login do cliente</h1>
-      <p className="mt-2 text-sm text-zinc-400">Entre para agendar seu horario.</p>
+      <p className="mt-2 text-sm text-zinc-400">Entre para agendar seu horário.</p>
 
       <form action={formAction} className="mt-5 space-y-4">
         <input type="hidden" name="next" value={next} />
@@ -59,7 +59,7 @@ export function ClientLoginForm() {
       </form>
 
       <p className="mt-4 text-sm text-zinc-400">
-        Ainda nao tem conta?{" "}
+        Ainda não tem conta?{" "}
         <Link href={`/cliente/cadastro?next=${encodeURIComponent(next)}`} className="text-cyan-300 hover:text-cyan-200">
           Criar cadastro
         </Link>
