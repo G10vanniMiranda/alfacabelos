@@ -67,7 +67,9 @@ async function uploadToSupabase(objectPath: string, file: File): Promise<string>
   });
 
   if (!response.ok) {
-    throw new Error("Falha ao enviar imagem para o storage");
+    const details = await response.text().catch(() => "");
+    const suffix = details ? ` (${response.status}): ${details.slice(0, 140)}` : ` (${response.status})`;
+    throw new Error(`Falha ao enviar imagem para o storage${suffix}`);
   }
 
   return getSupabasePublicUrl(objectPath);
@@ -258,44 +260,55 @@ function extensionFromMime(mime: string): string {
   return "jpg";
 }
 
-export async function uploadGalleryImageAction(formData: FormData) {
-  await assertAdminSession();
-  const fileValue = formData.get("file");
-  const altRaw = String(formData.get("altText") ?? "").trim();
-  const altText = altRaw.length > 0 ? altRaw : undefined;
+export async function uploadGalleryImageAction(formData: FormData): Promise<ActionState> {
+  try {
+    await assertAdminSession();
+    const fileValue = formData.get("file");
+    const altRaw = String(formData.get("altText") ?? "").trim();
+    const altText = altRaw.length > 0 ? altRaw : undefined;
 
-  if (!(fileValue instanceof File)) {
-    throw new Error("Selecione uma imagem para upload");
-  }
-  if (!ACCEPTED_IMAGE_TYPES.has(fileValue.type)) {
-    throw new Error("Formato inválido. Use JPG, PNG, WEBP ou AVIF");
-  }
-  if (fileValue.size === 0 || fileValue.size > MAX_IMAGE_BYTES) {
-    throw new Error("Imagem deve ter até 5MB");
-  }
+    if (!(fileValue instanceof File)) {
+      return { success: false, message: "Selecione uma imagem para upload" };
+    }
+    if (!ACCEPTED_IMAGE_TYPES.has(fileValue.type)) {
+      return { success: false, message: "Formato invalido. Use JPG, PNG, WEBP ou AVIF" };
+    }
+    if (fileValue.size === 0 || fileValue.size > MAX_IMAGE_BYTES) {
+      return { success: false, message: "Imagem deve ter ate 5MB" };
+    }
 
-  const ext = extensionFromMime(fileValue.type);
-  const filename = `${Date.now()}-${randomUUID()}.${ext}`;
-  const objectPath = `galeria/${filename}`;
+    const ext = extensionFromMime(fileValue.type);
+    const filename = `${Date.now()}-${randomUUID()}.${ext}`;
+    const objectPath = `galeria/${filename}`;
 
-  let imageUrl = "";
-  if (canUseSupabaseStorage()) {
-    imageUrl = await uploadToSupabase(objectPath, fileValue);
-  } else if (process.env.NODE_ENV !== "production") {
-    const relativePath = `/uploads/galeria/${filename}`;
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "galeria");
-    const absolutePath = path.join(uploadDir, filename);
-    await mkdir(uploadDir, { recursive: true });
-    const buffer = Buffer.from(await fileValue.arrayBuffer());
-    await writeFile(absolutePath, buffer);
-    imageUrl = relativePath;
-  } else {
-    throw new Error("Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY (ou SUPABASE_KEY) para upload em producao");
+    let imageUrl = "";
+    if (canUseSupabaseStorage()) {
+      imageUrl = await uploadToSupabase(objectPath, fileValue);
+    } else if (process.env.NODE_ENV !== "production") {
+      const relativePath = `/uploads/galeria/${filename}`;
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "galeria");
+      const absolutePath = path.join(uploadDir, filename);
+      await mkdir(uploadDir, { recursive: true });
+      const buffer = Buffer.from(await fileValue.arrayBuffer());
+      await writeFile(absolutePath, buffer);
+      imageUrl = relativePath;
+    } else {
+      return {
+        success: false,
+        message: "Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY (ou SUPABASE_KEY) na Vercel",
+      };
+    }
+
+    await createGalleryImage({ imageUrl, altText });
+    revalidatePath("/admin/galeria");
+    revalidatePath("/");
+    return { success: true, message: "Foto adicionada na galeria" };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Falha ao fazer upload da imagem",
+    };
   }
-
-  await createGalleryImage({ imageUrl, altText });
-  revalidatePath("/admin/galeria");
-  revalidatePath("/");
 }
 
 export async function deleteGalleryImageAction(payload: { galleryImageId: string; imageUrl?: string }) {
@@ -320,6 +333,7 @@ export async function isAdminAuthenticated() {
   const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
   return isAdminSessionTokenValid(token);
 }
+
 
 
 

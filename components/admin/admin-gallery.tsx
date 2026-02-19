@@ -34,8 +34,11 @@ export function AdminGallery({ images }: AdminGalleryProps) {
 
     startTransition(async () => {
       try {
-        await uploadGalleryImageAction(data);
-        pushToast("Foto adicionada na galeria", "success");
+        const result = await uploadGalleryImageAction(data);
+        pushToast(result.message, result.success ? "success" : "error");
+        if (!result.success) {
+          return;
+        }
         setForm({ altText: "" });
         setFile(null);
         window.location.reload();
