@@ -1,6 +1,7 @@
 import { listBarbers, listGalleryImages, listServices } from "@/lib/booking-service";
 import { testimonials } from "@/lib/data/seed";
 import { formatBRLFromCents } from "@/lib/utils";
+import { GalleryCarousel } from "@/components/home/gallery-carousel";
 
 export async function HomeSections() {
   const [services, barbers, galleryImages] = await Promise.all([
@@ -52,24 +53,8 @@ export async function HomeSections() {
       <section id="galeria" className="border-y border-zinc-800 bg-zinc-900/40 py-16">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <h2 className="text-3xl font-bold text-zinc-100">Galeria</h2>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {galleryImages.length > 0
-              ? galleryImages.map((image) => (
-                  <article key={image.id} className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
-                    <img
-                      src={image.imageUrl}
-                      alt={image.altText ?? "Foto da galeria da barbearia"}
-                      className="aspect-square w-full object-cover transition duration-300 hover:scale-105"
-                      loading="lazy"
-                    />
-                  </article>
-                ))
-              : [1, 2, 3, 4].map((item) => (
-                  <div
-                    key={item}
-                    className="aspect-square rounded-lg border border-zinc-800 bg-linear-to-br from-zinc-900 via-zinc-800 to-cyan-950"
-                  />
-                ))}
+          <div className="mt-6">
+            <GalleryCarousel images={galleryImages} />
           </div>
         </div>
       </section>
