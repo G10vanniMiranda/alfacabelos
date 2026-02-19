@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listAdminBookings, updateBookingStatus } from "@/lib/booking-service";
+import { isAdminSessionTokenValid } from "@/lib/auth/admin-session-store";
 
-function isAuthorized(request: NextRequest): boolean {
-  return request.cookies.get("barber_admin")?.value === "ok";
+async function isAuthorized(request: NextRequest): Promise<boolean> {
+  const token = request.cookies.get("barber_admin")?.value ?? "";
+  return isAdminSessionTokenValid(token);
 }
 
 export async function GET(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
   }
 
@@ -23,7 +25,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
   }
 

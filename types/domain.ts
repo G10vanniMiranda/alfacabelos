@@ -43,6 +43,15 @@ export type ClientUser = {
   createdAt: string;
 };
 
+export type AdminAccessUser = {
+  id: string;
+  email: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string;
+};
+
 export type GalleryImage = {
   id: string;
   imageUrl: string;

@@ -71,6 +71,39 @@ model Client {
   createdAt       DateTime @default(now())
 }
 
+model AdminAccess {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  sessions     AdminSession[]
+}
+
+model AdminSession {
+  id            String      @id @default(cuid())
+  tokenHash     String      @unique
+  adminAccessId String?
+  email         String
+  expiresAt     DateTime
+  createdAt     DateTime    @default(now())
+  lastSeenAt    DateTime    @default(now())
+
+  adminAccess AdminAccess? @relation(fields: [adminAccessId], references: [id], onDelete: SetNull)
+
+  @@index([expiresAt])
+}
+
+model AdminLoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+}
+
 model GalleryImage {
   id        String   @id @default(cuid())
   imageUrl  String

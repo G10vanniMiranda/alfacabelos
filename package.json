@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "admin:create": "tsx --tsconfig tsconfig.json scripts/create-admin-access.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",

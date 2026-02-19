@@ -9,8 +9,10 @@ const items = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/servicos", label: "Serviços" },
   { href: "/admin/agenda", label: "Agenda" },
+  { href: "/admin/ganhos", label: "Ganhos" },
   { href: "/admin/bloqueios", label: "Bloqueios" },
   { href: "/admin/galeria", label: "Galeria" },
+  { href: "/admin/acessos", label: "Acessos" },
 ];
 
 export function AdminSidebar() {
@@ -116,3 +118,6 @@ export function AdminSidebar() {
     </>
   );
 }
+
+
+

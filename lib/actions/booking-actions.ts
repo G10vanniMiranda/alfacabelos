@@ -18,24 +18,25 @@ import {
 } from "@/lib/booking-service";
 import { adminLoginSchema } from "@/lib/validators/schemas";
 import { ActionState } from "@/types/scheduler";
+import { authenticateAdminAccess, registerAdminLogin } from "@/lib/auth/admin-access-store";
+import { createAdminSession, isAdminSessionTokenValid, revokeAdminSession } from "@/lib/auth/admin-session-store";
+import {
+  clearAdminLoginAttempts,
+  getAdminLoginBlockStatus,
+  registerFailedAdminLogin,
+} from "@/lib/auth/admin-login-attempt-store";
 
 const ADMIN_COOKIE = "barber_admin";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "galeria";
 
-function isAdminPasswordValid(password: string): boolean {
-  const fromEnv = process.env.ADMIN_PASSWORD;
-  if (!fromEnv) {
-    return false;
-  }
-  return password === fromEnv;
-}
-
 async function assertAdminSession() {
   const cookieStore = await cookies();
-  if (cookieStore.get(ADMIN_COOKIE)?.value !== "ok") {
-    throw new Error("Não autorizado");
+  const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
+  const authorized = await isAdminSessionTokenValid(token);
+  if (!authorized) {
+    throw new Error("Nao autorizado");
   }
 }
 
@@ -131,24 +132,44 @@ export async function adminLoginAction(
   formData: FormData,
 ): Promise<ActionState> {
   const parsed = adminLoginSchema.safeParse({
+    email: String(formData.get("email") ?? ""),
     password: String(formData.get("password") ?? ""),
   });
 
   if (!parsed.success) {
-    return { success: false, message: parsed.error.issues[0]?.message ?? "Senha inválida" };
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Credenciais invalidas" };
   }
 
-  if (!isAdminPasswordValid(parsed.data.password)) {
-    return { success: false, message: "Senha incorreta ou ADMIN_PASSWORD não configurada" };
+  const blockStatus = await getAdminLoginBlockStatus(parsed.data.email);
+  if (blockStatus.blocked) {
+    const minutes = Math.ceil(blockStatus.retryAfterSeconds / 60);
+    return {
+      success: false,
+      message: `Muitas tentativas de login. Tente novamente em ${minutes} minuto(s).`,
+    };
   }
+
+  const adminByDatabase = await authenticateAdminAccess(parsed.data.email, parsed.data.password);
+  if (!adminByDatabase) {
+    await registerFailedAdminLogin(parsed.data.email);
+    return { success: false, message: "Email ou senha incorretos" };
+  }
+
+  await clearAdminLoginAttempts(parsed.data.email);
+  await registerAdminLogin(adminByDatabase.id);
+
+  const session = await createAdminSession({
+    email: parsed.data.email.trim().toLowerCase(),
+    adminAccessId: adminByDatabase.id,
+  });
 
   const cookieStore = await cookies();
-  cookieStore.set(ADMIN_COOKIE, "ok", {
+  cookieStore.set(ADMIN_COOKIE, session.token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 8,
+    maxAge: session.maxAgeSeconds,
   });
 
   return { success: true, message: "Login efetuado" };
@@ -156,6 +177,8 @@ export async function adminLoginAction(
 
 export async function adminLogoutAction() {
   const cookieStore = await cookies();
+  const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
+  await revokeAdminSession(token);
   cookieStore.delete(ADMIN_COOKIE);
 }
 
@@ -294,5 +317,11 @@ export async function deleteGalleryImageAction(payload: { galleryImageId: string
 
 export async function isAdminAuthenticated() {
   const cookieStore = await cookies();
-  return cookieStore.get(ADMIN_COOKIE)?.value === "ok";
+  const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
+  return isAdminSessionTokenValid(token);
 }
+
+
+
+
+

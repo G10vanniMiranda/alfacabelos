@@ -14,7 +14,9 @@ Projeto completo de barbearia com Next.js (App Router), TypeScript e TailwindCSS
   - buffer entre atendimentos (10 min)
   - bloqueio de conflitos por barbeiro/horario
 - Pagina `/confirmacao` com resumo e status do agendamento.
-- `/admin` com login por senha em variavel de ambiente, filtros e acoes de confirmar/cancelar e bloqueios.
+- `/admin` com login por email + senha em variaveis de ambiente, filtros e acoes de confirmar/cancelar e bloqueios.
+- `/admin/acessos` para gerenciar contas de acesso ao painel (email + senha com hash).
+- `/admin/ganhos` para acompanhar faturamento por periodo (confirmados, previsao pendente, ticket medio e detalhamento).
 - Validacao com Zod e Server Actions para operacoes criticas.
 - API routes locais para listagem de dados e horarios disponiveis.
 
@@ -89,7 +91,6 @@ prisma/
 Crie `.env.local`:
 
 ```env
-ADMIN_PASSWORD=admin123
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/alfa_barber
 SUPABASE_URL=https://seu-projeto.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key
@@ -98,7 +99,7 @@ SUPABASE_STORAGE_BUCKET=galeria
 
 Observacao:
 - `DATABASE_URL` e obrigatoria no ambiente.
-- Defina `ADMIN_PASSWORD` forte em producao.
+- O acesso admin agora e gerenciado pela secao `/admin/acessos`.
 - Em producao, configure `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` para upload persistente da galeria.
 
 ## Como Rodar
@@ -121,6 +122,12 @@ npm run dev
 npm run lint
 ```
 
+4. Bootstrap do primeiro acesso admin (necessario em ambiente novo):
+
+```bash
+npm run admin:create -- admin@empresa.com sua_senha_forte
+```
+
 ## Prisma (Obrigatorio - PostgreSQL/Supabase)
 
 Schema pronto em `prisma/schema.prisma`.
@@ -138,7 +145,6 @@ npm run prisma:seed
 
 1. Configure no projeto da Vercel:
    - `DATABASE_URL`
-   - `ADMIN_PASSWORD`
 2. Aplique migrations no banco:
 
 ```bash
@@ -172,6 +178,7 @@ npm run prisma:seed
 - `createBlockedSlotAction`
 - `deleteBlockedSlotAction`
 - `adminLoginAction` / `adminLogoutAction`
+- `createAdminAccessAction` / `deleteAdminAccessAction`
 
 ## Fluxo de Teste (Manual)
 
@@ -181,9 +188,10 @@ npm run prisma:seed
 4. Escolha data futura e horario disponivel.
 5. Preencha/confira nome + telefone e confirme.
 6. Valide redirecionamento para `/confirmacao?id=...`.
-7. Acesse `/admin` e faca login com `ADMIN_PASSWORD`.
-8. Confirme/cancele um agendamento.
-9. Crie um bloqueio e veja o horario sumir no fluxo de agendamento.
+7. Acesse `/admin` e faca login com um email/senha cadastrado em `/admin/acessos`.
+8. No menu lateral, acesse `/admin/acessos` para cadastrar ou remover acessos admin.
+9. Confirme/cancele um agendamento.
+10. Crie um bloqueio e veja o horario sumir no fluxo de agendamento.
 
 ## Observacoes Tecnicas
 

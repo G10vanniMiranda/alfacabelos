@@ -34,8 +34,20 @@ export const clientLoginSchema = z.object({
 });
 
 export const adminLoginSchema = z.object({
-  password: z.string().min(1, "Senha é obrigatória"),
+  email: z.string().trim().email("Email invalido"),
+  password: z.string().min(1, "Senha obrigatoria"),
 });
+
+export const createAdminAccessSchema = z
+  .object({
+    email: z.string().trim().email("Email invalido"),
+    password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
+    confirmPassword: z.string().min(8, "Confirme a senha"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As senhas nao conferem",
+    path: ["confirmPassword"],
+  });
 
 export const updateBookingStatusSchema = z.object({
   bookingId: z.string().min(1),
@@ -75,3 +87,4 @@ export const createGalleryImageSchema = z.object({
 export const deleteGalleryImageSchema = z.object({
   galleryImageId: z.string().min(1, "Foto inválida"),
 });
+

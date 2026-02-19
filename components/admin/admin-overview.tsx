@@ -103,6 +103,12 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
                 Atualizar status da agenda
               </Link>
               <Link
+                href="/admin/ganhos"
+                className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
+              >
+                Controle de ganhos
+              </Link>
+              <Link
                 href="/admin/bloqueios"
                 className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
               >
@@ -113,6 +119,12 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
                 className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
               >
                 Gerenciar galeria
+              </Link>
+              <Link
+                href="/admin/acessos"
+                className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
+              >
+                Gerenciar acessos
               </Link>
             </div>
           </div>
