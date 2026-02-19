@@ -3,7 +3,11 @@ import { testimonials } from "@/lib/data/seed";
 import { formatBRLFromCents } from "@/lib/utils";
 
 export async function HomeSections() {
-  const [services, barbers, galleryImages] = await Promise.all([listServices(), listBarbers(), listGalleryImages()]);
+  const [services, barbers, galleryImages] = await Promise.all([
+    listServices().catch(() => []),
+    listBarbers().catch(() => []),
+    listGalleryImages().catch(() => []),
+  ]);
 
   return (
     <>
