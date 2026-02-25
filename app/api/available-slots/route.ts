@@ -8,16 +8,14 @@ export async function GET(request: NextRequest) {
   const serviceId = request.nextUrl.searchParams.get("serviceId");
 
   if (!date || !serviceId) {
-    return NextResponse.json({ message: "date e serviceId são obrigatórios" }, { status: 400 });
+    return NextResponse.json({ message: "date e serviceId sao obrigatorios" }, { status: 400 });
   }
 
   try {
     const slots = await getAvailableSlots({ date, barberId, serviceId });
     return NextResponse.json(slots);
   } catch (error) {
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Erro ao gerar horários" },
-      { status: 400 },
-    );
+    console.error("GET /api/available-slots failed", error);
+    return NextResponse.json({ message: "Erro ao gerar horarios" }, { status: 400 });
   }
 }

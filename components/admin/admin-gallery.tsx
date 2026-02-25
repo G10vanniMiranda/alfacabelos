@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useTransition } from "react";
 import { deleteGalleryImageAction, uploadGalleryImageAction } from "@/lib/actions/booking-actions";
 import { useToast } from "@/components/ui/toast";
@@ -115,11 +116,14 @@ export function AdminGallery({ images }: AdminGalleryProps) {
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {images.map((image) => (
               <article key={image.id} className="overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950/70">
-                <img
+                <Image
                   src={image.imageUrl}
                   alt={image.altText ?? "Foto da galeria"}
                   className="aspect-square w-full object-cover"
+                  width={900}
+                  height={900}
                   loading="lazy"
+                  unoptimized
                 />
                 <div className="space-y-2 p-3">
                   <p className="line-clamp-2 text-xs text-zinc-400">{image.altText ?? "Sem descrição"}</p>

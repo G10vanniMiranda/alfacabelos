@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GalleryImage } from "@/types/domain";
 
@@ -123,11 +124,14 @@ export function GalleryCarousel({ images }: GalleryCarouselProps) {
             className="min-w-0 shrink-0 basis-[86%] snap-start overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 sm:basis-[48%] lg:basis-[32%]"
           >
             {slide.imageUrl ? (
-              <img
+              <Image
                 src={slide.imageUrl}
                 alt={slide.alt}
                 className="aspect-4/5 w-full object-cover transition duration-300 hover:scale-[1.02]"
+                width={960}
+                height={1200}
                 loading="lazy"
+                unoptimized
               />
             ) : (
               <div className="aspect-4/5 w-full bg-linear-to-br from-zinc-900 via-zinc-800 to-cyan-950" />

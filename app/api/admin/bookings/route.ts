@@ -9,7 +9,7 @@ async function isAuthorized(request: NextRequest): Promise<boolean> {
 
 export async function GET(request: NextRequest) {
   if (!(await isAuthorized(request))) {
-    return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
+    return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
   }
 
   const date = request.nextUrl.searchParams.get("date") ?? undefined;
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   if (!(await isAuthorized(request))) {
-    return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
+    return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
   }
 
   try {
@@ -34,10 +34,7 @@ export async function PATCH(request: NextRequest) {
     const updated = await updateBookingStatus(payload);
     return NextResponse.json(updated);
   } catch (error) {
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Erro ao atualizar status" },
-      { status: 400 },
-    );
+    console.error("PATCH /api/admin/bookings failed", error);
+    return NextResponse.json({ message: "Erro ao atualizar status" }, { status: 400 });
   }
 }
-

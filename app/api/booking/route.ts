@@ -7,10 +7,7 @@ export async function POST(request: NextRequest) {
     const booking = await createBooking(payload);
     return NextResponse.json(booking, { status: 201 });
   } catch (error) {
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Erro ao criar agendamento" },
-      { status: 400 },
-    );
+    console.error("POST /api/booking failed", error);
+    return NextResponse.json({ message: "Erro ao criar agendamento" }, { status: 400 });
   }
 }
-
