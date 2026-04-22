@@ -99,6 +99,34 @@ let galleryTableExists = false;
 let availabilityTableChecked = false;
 let availabilityTableExists = false;
 
+function isDatabaseUnavailableError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybe = error as { code?: string; message?: string };
+  if (maybe.code === "P1001") {
+    return true;
+  }
+
+  return typeof maybe.message === "string" && maybe.message.includes("Can't reach database server");
+}
+
+function canUseReadFallback() {
+  return process.env.NODE_ENV !== "production";
+}
+
+async function readWithFallback<T>(action: () => Promise<T>, fallback: () => T | Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    if (canUseReadFallback() && isDatabaseUnavailableError(error)) {
+      return fallback();
+    }
+    throw error;
+  }
+}
+
 function getGalleryDelegate() {
   return (prisma as unknown as {
     galleryImage?: {
@@ -209,15 +237,17 @@ async function ensureBarberAvailabilityTableExists(): Promise<boolean> {
 
 export const prismaRepository: BookingRepository = {
   async getServices() {
-    const rows = await prisma.service.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    });
-    if (rows.length > 0) {
-      return rows;
-    }
+    return readWithFallback(async () => {
+      const rows = await prisma.service.findMany({
+        where: { isActive: true },
+        orderBy: { name: "asc" },
+      });
+      if (rows.length > 0) {
+        return rows;
+      }
 
-    return servicesSeed.filter((service) => service.isActive);
+      return servicesSeed.filter((service) => service.isActive);
+    }, () => servicesSeed.filter((service) => service.isActive));
   },
 
   async createService(input) {
@@ -264,35 +294,39 @@ export const prismaRepository: BookingRepository = {
   },
 
   async getBarbers() {
-    let rows = await prisma.barber.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    });
+    return readWithFallback(async () => {
+      let rows = await prisma.barber.findMany({
+        where: { isActive: true },
+        orderBy: { name: "asc" },
+      });
 
-    if (rows.length === 0) {
-      rows = barbersSeed
-        .filter((barber) => barber.isActive)
-        .map((barber) => ({
-          id: barber.id,
-          name: barber.name,
-          avatarUrl: barber.avatarUrl ?? null,
-          isActive: barber.isActive,
-        }));
-    }
+      if (rows.length === 0) {
+        rows = barbersSeed
+          .filter((barber) => barber.isActive)
+          .map((barber) => ({
+            id: barber.id,
+            name: barber.name,
+            avatarUrl: barber.avatarUrl ?? null,
+            isActive: barber.isActive,
+          }));
+      }
 
-    return rows.map(toBarber);
+      return rows.map(toBarber);
+    }, () => barbersSeed.filter((barber) => barber.isActive));
   },
 
   async getServiceById(id: string) {
-    const service = await prisma.service.findFirst({
-      where: { id, isActive: true },
-    });
-    if (service) {
-      return service;
-    }
+    return readWithFallback(async () => {
+      const service = await prisma.service.findFirst({
+        where: { id, isActive: true },
+      });
+      if (service) {
+        return service;
+      }
 
-    const fallback = servicesSeed.find((item) => item.id === id && item.isActive);
-    return fallback ?? undefined;
+      const fallback = servicesSeed.find((item) => item.id === id && item.isActive);
+      return fallback ?? undefined;
+    }, () => servicesSeed.find((item) => item.id === id && item.isActive));
   },
 
   async getBookingById(id: string) {
@@ -423,9 +457,8 @@ export const prismaRepository: BookingRepository = {
   },
 
   async listBarberAvailabilities(barberId) {
-    const hasTable = await ensureBarberAvailabilityTableExists();
-    if (!hasTable) {
-      return BUSINESS_CONFIG.operatingHours.map((slot) => ({
+    const fallbackAvailabilities = () =>
+      BUSINESS_CONFIG.operatingHours.map((slot) => ({
         id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
         barberId,
         dayOfWeek: slot.dayOfWeek,
@@ -434,55 +467,37 @@ export const prismaRepository: BookingRepository = {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }));
-    }
 
-    const availability = getBarberAvailabilityDelegate();
-    if (!availability) {
-      return BUSINESS_CONFIG.operatingHours.map((slot) => ({
-        id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
-        barberId,
-        dayOfWeek: slot.dayOfWeek,
-        openTime: slot.open,
-        closeTime: slot.close,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }));
-    }
-
-    try {
-      const rows = await availability.findMany({
-        where: { barberId },
-        orderBy: [{ dayOfWeek: "asc" }, { openTime: "asc" }],
-      });
-
-      if (rows.length > 0) {
-        return rows.map(toBarberAvailability);
+    return readWithFallback(async () => {
+      const hasTable = await ensureBarberAvailabilityTableExists();
+      if (!hasTable) {
+        return fallbackAvailabilities();
       }
 
-      return BUSINESS_CONFIG.operatingHours.map((slot) => ({
-        id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
-        barberId,
-        dayOfWeek: slot.dayOfWeek,
-        openTime: slot.open,
-        closeTime: slot.close,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }));
-    } catch (error) {
-      if (isBarberAvailabilityTableMissing(error)) {
-        availabilityTableExists = false;
-        return BUSINESS_CONFIG.operatingHours.map((slot) => ({
-          id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
-          barberId,
-          dayOfWeek: slot.dayOfWeek,
-          openTime: slot.open,
-          closeTime: slot.close,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }));
+      const availability = getBarberAvailabilityDelegate();
+      if (!availability) {
+        return fallbackAvailabilities();
       }
-      throw error;
-    }
+
+      try {
+        const rows = await availability.findMany({
+          where: { barberId },
+          orderBy: [{ dayOfWeek: "asc" }, { openTime: "asc" }],
+        });
+
+        if (rows.length > 0) {
+          return rows.map(toBarberAvailability);
+        }
+
+        return fallbackAvailabilities();
+      } catch (error) {
+        if (isBarberAvailabilityTableMissing(error)) {
+          availabilityTableExists = false;
+          return fallbackAvailabilities();
+        }
+        throw error;
+      }
+    }, fallbackAvailabilities);
   },
 
   async replaceBarberDayAvailabilities(input) {
@@ -547,28 +562,30 @@ export const prismaRepository: BookingRepository = {
   },
 
   async listGalleryImages() {
-    const hasTable = await ensureGalleryTableExists();
-    if (!hasTable) {
-      return [];
-    }
-
-    const gallery = getGalleryDelegate();
-    if (!gallery) {
-      return [];
-    }
-
-    try {
-      const rows = await gallery.findMany({
-        orderBy: { createdAt: "desc" },
-      });
-      return rows.map(toGalleryImage);
-    } catch (error) {
-      if (isGalleryTableMissing(error)) {
-        galleryTableExists = false;
+    return readWithFallback(async () => {
+      const hasTable = await ensureGalleryTableExists();
+      if (!hasTable) {
         return [];
       }
-      throw error;
-    }
+
+      const gallery = getGalleryDelegate();
+      if (!gallery) {
+        return [];
+      }
+
+      try {
+        const rows = await gallery.findMany({
+          orderBy: { createdAt: "desc" },
+        });
+        return rows.map(toGalleryImage);
+      } catch (error) {
+        if (isGalleryTableMissing(error)) {
+          galleryTableExists = false;
+          return [];
+        }
+        throw error;
+      }
+    }, () => []);
   },
 
   async createGalleryImage(input: CreateGalleryImageInput) {
