@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createBookingAction } from "@/lib/actions/booking-actions";
 import { DEFAULT_BARBER_ID, DEFAULT_BARBER_NAME } from "@/lib/constants/barber";
@@ -28,6 +28,7 @@ export function SchedulerWizard({
   const [draft, setDraft] = useState<SchedulerDraft>({ barberId: DEFAULT_BARBER_ID });
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const slotsRequestRef = useRef<AbortController | null>(null);
 
   const minDate = useMemo(() => formatDateInput(new Date()), []);
 
@@ -43,6 +44,7 @@ export function SchedulerWizard({
       });
       return;
     }
+
     setDraft((prev) => ({
       ...prev,
       barberId: DEFAULT_BARBER_ID,
@@ -57,26 +59,40 @@ export function SchedulerWizard({
 
   const loadSlots = useCallback(
     async (date: string, serviceId?: string) => {
+      slotsRequestRef.current?.abort();
+
       if (!date || !serviceId) {
         setSlots([]);
         return;
       }
 
+      const controller = new AbortController();
+      slotsRequestRef.current = controller;
       setSlotsLoading(true);
+
       try {
         const response = await fetch(
           `/api/available-slots?date=${date}&barberId=${DEFAULT_BARBER_ID}&serviceId=${serviceId}`,
+          { signal: controller.signal },
         );
         const data = (await response.json()) as AvailableSlot[] | { message: string };
         if (!response.ok || !Array.isArray(data)) {
-          throw new Error((data as { message: string }).message ?? "Falha ao carregar horários");
+          throw new Error((data as { message: string }).message ?? "Falha ao carregar horarios");
         }
+
         setSlots(data);
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
         setSlots([]);
-        pushToast(error instanceof Error ? error.message : "Erro ao carregar horários", "error");
+        pushToast(error instanceof Error ? error.message : "Erro ao carregar horarios", "error");
       } finally {
-        setSlotsLoading(false);
+        if (slotsRequestRef.current === controller) {
+          slotsRequestRef.current = null;
+          setSlotsLoading(false);
+        }
       }
     },
     [pushToast],
@@ -87,6 +103,10 @@ export function SchedulerWizard({
       loadSlots(draft.date, draft.serviceId);
     }
   }, [step, draft.date, draft.serviceId, loadSlots]);
+
+  useEffect(() => {
+    return () => slotsRequestRef.current?.abort();
+  }, []);
 
   function canAdvance(): boolean {
     if (step === 1) {
@@ -138,10 +158,11 @@ export function SchedulerWizard({
               type="button"
               key={service.id}
               onClick={() => setDraft((prev) => ({ ...prev, serviceId: service.id }))}
-              className={`rounded-lg border p-4 text-left transition ${draft.serviceId === service.id
-                ? "border-cyan-300 bg-cyan-500/10"
-                : "border-zinc-700 bg-zinc-900 hover:border-cyan-500"
-                }`}
+              className={`rounded-lg border p-4 text-left transition ${
+                draft.serviceId === service.id
+                  ? "border-cyan-300 bg-cyan-500/10"
+                  : "border-zinc-700 bg-zinc-900 hover:border-cyan-500"
+              }`}
             >
               <p className="font-semibold text-zinc-50">{service.name}</p>
               <p className="text-sm text-cyan-200">R$ {(service.priceCents / 100).toFixed(2)}</p>
@@ -158,7 +179,6 @@ export function SchedulerWizard({
             selectedDate={draft.date}
             onSelect={(date) => {
               setDraft((prev) => ({ ...prev, date, time: undefined }));
-              loadSlots(date, draft.serviceId);
             }}
           />
           <AvailableSlots
@@ -173,9 +193,9 @@ export function SchedulerWizard({
       {step === 3 && (
         <div className="mt-6 space-y-4">
           <div className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-4 text-sm text-zinc-300">
-            <p>Serviço: {selectedService?.name}</p>
+            <p>Servico: {selectedService?.name}</p>
             <p>Barbeiro: {DEFAULT_BARBER_NAME}</p>
-            <p>Horário: {draft.time ? new Date(draft.time).toLocaleString("pt-BR") : "-"}</p>
+            <p>Horario: {draft.time ? new Date(draft.time).toLocaleString("pt-BR") : "-"}</p>
           </div>
 
           <div>

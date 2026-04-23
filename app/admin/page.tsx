@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AdminLogin } from "@/components/admin/admin-login";
+import { ToastProvider } from "@/components/ui/toast";
 import { isAdminAuthenticated } from "@/lib/actions/booking-actions";
 
 export const metadata = {
@@ -14,9 +15,11 @@ export default async function AdminPage() {
 
   return (
     <div className="min-h-screen pb-10">
-      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <AdminLogin />
-      </main>
+      <ToastProvider>
+        <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+          <AdminLogin />
+        </main>
+      </ToastProvider>
     </div>
   );
 }

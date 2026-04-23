@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
 import { repository } from "@/lib/repositories";
@@ -15,12 +16,29 @@ import { BookingFilters } from "@/types/domain";
 import { generateAvailableSlots, getDayRange } from "./time";
 import { addMinutesToIso, overlaps } from "./utils";
 
+const HOME_REVALIDATE_SECONDS = 60 * 15;
+
+const getCachedServices = unstable_cache(async () => repository.getServices(), ["services"], {
+  revalidate: HOME_REVALIDATE_SECONDS,
+  tags: ["services"],
+});
+
+const getCachedGalleryImages = unstable_cache(async () => repository.listGalleryImages(), ["gallery-images"], {
+  revalidate: HOME_REVALIDATE_SECONDS,
+  tags: ["gallery-images"],
+});
+
+const getCachedBarbers = unstable_cache(async () => repository.getBarbers(), ["barbers"], {
+  revalidate: HOME_REVALIDATE_SECONDS,
+  tags: ["barbers"],
+});
+
 export async function listServices() {
-  return repository.getServices();
+  return getCachedServices();
 }
 
 export async function listGalleryImages() {
-  return repository.listGalleryImages();
+  return getCachedGalleryImages();
 }
 
 export async function createService(input: unknown) {
@@ -92,7 +110,7 @@ export async function deleteGalleryImage(input: unknown) {
 }
 
 export async function listBarbers() {
-  return repository.getBarbers();
+  return getCachedBarbers();
 }
 
 export async function getAvailableSlots(params: { date: string; barberId?: string; serviceId: string }) {

@@ -1,7 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -222,6 +222,7 @@ export async function replaceBarberDayAvailabilityAction(payload: {
   await replaceBarberDayAvailability(payload);
   revalidatePath("/admin/horarios");
   revalidatePath("/agendar");
+  updateTag("barbers");
 }
 
 export async function updateServiceAction(payload: {
@@ -234,6 +235,7 @@ export async function updateServiceAction(payload: {
   revalidatePath("/admin/servicos");
   revalidatePath("/");
   revalidatePath("/agendar");
+  updateTag("services");
 }
 
 export async function createServiceAction(payload: {
@@ -245,6 +247,7 @@ export async function createServiceAction(payload: {
   revalidatePath("/admin/servicos");
   revalidatePath("/");
   revalidatePath("/agendar");
+  updateTag("services");
 }
 
 export async function deleteServiceAction(payload: { serviceId: string }) {
@@ -253,6 +256,7 @@ export async function deleteServiceAction(payload: { serviceId: string }) {
   revalidatePath("/admin/servicos");
   revalidatePath("/");
   revalidatePath("/agendar");
+  updateTag("services");
 }
 
 export async function createGalleryImageAction(payload: {
@@ -263,6 +267,7 @@ export async function createGalleryImageAction(payload: {
   await createGalleryImage(payload);
   revalidatePath("/admin/galeria");
   revalidatePath("/");
+  updateTag("gallery-images");
 }
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
@@ -317,6 +322,7 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
     await createGalleryImage({ imageUrl, altText });
     revalidatePath("/admin/galeria");
     revalidatePath("/");
+    updateTag("gallery-images");
     return { success: true, message: "Foto adicionada na galeria" };
   } catch (error) {
     return {
@@ -341,6 +347,7 @@ export async function deleteGalleryImageAction(payload: { galleryImageId: string
 
   revalidatePath("/admin/galeria");
   revalidatePath("/");
+  updateTag("gallery-images");
 }
 
 export async function isAdminAuthenticated() {
