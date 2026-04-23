@@ -1,7 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useTransition } from "react";
-import { createAdminAccessAction, deleteAdminAccessAction } from "@/lib/actions/admin-access-actions";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import {
+  createAdminAccessAction,
+  deleteAdminAccessAction,
+  updateAdminAccessAction,
+} from "@/lib/actions/admin-access-actions";
 import { useToast } from "@/components/ui/toast";
 import { AdminAccessUser } from "@/types/domain";
 
@@ -10,6 +14,13 @@ const initialState = { success: false, message: "" };
 type AdminAccessesProps = {
   accesses: AdminAccessUser[];
   loadError?: string;
+};
+
+type EditDraft = {
+  accessId: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
 };
 
 function formatDateTime(iso?: string) {
@@ -27,6 +38,8 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
   const { pushToast } = useToast();
   const [state, formAction, isPendingCreate] = useActionState(createAdminAccessAction, initialState);
   const [isPendingDelete, startDeleteTransition] = useTransition();
+  const [isPendingUpdate, startUpdateTransition] = useTransition();
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
 
   useEffect(() => {
     if (!state.message) {
@@ -49,6 +62,32 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
     });
   }
 
+  function startEditing(access: AdminAccessUser) {
+    setEditDraft({
+      accessId: access.id,
+      email: access.email,
+      password: "",
+      confirmPassword: "",
+    });
+  }
+
+  function handleSave() {
+    if (!editDraft) {
+      return;
+    }
+
+    startUpdateTransition(async () => {
+      const result = await updateAdminAccessAction(editDraft);
+      pushToast(result.message || "Falha ao atualizar acesso", result.success ? "success" : "error");
+      if (result.success) {
+        setEditDraft(null);
+        window.location.reload();
+      }
+    });
+  }
+
+  const isBusy = isPendingCreate || isPendingDelete || isPendingUpdate || Boolean(loadError);
+
   return (
     <section className="space-y-6">
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-4 sm:px-5">
@@ -58,7 +97,7 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
 
       {loadError ? (
         <div className="rounded-2xl border border-amber-600/50 bg-amber-500/10 p-4 text-sm text-amber-100">
-          <p className="font-semibold">A seção de acessos precisa de migration</p>
+          <p className="font-semibold">A secao de acessos precisa de migration</p>
           <p className="mt-1">{loadError}</p>
           <p className="mt-2 text-amber-200">Execute: npm run prisma:migrate:deploy</p>
         </div>
@@ -103,28 +142,109 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
               <tr>
                 <th className="px-2 py-2">Email</th>
                 <th className="px-2 py-2">Criado em</th>
-                <th className="px-2 py-2">Último login</th>
-                <th className="px-2 py-2">Ações</th>
+                <th className="px-2 py-2">Ultimo login</th>
+                <th className="px-2 py-2">Acoes</th>
               </tr>
             </thead>
             <tbody>
-              {accesses.map((access) => (
-                <tr key={access.id} className="border-t border-zinc-800 text-zinc-200">
-                  <td className="px-2 py-2">{access.email}</td>
-                  <td className="px-2 py-2 text-zinc-400">{formatDateTime(access.createdAt)}</td>
-                  <td className="px-2 py-2 text-zinc-400">{formatDateTime(access.lastLoginAt)}</td>
-                  <td className="px-2 py-2">
-                    <button
-                      type="button"
-                      disabled={isPendingDelete || accesses.length <= 1 || Boolean(loadError)}
-                      onClick={() => handleDelete(access.id)}
-                      className="rounded-md border border-red-500/60 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/10 disabled:opacity-50"
-                    >
-                      Remover
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {accesses.map((access) => {
+                const isEditing = editDraft?.accessId === access.id;
+                const currentEdit = isEditing ? editDraft : null;
+
+                return (
+                  <tr key={access.id} className="border-t border-zinc-800 text-zinc-200 align-top">
+                    <td className="px-2 py-2">
+                      {currentEdit ? (
+                        <div className="space-y-2">
+                          <input
+                            type="email"
+                            value={currentEdit.email}
+                            onChange={(event) =>
+                              setEditDraft((prev) => (prev ? { ...prev, email: event.target.value } : prev))
+                            }
+                            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                          />
+                          <input
+                            type="password"
+                            value={currentEdit.password}
+                            onChange={(event) =>
+                              setEditDraft((prev) => (prev ? { ...prev, password: event.target.value } : prev))
+                            }
+                            placeholder="Nova senha (opcional)"
+                            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                          />
+                          <input
+                            type="password"
+                            value={currentEdit.confirmPassword}
+                            onChange={(event) =>
+                              setEditDraft((prev) =>
+                                prev ? { ...prev, confirmPassword: event.target.value } : prev,
+                              )
+                            }
+                            placeholder="Confirmar nova senha"
+                            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                          />
+                        </div>
+                      ) : (
+                        access.email
+                      )}
+                    </td>
+                    <td className="px-2 py-2 text-zinc-400">{formatDateTime(access.createdAt)}</td>
+                    <td className="px-2 py-2 text-zinc-400">{formatDateTime(access.lastLoginAt)}</td>
+                    <td className="px-2 py-2">
+                      <div className="flex gap-2">
+                        {isEditing ? (
+                          <>
+                            <button
+                              type="button"
+                              title="Salvar"
+                              aria-label="Salvar"
+                              disabled={isBusy}
+                              onClick={handleSave}
+                              className="rounded-md border border-cyan-500/60 px-3 py-1.5 text-sm text-cyan-200 transition hover:bg-cyan-500/10 disabled:opacity-50"
+                            >
+                              {"\uD83D\uDCBE"}
+                            </button>
+                            <button
+                              type="button"
+                              title="Cancelar"
+                              aria-label="Cancelar"
+                              disabled={isBusy}
+                              onClick={() => setEditDraft(null)}
+                              className="rounded-md border border-zinc-600 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-zinc-800 disabled:opacity-50"
+                            >
+                              {"\u2716"}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              title="Editar"
+                              aria-label="Editar"
+                              disabled={isBusy}
+                              onClick={() => startEditing(access)}
+                              className="rounded-md border border-cyan-500/60 px-3 py-1.5 text-sm text-cyan-200 transition hover:bg-cyan-500/10 disabled:opacity-50"
+                            >
+                              {"\u270F\uFE0F"}
+                            </button>
+                            <button
+                              type="button"
+                              title="Remover"
+                              aria-label="Remover"
+                              disabled={isBusy || accesses.length <= 1}
+                              onClick={() => handleDelete(access.id)}
+                              className="rounded-md border border-red-500/60 px-3 py-1.5 text-sm text-red-200 transition hover:bg-red-500/10 disabled:opacity-50"
+                            >
+                              {"\uD83D\uDDD1\uFE0F"}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {accesses.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-2 py-4 text-center text-zinc-500">

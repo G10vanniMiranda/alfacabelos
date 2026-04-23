@@ -208,6 +208,78 @@ export async function deleteAdminAccess(accessId: string): Promise<boolean> {
   }
 }
 
+export async function updateAdminAccess(input: {
+  accessId: string;
+  email: string;
+  password?: string;
+}): Promise<AdminAccessUser | null> {
+  const hasTable = await ensureAdminAccessTableExists();
+  if (!hasTable) {
+    throw new Error(ADMIN_ACCESS_TABLE_ERROR);
+  }
+
+  const email = normalizeEmail(input.email);
+  const password = input.password?.trim();
+
+  try {
+    const existing = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "AdminAccess"
+      WHERE "email" = ${email}
+        AND "isActive" = true
+        AND "id" <> ${input.accessId}
+      LIMIT 1
+    `;
+
+    if (existing.length > 0) {
+      throw new Error("Ja existe um acesso admin com este email");
+    }
+
+    const now = new Date();
+    if (password) {
+      const passwordHash = await hashPassword(password);
+      await prisma.$executeRaw`
+        UPDATE "AdminAccess"
+        SET "email" = ${email},
+            "passwordHash" = ${passwordHash},
+            "updatedAt" = ${now}
+        WHERE "id" = ${input.accessId}
+          AND "isActive" = true
+      `;
+    } else {
+      await prisma.$executeRaw`
+        UPDATE "AdminAccess"
+        SET "email" = ${email},
+            "updatedAt" = ${now}
+        WHERE "id" = ${input.accessId}
+          AND "isActive" = true
+      `;
+    }
+
+    const rows = await prisma.$queryRaw<AdminAccessRow[]>`
+      SELECT "id", "email", "passwordHash", "isActive", "createdAt", "updatedAt", "lastLoginAt"
+      FROM "AdminAccess"
+      WHERE "id" = ${input.accessId}
+        AND "isActive" = true
+      LIMIT 1
+    `;
+
+    const updated = rows[0];
+    return updated ? toAdminAccessUser(stripPasswordHash(updated)) : null;
+  } catch (error) {
+    if (error instanceof Error && error.message === "Ja existe um acesso admin com este email") {
+      throw error;
+    }
+
+    if (isTableMissingError(error)) {
+      adminAccessTableExists = false;
+      throw new Error(ADMIN_ACCESS_TABLE_ERROR);
+    }
+
+    throw error;
+  }
+}
+
 export async function countAdminAccesses(): Promise<number> {
   const hasTable = await ensureAdminAccessTableExists();
   if (!hasTable) {

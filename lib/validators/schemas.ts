@@ -54,6 +54,46 @@ export const updateBookingStatusSchema = z.object({
   status: z.enum(["PENDENTE", "CONFIRMADO", "CANCELADO"]),
 });
 
+export const updateAdminAccessSchema = z
+  .object({
+    accessId: z.string().min(1, "Acesso invalido"),
+    email: z.string().trim().email("Email invalido"),
+    password: z.string(),
+    confirmPassword: z.string(),
+  })
+  .superRefine((data, ctx) => {
+    const password = data.password.trim();
+    const confirmPassword = data.confirmPassword.trim();
+
+    if (!password && !confirmPassword) {
+      return;
+    }
+
+    if (password.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Senha deve ter pelo menos 8 caracteres",
+        path: ["password"],
+      });
+    }
+
+    if (confirmPassword.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Confirme a senha com pelo menos 8 caracteres",
+        path: ["confirmPassword"],
+      });
+    }
+
+    if (password !== confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "As senhas nao conferem",
+        path: ["confirmPassword"],
+      });
+    }
+  });
+
 export const createBlockedSlotSchema = z.object({
   barberId: z.string().optional(),
   dateTimeStart: z.string().datetime("Início inválido"),

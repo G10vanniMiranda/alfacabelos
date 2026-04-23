@@ -2,8 +2,8 @@
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createAdminAccessSchema } from "@/lib/validators/schemas";
-import { countAdminAccesses, createAdminAccess, deleteAdminAccess } from "@/lib/auth/admin-access-store";
+import { createAdminAccessSchema, updateAdminAccessSchema } from "@/lib/validators/schemas";
+import { countAdminAccesses, createAdminAccess, deleteAdminAccess, updateAdminAccess } from "@/lib/auth/admin-access-store";
 import { isAdminSessionTokenValid } from "@/lib/auth/admin-session-store";
 import { ActionState } from "@/types/scheduler";
 
@@ -76,6 +76,46 @@ export async function deleteAdminAccessAction(accessId: string): Promise<ActionS
     return {
       success: false,
       message: error instanceof Error ? error.message : "Falha ao remover acesso",
+    };
+  }
+}
+
+export async function updateAdminAccessAction(input: {
+  accessId: string;
+  email: string;
+  password?: string;
+  confirmPassword?: string;
+}): Promise<ActionState> {
+  await assertAdminSession();
+
+  const parsed = updateAdminAccessSchema.safeParse({
+    accessId: input.accessId,
+    email: input.email,
+    password: input.password ?? "",
+    confirmPassword: input.confirmPassword ?? "",
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados invalidos" };
+  }
+
+  try {
+    const updated = await updateAdminAccess({
+      accessId: parsed.data.accessId,
+      email: parsed.data.email,
+      password: parsed.data.password.trim() || undefined,
+    });
+
+    if (!updated) {
+      return { success: false, message: "Acesso nao encontrado" };
+    }
+
+    revalidatePath("/admin/acessos");
+    return { success: true, message: "Acesso atualizado com sucesso" };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Falha ao atualizar acesso",
     };
   }
 }
