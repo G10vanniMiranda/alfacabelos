@@ -17,7 +17,7 @@ import {
   updateService,
   updateBookingStatus,
 } from "@/lib/booking-service";
-import { adminLoginSchema } from "@/lib/validators/schemas";
+import { adminLoginSchema, createAdminBookingSchema } from "@/lib/validators/schemas";
 import { ActionState } from "@/types/scheduler";
 import { authenticateAdminAccess, registerAdminLogin } from "@/lib/auth/admin-access-store";
 import { createAdminSession, isAdminSessionTokenValid, revokeAdminSession } from "@/lib/auth/admin-session-store";
@@ -121,6 +121,105 @@ export async function createBookingAction(payload: {
       success: true,
       message: "Agendamento criado com sucesso.",
       bookingId: booking.id,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Falha ao criar agendamento",
+    };
+  }
+}
+
+function addRecurrenceStep(date: Date, recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY") {
+  const next = new Date(date);
+  if (recurrence === "DAILY") {
+    next.setDate(next.getDate() + 1);
+    return next;
+  }
+  if (recurrence === "WEEKLY") {
+    next.setDate(next.getDate() + 7);
+    return next;
+  }
+  if (recurrence === "MONTHLY") {
+    next.setMonth(next.getMonth() + 1);
+    return next;
+  }
+  next.setDate(next.getDate() + 1000);
+  return next;
+}
+
+export async function createAdminBookingsAction(payload: {
+  serviceId: string;
+  barberId: string;
+  customerName: string;
+  customerPhone: string;
+  start: string;
+  recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
+  repeatUntil?: string;
+}): Promise<ActionState> {
+  await assertAdminSession();
+
+  const parsed = createAdminBookingSchema.safeParse(payload);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message ?? "Dados invalidos para criar agendamento",
+    };
+  }
+
+  try {
+    const starts: string[] = [];
+    const firstStart = new Date(parsed.data.start);
+    const repeatUntil = parsed.data.repeatUntil ? new Date(`${parsed.data.repeatUntil}T23:59:59`) : null;
+    let cursor = new Date(firstStart);
+
+    while (starts.length < 60) {
+      if (repeatUntil && cursor > repeatUntil) {
+        break;
+      }
+
+      starts.push(cursor.toISOString());
+
+      if (parsed.data.recurrence === "NONE") {
+        break;
+      }
+
+      cursor = addRecurrenceStep(cursor, parsed.data.recurrence);
+    }
+
+    if (parsed.data.recurrence !== "NONE" && starts.length >= 60) {
+      return {
+        success: false,
+        message: "Limite de 60 repeticoes por criacao. Reduza o periodo.",
+      };
+    }
+
+    let firstBookingId: string | undefined;
+
+    for (const start of starts) {
+      const booking = await createBooking({
+        serviceId: parsed.data.serviceId,
+        barberId: parsed.data.barberId,
+        start,
+        customerName: parsed.data.customerName,
+        customerPhone: parsed.data.customerPhone,
+      });
+
+      if (!firstBookingId) {
+        firstBookingId = booking.id;
+      }
+    }
+
+    revalidatePath("/admin/agenda");
+    revalidatePath("/admin/dashboard");
+
+    return {
+      success: true,
+      message:
+        starts.length === 1
+          ? "Agendamento criado com sucesso."
+          : `${starts.length} agendamentos criados com sucesso.`,
+      bookingId: firstBookingId,
     };
   } catch (error) {
     return {

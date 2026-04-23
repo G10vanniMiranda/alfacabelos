@@ -54,6 +54,60 @@ export const updateBookingStatusSchema = z.object({
   status: z.enum(["PENDENTE", "CONFIRMADO", "CANCELADO"]),
 });
 
+export const createAdminBookingSchema = z
+  .object({
+    serviceId: z.string().min(1, "Servico e obrigatorio"),
+    barberId: z.string().min(1, "Barbeiro e obrigatorio"),
+    customerName: z.string().trim().min(2, "Informe o nome do cliente"),
+    customerPhone: phoneSchema,
+    start: z.string().datetime("Data/hora invalida"),
+    recurrence: z.enum(["NONE", "DAILY", "WEEKLY", "MONTHLY"]),
+    repeatUntil: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.recurrence === "NONE") {
+      return;
+    }
+
+    const repeatUntil = data.repeatUntil?.trim() ?? "";
+    if (!repeatUntil) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Informe ate quando repetir",
+        path: ["repeatUntil"],
+      });
+      return;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(repeatUntil)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Data final invalida",
+        path: ["repeatUntil"],
+      });
+      return;
+    }
+
+    const startDate = new Date(data.start);
+    const untilDate = new Date(`${repeatUntil}T23:59:59`);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(untilDate.getTime())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Data final invalida",
+        path: ["repeatUntil"],
+      });
+      return;
+    }
+
+    if (untilDate < startDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "A repeticao deve terminar depois do primeiro agendamento",
+        path: ["repeatUntil"],
+      });
+    }
+  });
+
 export const updateAdminAccessSchema = z
   .object({
     accessId: z.string().min(1, "Acesso invalido"),
