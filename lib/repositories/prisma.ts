@@ -1,10 +1,11 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { barbersSeed, servicesSeed } from "@/lib/data/seed";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { Barber, BarberAvailability, Booking, BookingWithRelations, BlockedSlot, GalleryImage } from "@/types/domain";
-import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput } from "./types";
+import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput, UpdateBookingInput } from "./types";
 
-function toBooking(row: {
+type BookingRow = {
   id: string;
   barberId: string;
   serviceId: string;
@@ -13,8 +14,22 @@ function toBooking(row: {
   dateTimeStart: Date;
   dateTimeEnd: Date;
   status: "PENDENTE" | "CONFIRMADO" | "CANCELADO";
+  paymentStatus?: "PENDENTE" | "CONFIRMADO" | null;
+  paymentConfirmedAt?: Date | null;
   createdAt: Date;
-}): Booking {
+};
+
+type BookingWithRelationsRow = BookingRow & {
+  barberName: string;
+  barberAvatarUrl: string | null;
+  barberIsActive: boolean;
+  serviceName: string;
+  serviceDurationMinutes: number;
+  servicePriceCents: number;
+  serviceIsActive: boolean;
+};
+
+function toBooking(row: BookingRow): Booking {
   return {
     id: row.id,
     barberId: row.barberId,
@@ -24,7 +39,28 @@ function toBooking(row: {
     dateTimeStart: row.dateTimeStart.toISOString(),
     dateTimeEnd: row.dateTimeEnd.toISOString(),
     status: row.status,
+    paymentStatus: row.paymentStatus ?? "PENDENTE",
+    paymentConfirmedAt: row.paymentConfirmedAt?.toISOString(),
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function toBookingWithRelations(row: BookingWithRelationsRow): BookingWithRelations {
+  return {
+    ...toBooking(row),
+    barber: {
+      id: row.barberId,
+      name: row.barberName,
+      avatarUrl: row.barberAvatarUrl ?? undefined,
+      isActive: row.barberIsActive,
+    },
+    service: {
+      id: row.serviceId,
+      name: row.serviceName,
+      durationMinutes: row.serviceDurationMinutes,
+      priceCents: row.servicePriceCents,
+      isActive: row.serviceIsActive,
+    },
   };
 }
 
@@ -98,6 +134,8 @@ let galleryTableChecked = false;
 let galleryTableExists = false;
 let availabilityTableChecked = false;
 let availabilityTableExists = false;
+let bookingPaymentColumnsChecked = false;
+let bookingPaymentColumnsExist = false;
 
 function isDatabaseUnavailableError(error: unknown): boolean {
   if (!error || typeof error !== "object") {
@@ -235,6 +273,91 @@ async function ensureBarberAvailabilityTableExists(): Promise<boolean> {
   return availabilityTableExists;
 }
 
+async function ensureBookingPaymentColumnsExist(): Promise<boolean> {
+  if (bookingPaymentColumnsChecked) {
+    return bookingPaymentColumnsExist;
+  }
+
+  try {
+    const result = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'Booking'
+          AND column_name = 'paymentStatus'
+      ) AS "exists"
+    `;
+    bookingPaymentColumnsExist = result[0]?.exists === true;
+  } catch {
+    bookingPaymentColumnsExist = false;
+  } finally {
+    bookingPaymentColumnsChecked = true;
+  }
+
+  return bookingPaymentColumnsExist;
+}
+
+async function getBookingWithRelationsById(id: string): Promise<BookingWithRelations | undefined> {
+  const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
+  const rows = hasPaymentColumns
+    ? await prisma.$queryRaw<BookingWithRelationsRow[]>`
+        SELECT
+          b.id,
+          b."barberId",
+          b."serviceId",
+          b."customerName",
+          b."customerPhone",
+          b."dateTimeStart",
+          b."dateTimeEnd",
+          b.status::text AS status,
+          COALESCE(b."paymentStatus"::text, 'PENDENTE') AS "paymentStatus",
+          b."paymentConfirmedAt",
+          b."createdAt",
+          br.name AS "barberName",
+          br."avatarUrl" AS "barberAvatarUrl",
+          br."isActive" AS "barberIsActive",
+          s.name AS "serviceName",
+          s."durationMinutes" AS "serviceDurationMinutes",
+          s."priceCents" AS "servicePriceCents",
+          s."isActive" AS "serviceIsActive"
+        FROM "Booking" b
+        INNER JOIN "Barber" br ON br.id = b."barberId"
+        INNER JOIN "Service" s ON s.id = b."serviceId"
+        WHERE b.id = ${id}
+        LIMIT 1
+      `
+    : await prisma.$queryRaw<BookingWithRelationsRow[]>`
+        SELECT
+          b.id,
+          b."barberId",
+          b."serviceId",
+          b."customerName",
+          b."customerPhone",
+          b."dateTimeStart",
+          b."dateTimeEnd",
+          b.status::text AS status,
+          'PENDENTE' AS "paymentStatus",
+          NULL::timestamp AS "paymentConfirmedAt",
+          b."createdAt",
+          br.name AS "barberName",
+          br."avatarUrl" AS "barberAvatarUrl",
+          br."isActive" AS "barberIsActive",
+          s.name AS "serviceName",
+          s."durationMinutes" AS "serviceDurationMinutes",
+          s."priceCents" AS "servicePriceCents",
+          s."isActive" AS "serviceIsActive"
+        FROM "Booking" b
+        INNER JOIN "Barber" br ON br.id = b."barberId"
+        INNER JOIN "Service" s ON s.id = b."serviceId"
+        WHERE b.id = ${id}
+        LIMIT 1
+      `;
+
+  const row = rows[0];
+  return row ? toBookingWithRelations(row) : undefined;
+}
+
 export const prismaRepository: BookingRepository = {
   async getServices() {
     return readWithFallback(async () => {
@@ -330,49 +453,83 @@ export const prismaRepository: BookingRepository = {
   },
 
   async getBookingById(id: string) {
-    const booking = await prisma.booking.findUnique({
-      where: { id },
-      include: { barber: true, service: true },
-    });
-    if (!booking) {
-      return undefined;
-    }
-
-    return {
-      ...toBooking(booking),
-      barber: toBarber(booking.barber),
-      service: booking.service,
-    } satisfies BookingWithRelations;
+    return getBookingWithRelationsById(id);
   },
 
   async listBookings(filters) {
-    const where = {
-      ...(filters?.barberId ? { barberId: filters.barberId } : {}),
-      ...(filters?.status && filters.status !== "TODOS" ? { status: filters.status } : {}),
-      ...(filters?.date
-        ? {
-          dateTimeStart: {
-            gte: new Date(`${filters.date}T00:00:00`),
-            lte: new Date(`${filters.date}T23:59:59.999`),
-          },
-        }
-        : {}),
-    };
+    const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
+    const barberFilter = filters?.barberId ? Prisma.sql`AND b."barberId" = ${filters.barberId}` : Prisma.empty;
+    const statusFilter =
+      filters?.status && filters.status !== "TODOS"
+        ? Prisma.sql`AND b.status::text = ${filters.status}`
+        : Prisma.empty;
+    const dateFilter = filters?.date
+      ? Prisma.sql`AND b."dateTimeStart" >= ${new Date(`${filters.date}T00:00:00`)} AND b."dateTimeStart" <= ${new Date(
+        `${filters.date}T23:59:59.999`,
+      )}`
+      : Prisma.empty;
 
-    const rows = await prisma.booking.findMany({
-      where,
-      include: { barber: true, service: true },
-      orderBy: { dateTimeStart: "asc" },
-    });
+    const rows = hasPaymentColumns
+      ? await prisma.$queryRaw<BookingWithRelationsRow[]>`
+          SELECT
+            b.id,
+            b."barberId",
+            b."serviceId",
+            b."customerName",
+            b."customerPhone",
+            b."dateTimeStart",
+            b."dateTimeEnd",
+            b.status::text AS status,
+            COALESCE(b."paymentStatus"::text, 'PENDENTE') AS "paymentStatus",
+            b."paymentConfirmedAt",
+            b."createdAt",
+            br.name AS "barberName",
+            br."avatarUrl" AS "barberAvatarUrl",
+            br."isActive" AS "barberIsActive",
+            s.name AS "serviceName",
+            s."durationMinutes" AS "serviceDurationMinutes",
+            s."priceCents" AS "servicePriceCents",
+            s."isActive" AS "serviceIsActive"
+          FROM "Booking" b
+          INNER JOIN "Barber" br ON br.id = b."barberId"
+          INNER JOIN "Service" s ON s.id = b."serviceId"
+          WHERE 1 = 1
+          ${barberFilter}
+          ${statusFilter}
+          ${dateFilter}
+          ORDER BY b."dateTimeStart" ASC
+        `
+      : await prisma.$queryRaw<BookingWithRelationsRow[]>`
+          SELECT
+            b.id,
+            b."barberId",
+            b."serviceId",
+            b."customerName",
+            b."customerPhone",
+            b."dateTimeStart",
+            b."dateTimeEnd",
+            b.status::text AS status,
+            'PENDENTE' AS "paymentStatus",
+            NULL::timestamp AS "paymentConfirmedAt",
+            b."createdAt",
+            br.name AS "barberName",
+            br."avatarUrl" AS "barberAvatarUrl",
+            br."isActive" AS "barberIsActive",
+            s.name AS "serviceName",
+            s."durationMinutes" AS "serviceDurationMinutes",
+            s."priceCents" AS "servicePriceCents",
+            s."isActive" AS "serviceIsActive"
+          FROM "Booking" b
+          INNER JOIN "Barber" br ON br.id = b."barberId"
+          INNER JOIN "Service" s ON s.id = b."serviceId"
+          WHERE 1 = 1
+          ${barberFilter}
+          ${statusFilter}
+          ${dateFilter}
+          ORDER BY b."dateTimeStart" ASC
+        `;
 
-    return rows.map(
-      (row) =>
-        ({
-          ...toBooking(row),
-          barber: toBarber(row.barber),
-          service: row.service,
-        }) satisfies BookingWithRelations,
-    );
+    return rows.map(toBookingWithRelations);
   },
 
   async listBlockedSlots(date) {
@@ -406,18 +563,78 @@ export const prismaRepository: BookingRepository = {
   },
 
   async createBooking(input: CreateBookingInput) {
-    const created = await prisma.booking.create({
-      data: {
-        barberId: input.barberId,
-        serviceId: input.serviceId,
-        customerName: input.customerName,
-        customerPhone: input.customerPhone,
-        dateTimeStart: new Date(input.dateTimeStart),
-        dateTimeEnd: new Date(input.dateTimeEnd),
+    const created = await prisma.$transaction(
+      async (tx) => {
+        const conflict = await tx.booking.findFirst({
+          where: {
+            barberId: input.barberId,
+            status: { not: "CANCELADO" },
+            dateTimeStart: { lt: new Date(input.dateTimeEnd) },
+            dateTimeEnd: { gt: new Date(input.dateTimeStart) },
+          },
+        });
+
+        if (conflict) {
+          throw new Error("Este horario acabou de ser reservado. Escolha outro horario.");
+        }
+
+        return tx.booking.create({
+          data: {
+            barberId: input.barberId,
+            serviceId: input.serviceId,
+            customerName: input.customerName,
+            customerPhone: input.customerPhone,
+            dateTimeStart: new Date(input.dateTimeStart),
+            dateTimeEnd: new Date(input.dateTimeEnd),
+          },
+        });
       },
-    });
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
 
     return toBooking(created);
+  },
+
+  async updateBooking(input: UpdateBookingInput) {
+    const existing = await prisma.booking.findUnique({
+      where: { id: input.bookingId },
+    });
+    if (!existing) {
+      return undefined;
+    }
+
+    const updated = await prisma.$transaction(
+      async (tx) => {
+        const conflict = await tx.booking.findFirst({
+          where: {
+            id: { not: input.bookingId },
+            barberId: input.barberId,
+            status: { not: "CANCELADO" },
+            dateTimeStart: { lt: new Date(input.dateTimeEnd) },
+            dateTimeEnd: { gt: new Date(input.dateTimeStart) },
+          },
+        });
+
+        if (conflict) {
+          throw new Error("Este horario acabou de ser reservado. Escolha outro horario.");
+        }
+
+        return tx.booking.update({
+          where: { id: input.bookingId },
+          data: {
+            barberId: input.barberId,
+            serviceId: input.serviceId,
+            customerName: input.customerName,
+            customerPhone: input.customerPhone,
+            dateTimeStart: new Date(input.dateTimeStart),
+            dateTimeEnd: new Date(input.dateTimeEnd),
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    return toBooking(updated);
   },
 
   async updateBookingStatus(bookingId, status) {
@@ -434,6 +651,31 @@ export const prismaRepository: BookingRepository = {
     });
 
     return toBooking(updated);
+  },
+
+  async updateBookingPaymentStatus(bookingId, paymentStatus) {
+    const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
+    if (!hasPaymentColumns) {
+      throw new Error("Confirmacao de pagamento indisponivel. Execute a migration do banco.");
+    }
+
+    const existing = await prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+    if (!existing) {
+      return undefined;
+    }
+
+    await prisma.$executeRaw`
+      UPDATE "Booking"
+      SET
+        "paymentStatus" = CAST(${paymentStatus} AS "BookingPaymentStatus"),
+        "paymentConfirmedAt" = ${paymentStatus === "CONFIRMADO" ? new Date() : null}
+      WHERE id = ${bookingId}
+    `;
+
+    const updated = await getBookingWithRelationsById(bookingId);
+    return updated ?? undefined;
   },
 
   async createBlockedSlot(input: CreateBlockedSlotInput) {

@@ -1,3 +1,6 @@
+ "use client";
+
+import { useRef } from "react";
 import { Barber, BookingWithRelations } from "@/types/domain";
 import { formatBRLFromCents } from "@/lib/utils";
 
@@ -15,6 +18,15 @@ type RevenueGroup = {
   label: string;
   totalCents: number;
   bookingsCount: number;
+};
+
+type DateInputWithPickerProps = {
+  name: string;
+  defaultValue: string;
+};
+
+type DateInputElement = HTMLInputElement & {
+  showPicker?: () => void;
 };
 
 function formatDateTime(iso: string) {
@@ -64,6 +76,35 @@ function groupRevenue(
   return Array.from(map.values()).sort((a, b) => b.totalCents - a.totalCents);
 }
 
+function DateInputWithPicker({ name, defaultValue }: DateInputWithPickerProps) {
+  const inputRef = useRef<DateInputElement | null>(null);
+
+  function openPicker() {
+    inputRef.current?.showPicker?.();
+    inputRef.current?.focus();
+  }
+
+  return (
+    <div className="relative rounded-lg border border-zinc-700 bg-zinc-950">
+      <input
+        ref={inputRef}
+        type="date"
+        name={name}
+        defaultValue={defaultValue}
+        className="w-full bg-transparent px-3 py-2 pr-12 text-zinc-100 outline-none [&::-webkit-calendar-picker-indicator]:opacity-0"
+      />
+      <button
+        type="button"
+        onClick={openPicker}
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-zinc-600 px-2 py-1 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-300"
+        aria-label={`Abrir calendario de ${name === "from" ? "data inicial" : "data final"}`}
+      >
+        📅
+      </button>
+    </div>
+  );
+}
+
 export function AdminEarnings({
   from,
   to,
@@ -97,22 +138,12 @@ export function AdminEarnings({
     <section className="space-y-6">
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-4 sm:px-5">
         <h2 className="text-xl font-semibold text-zinc-100 sm:text-2xl">Controle de ganhos</h2>
-        <p className="mt-1 text-sm text-zinc-400">Acompanhe o faturamento confirmado e a previsão de entradas.</p>
+        <p className="mt-1 text-sm text-zinc-400">Acompanhe os recebimentos confirmados e o que ainda aguarda pagamento.</p>
       </div>
 
       <form className="grid gap-3 rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 md:grid-cols-[180px_180px_1fr_auto]">
-        <input
-          type="date"
-          name="from"
-          defaultValue={from}
-          className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-        />
-        <input
-          type="date"
-          name="to"
-          defaultValue={to}
-          className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-        />
+        <DateInputWithPicker name="from" defaultValue={from} />
+        <DateInputWithPicker name="to" defaultValue={to} />
         <select
           name="barberId"
           defaultValue={barberId}
@@ -137,22 +168,22 @@ export function AdminEarnings({
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Faturamento</p>
           <p className="mt-2 text-2xl font-black text-emerald-300">{formatBRLFromCents(totalConfirmedCents)}</p>
-          <p className="mt-1 text-sm text-zinc-400">apenas agendamentos confirmados</p>
+          <p className="mt-1 text-sm text-zinc-400">apenas pagamentos confirmados</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Previsão</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Previsao</p>
           <p className="mt-2 text-2xl font-black text-amber-300">{formatBRLFromCents(pendingPotentialCents)}</p>
-          <p className="mt-1 text-sm text-zinc-400">valor pendente de confirmação</p>
+          <p className="mt-1 text-sm text-zinc-400">valor aguardando confirmacao de pagamento</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Atendimentos</p>
           <p className="mt-2 text-2xl font-black text-zinc-100">{totalBookings}</p>
-          <p className="mt-1 text-sm text-zinc-400">confirmados no período</p>
+          <p className="mt-1 text-sm text-zinc-400">pagamentos confirmados no periodo</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Ticket médio</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Ticket medio</p>
           <p className="mt-2 text-2xl font-black text-zinc-100">{formatBRLFromCents(averageTicketCents)}</p>
-          <p className="mt-1 text-sm text-zinc-400">média por atendimento confirmado</p>
+          <p className="mt-1 text-sm text-zinc-400">media por pagamento confirmado</p>
         </article>
       </div>
 
@@ -164,24 +195,24 @@ export function AdminEarnings({
               <article key={item.key} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
                 <p className="font-semibold text-zinc-100">{item.label}</p>
                 <p className="mt-1 text-sm text-cyan-300">{formatBRLFromCents(item.totalCents)}</p>
-                <p className="mt-1 text-xs text-zinc-500">{item.bookingsCount} confirmado(s)</p>
+                <p className="mt-1 text-xs text-zinc-500">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {dailyRevenue.length === 0 ? <p className="text-sm text-zinc-500">Sem faturamento no período.</p> : null}
+            {dailyRevenue.length === 0 ? <p className="text-sm text-zinc-500">Sem faturamento no periodo.</p> : null}
           </div>
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-          <h3 className="text-lg font-semibold text-zinc-100">Ganhos por serviço</h3>
+          <h3 className="text-lg font-semibold text-zinc-100">Ganhos por servico</h3>
           <div className="mt-4 space-y-2">
             {serviceRevenue.map((item) => (
               <article key={item.key} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
                 <p className="font-semibold text-zinc-100">{item.label}</p>
                 <p className="mt-1 text-sm text-cyan-300">{formatBRLFromCents(item.totalCents)}</p>
-                <p className="mt-1 text-xs text-zinc-500">{item.bookingsCount} confirmado(s)</p>
+                <p className="mt-1 text-xs text-zinc-500">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {serviceRevenue.length === 0 ? <p className="text-sm text-zinc-500">Sem serviços confirmados no período.</p> : null}
+            {serviceRevenue.length === 0 ? <p className="text-sm text-zinc-500">Sem servicos pagos no periodo.</p> : null}
           </div>
         </section>
 
@@ -192,22 +223,22 @@ export function AdminEarnings({
               <article key={item.key} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
                 <p className="font-semibold text-zinc-100">{item.label}</p>
                 <p className="mt-1 text-sm text-cyan-300">{formatBRLFromCents(item.totalCents)}</p>
-                <p className="mt-1 text-xs text-zinc-500">{item.bookingsCount} confirmado(s)</p>
+                <p className="mt-1 text-xs text-zinc-500">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {barberRevenue.length === 0 ? <p className="text-sm text-zinc-500">Sem barbeiros com ganhos no período.</p> : null}
+            {barberRevenue.length === 0 ? <p className="text-sm text-zinc-500">Sem barbeiros com ganhos no periodo.</p> : null}
           </div>
         </section>
       </div>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-        <h3 className="text-lg font-semibold text-zinc-100">Últimos recebimentos confirmados</h3>
+        <h3 className="text-lg font-semibold text-zinc-100">Ultimos recebimentos confirmados</h3>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-190 text-left text-sm">
             <thead className="text-zinc-400">
               <tr>
                 <th className="px-2 py-2">Cliente</th>
-                <th className="px-2 py-2">Serviço</th>
+                <th className="px-2 py-2">Servico</th>
                 <th className="px-2 py-2">Barbeiro</th>
                 <th className="px-2 py-2">Data</th>
                 <th className="px-2 py-2">Valor</th>
@@ -216,21 +247,21 @@ export function AdminEarnings({
             <tbody>
               {confirmedBookings
                 .slice()
-                .sort((a, b) => new Date(b.dateTimeStart).getTime() - new Date(a.dateTimeStart).getTime())
+                .sort((a, b) => new Date(b.paymentConfirmedAt ?? b.dateTimeStart).getTime() - new Date(a.paymentConfirmedAt ?? a.dateTimeStart).getTime())
                 .slice(0, 20)
                 .map((booking) => (
                   <tr key={booking.id} className="border-t border-zinc-800 text-zinc-200">
                     <td className="px-2 py-2">{booking.customerName}</td>
                     <td className="px-2 py-2">{booking.service.name}</td>
                     <td className="px-2 py-2">{booking.barber.name}</td>
-                    <td className="px-2 py-2 text-zinc-400">{formatDateTime(booking.dateTimeStart)}</td>
+                    <td className="px-2 py-2 text-zinc-400">{formatDateTime(booking.paymentConfirmedAt ?? booking.dateTimeStart)}</td>
                     <td className="px-2 py-2 text-emerald-300">{formatBRLFromCents(booking.service.priceCents)}</td>
                   </tr>
                 ))}
               {confirmedBookings.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-2 py-4 text-center text-zinc-500">
-                    Nenhum recebimento confirmado no período selecionado.
+                    Nenhum recebimento confirmado no periodo selecionado.
                   </td>
                 </tr>
               ) : null}

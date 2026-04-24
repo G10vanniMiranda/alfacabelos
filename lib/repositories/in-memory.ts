@@ -7,12 +7,13 @@ import {
   BlockedSlot,
   Booking,
   BookingFilters,
+  BookingPaymentStatus,
   BookingStatus,
   BookingWithRelations,
   GalleryImage,
   Service,
 } from "@/types/domain";
-import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput } from "./types";
+import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput, UpdateBookingInput } from "./types";
 
 const data = {
   barbers: [...barbersSeed] as Barber[],
@@ -138,6 +139,23 @@ export const inMemoryRepository: BookingRepository = {
   },
 
   async createBooking(input: CreateBookingInput) {
+    const hasConflict = data.bookings.some((booking) => {
+      if (booking.barberId !== input.barberId || booking.status === "CANCELADO") {
+        return false;
+      }
+
+      return overlaps(
+        new Date(input.dateTimeStart),
+        new Date(input.dateTimeEnd),
+        new Date(booking.dateTimeStart),
+        new Date(booking.dateTimeEnd),
+      );
+    });
+
+    if (hasConflict) {
+      throw new Error("Este horario acabou de ser reservado. Escolha outro horario.");
+    }
+
     const booking: Booking = {
       id: createId("booking"),
       barberId: input.barberId,
@@ -147,10 +165,43 @@ export const inMemoryRepository: BookingRepository = {
       dateTimeStart: input.dateTimeStart,
       dateTimeEnd: input.dateTimeEnd,
       status: "PENDENTE",
+      paymentStatus: "PENDENTE",
       createdAt: new Date().toISOString(),
     };
 
     data.bookings.push(booking);
+    return booking;
+  },
+
+  async updateBooking(input: UpdateBookingInput) {
+    const booking = data.bookings.find((item) => item.id === input.bookingId);
+    if (!booking) {
+      return undefined;
+    }
+
+    const hasConflict = data.bookings.some((item) => {
+      if (item.id === input.bookingId || item.barberId !== input.barberId || item.status === "CANCELADO") {
+        return false;
+      }
+
+      return overlaps(
+        new Date(input.dateTimeStart),
+        new Date(input.dateTimeEnd),
+        new Date(item.dateTimeStart),
+        new Date(item.dateTimeEnd),
+      );
+    });
+
+    if (hasConflict) {
+      throw new Error("Este horario acabou de ser reservado. Escolha outro horario.");
+    }
+
+    booking.barberId = input.barberId;
+    booking.serviceId = input.serviceId;
+    booking.customerName = input.customerName;
+    booking.customerPhone = input.customerPhone;
+    booking.dateTimeStart = input.dateTimeStart;
+    booking.dateTimeEnd = input.dateTimeEnd;
     return booking;
   },
 
@@ -160,6 +211,16 @@ export const inMemoryRepository: BookingRepository = {
       return undefined;
     }
     booking.status = status;
+    return booking;
+  },
+
+  async updateBookingPaymentStatus(bookingId: string, paymentStatus: BookingPaymentStatus) {
+    const booking = data.bookings.find((item) => item.id === bookingId);
+    if (!booking) {
+      return undefined;
+    }
+    booking.paymentStatus = paymentStatus;
+    booking.paymentConfirmedAt = paymentStatus === "CONFIRMADO" ? new Date().toISOString() : undefined;
     return booking;
   },
 

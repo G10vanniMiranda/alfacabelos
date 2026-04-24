@@ -1,4 +1,5 @@
 export type BookingStatus = "PENDENTE" | "CONFIRMADO" | "CANCELADO";
+export type BookingPaymentStatus = "PENDENTE" | "CONFIRMADO";
 
 export type Barber = {
   id: string;
@@ -24,6 +25,8 @@ export type Booking = {
   dateTimeStart: string;
   dateTimeEnd: string;
   status: BookingStatus;
+  paymentStatus: BookingPaymentStatus;
+  paymentConfirmedAt?: string;
   createdAt: string;
 };
 

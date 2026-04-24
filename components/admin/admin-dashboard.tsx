@@ -5,6 +5,7 @@ import {
   adminLogoutAction,
   createBlockedSlotAction,
   deleteBlockedSlotAction,
+  updateBookingPaymentStatusAction,
   updateBookingStatusAction,
   updateServiceAction,
 } from "@/lib/actions/booking-actions";
@@ -84,6 +85,18 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
         window.location.reload();
       } catch (error) {
         pushToast(error instanceof Error ? error.message : "Erro ao atualizar", "error");
+      }
+    });
+  }
+
+  function changePaymentStatus(bookingId: string, paymentStatus: "PENDENTE" | "CONFIRMADO") {
+    startTransition(async () => {
+      try {
+        await updateBookingPaymentStatusAction({ bookingId, paymentStatus });
+        pushToast("Pagamento atualizado", "success");
+        window.location.reload();
+      } catch (error) {
+        pushToast(error instanceof Error ? error.message : "Erro ao atualizar pagamento", "error");
       }
     });
   }
@@ -274,6 +287,7 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
                   <th className="px-3 py-2">Barbeiro</th>
                   <th className="px-3 py-2">Horário</th>
                   <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Pagamento</th>
                   <th className="px-3 py-2">Ações</th>
                 </tr>
               </thead>
@@ -289,6 +303,17 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
                     <td className="whitespace-nowrap px-3 py-2 text-zinc-300">{new Date(booking.dateTimeStart).toLocaleString("pt-BR")}</td>
                     <td className="px-3 py-2"><StatusBadge status={booking.status} /></td>
                     <td className="px-3 py-2">
+                      <span
+                        className={`rounded-full border px-2 py-1 text-xs font-semibold ${
+                          booking.paymentStatus === "CONFIRMADO"
+                            ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-200"
+                            : "border-amber-400/50 bg-amber-500/15 text-amber-100"
+                        }`}
+                      >
+                        {booking.paymentStatus}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -297,6 +322,14 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
                           className="rounded border border-emerald-400/50 px-2 py-1 text-xs text-emerald-200"
                         >
                           Confirmar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPending || booking.status === "CANCELADO" || booking.paymentStatus === "CONFIRMADO"}
+                          onClick={() => changePaymentStatus(booking.id, "CONFIRMADO")}
+                          className="rounded border border-cyan-400/50 px-2 py-1 text-xs text-cyan-200 disabled:opacity-50"
+                        >
+                          Confirmar pagamento
                         </button>
                         <button
                           type="button"
@@ -312,7 +345,7 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-5 text-center text-zinc-500">
+                    <td colSpan={7} className="px-3 py-5 text-center text-zinc-500">
                       Nenhum agendamento encontrado.
                     </td>
                   </tr>

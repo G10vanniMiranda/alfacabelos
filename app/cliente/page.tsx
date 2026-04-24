@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { cancelMyBookingAction, getCurrentClient, logoutClientAction } from "@/lib/actions/client-auth-actions";
+import {
+  cancelMyBookingAction,
+  confirmMyBookingAction,
+  getCurrentClient,
+  logoutClientAction,
+} from "@/lib/actions/client-auth-actions";
 import { listClientBookings } from "@/lib/booking-service";
 
 export const metadata = {
@@ -107,6 +112,17 @@ export default async function ClientAreaPage() {
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
                     <StatusBadge status={booking.status} />
+                    {booking.status === "PENDENTE" ? (
+                      <form action={confirmMyBookingAction}>
+                        <input type="hidden" name="bookingId" value={booking.id} />
+                        <button
+                          type="submit"
+                          className="rounded-md border border-emerald-500/60 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/15"
+                        >
+                          Confirmar agendamento
+                        </button>
+                      </form>
+                    ) : null}
                     <form action={cancelMyBookingAction}>
                       <input type="hidden" name="bookingId" value={booking.id} />
                       <button

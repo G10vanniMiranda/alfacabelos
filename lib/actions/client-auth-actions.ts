@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { clientLoginSchema, clientRegisterSchema } from "@/lib/validators/schemas";
 import { authenticateClient, createClient, findClientById } from "@/lib/auth/client-store";
-import { cancelClientBooking } from "@/lib/booking-service";
+import { cancelClientBooking, confirmClientBooking } from "@/lib/booking-service";
 import { ActionState } from "@/types/scheduler";
 
 const CLIENT_COOKIE = "barber_client";
@@ -108,6 +108,22 @@ export async function cancelMyBookingAction(formData: FormData) {
   }
 
   await cancelClientBooking({ bookingId, customerPhone: client.phone });
+  revalidatePath("/cliente");
+  revalidatePath("/admin/agenda");
+}
+
+export async function confirmMyBookingAction(formData: FormData) {
+  const bookingId = String(formData.get("bookingId") ?? "");
+  if (!bookingId) {
+    return;
+  }
+
+  const client = await getCurrentClient();
+  if (!client) {
+    return;
+  }
+
+  await confirmClientBooking({ bookingId, customerPhone: client.phone });
   revalidatePath("/cliente");
   revalidatePath("/admin/agenda");
 }

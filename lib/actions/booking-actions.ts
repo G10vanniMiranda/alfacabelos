@@ -14,6 +14,8 @@ import {
   deleteService,
   deleteBlockedSlot,
   replaceBarberDayAvailability,
+  updateAdminBooking,
+  updateBookingPaymentStatus,
   updateService,
   updateBookingStatus,
 } from "@/lib/booking-service";
@@ -288,6 +290,43 @@ export async function updateBookingStatusAction(payload: { bookingId: string; st
   await assertAdminSession();
   await updateBookingStatus(payload);
   revalidatePath("/admin/agenda");
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/ganhos");
+}
+
+export async function updateBookingPaymentStatusAction(payload: {
+  bookingId: string;
+  paymentStatus: "PENDENTE" | "CONFIRMADO";
+}) {
+  await assertAdminSession();
+  await updateBookingPaymentStatus(payload);
+  revalidatePath("/admin/agenda");
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/ganhos");
+}
+
+export async function updateAdminBookingAction(payload: {
+  bookingId: string;
+  serviceId: string;
+  barberId: string;
+  customerName: string;
+  customerPhone: string;
+  start: string;
+}): Promise<ActionState> {
+  await assertAdminSession();
+
+  try {
+    await updateAdminBooking(payload);
+    revalidatePath("/admin/agenda");
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/cliente");
+    return { success: true, message: "Agendamento atualizado com sucesso." };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Falha ao atualizar agendamento",
+    };
+  }
 }
 
 export async function createBlockedSlotAction(payload: {

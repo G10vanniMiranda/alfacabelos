@@ -3,6 +3,7 @@ import {
   BlockedSlot,
   Booking,
   BookingFilters,
+  BookingPaymentStatus,
   BookingStatus,
   BookingWithRelations,
   BarberAvailability,
@@ -11,6 +12,16 @@ import {
 } from "@/types/domain";
 
 export type CreateBookingInput = {
+  serviceId: string;
+  barberId: string;
+  customerName: string;
+  customerPhone: string;
+  dateTimeStart: string;
+  dateTimeEnd: string;
+};
+
+export type UpdateBookingInput = {
+  bookingId: string;
   serviceId: string;
   barberId: string;
   customerName: string;
@@ -52,7 +63,9 @@ export interface BookingRepository {
   listBlockedSlots(date?: string): Promise<BlockedSlot[]>;
   listBookingsInRange(startIso: string, endIso: string, barberId?: string): Promise<Booking[]>;
   createBooking(input: CreateBookingInput): Promise<Booking>;
+  updateBooking(input: UpdateBookingInput): Promise<Booking | undefined>;
   updateBookingStatus(bookingId: string, status: BookingStatus): Promise<Booking | undefined>;
+  updateBookingPaymentStatus(bookingId: string, paymentStatus: BookingPaymentStatus): Promise<Booking | undefined>;
   createBlockedSlot(input: CreateBlockedSlotInput): Promise<BlockedSlot>;
   deleteBlockedSlot(blockedSlotId: string): Promise<boolean>;
   listBarberAvailabilities(barberId: string): Promise<BarberAvailability[]>;

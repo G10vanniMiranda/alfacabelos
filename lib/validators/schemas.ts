@@ -54,6 +54,20 @@ export const updateBookingStatusSchema = z.object({
   status: z.enum(["PENDENTE", "CONFIRMADO", "CANCELADO"]),
 });
 
+export const updateBookingPaymentStatusSchema = z.object({
+  bookingId: z.string().min(1),
+  paymentStatus: z.enum(["PENDENTE", "CONFIRMADO"]),
+});
+
+export const updateAdminBookingSchema = z.object({
+  bookingId: z.string().min(1, "Agendamento invalido"),
+  serviceId: z.string().min(1, "Servico e obrigatorio"),
+  barberId: z.string().min(1, "Barbeiro e obrigatorio"),
+  customerName: z.string().trim().min(2, "Informe o nome do cliente"),
+  customerPhone: phoneSchema,
+  start: z.string().datetime("Data/hora invalida"),
+});
+
 export const createAdminBookingSchema = z
   .object({
     serviceId: z.string().min(1, "Servico e obrigatorio"),

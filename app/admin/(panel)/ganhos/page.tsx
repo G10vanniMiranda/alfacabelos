@@ -45,8 +45,12 @@ export default async function AdminGanhosPage({
     return true;
   });
 
-  const confirmed = filtered.filter((booking) => booking.status === "CONFIRMADO");
-  const pending = filtered.filter((booking) => booking.status === "PENDENTE");
+  const confirmed = filtered.filter(
+    (booking) => booking.status !== "CANCELADO" && booking.paymentStatus === "CONFIRMADO",
+  );
+  const pending = filtered.filter(
+    (booking) => booking.status !== "CANCELADO" && booking.paymentStatus === "PENDENTE",
+  );
 
   return (
     <AdminEarnings

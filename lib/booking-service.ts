@@ -9,6 +9,8 @@ import {
   createServiceSchema,
   deleteGalleryImageSchema,
   replaceBarberDayAvailabilitySchema,
+  updateAdminBookingSchema,
+  updateBookingPaymentStatusSchema,
   updateBookingStatusSchema,
   updateServiceSchema,
 } from "@/lib/validators/schemas";
@@ -186,6 +188,39 @@ export async function createBooking(input: unknown) {
   });
 }
 
+export async function updateAdminBooking(input: unknown) {
+  const parsed = updateAdminBookingSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados do agendamento invalidos");
+  }
+
+  const service = await repository.getServiceById(parsed.data.serviceId);
+  if (!service) {
+    throw new Error("Servico nao encontrado");
+  }
+
+  const computedEnd = addMinutesToIso(
+    parsed.data.start,
+    service.durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes,
+  );
+
+  const updated = await repository.updateBooking({
+    bookingId: parsed.data.bookingId,
+    barberId: parsed.data.barberId,
+    serviceId: parsed.data.serviceId,
+    customerName: parsed.data.customerName,
+    customerPhone: parsed.data.customerPhone,
+    dateTimeStart: parsed.data.start,
+    dateTimeEnd: computedEnd,
+  });
+
+  if (!updated) {
+    throw new Error("Agendamento nao encontrado");
+  }
+
+  return updated;
+}
+
 export async function getBookingById(bookingId: string) {
   return repository.getBookingById(bookingId);
 }
@@ -221,6 +256,27 @@ export async function cancelClientBooking(input: { bookingId: string; customerPh
   return repository.updateBookingStatus(booking.id, "CANCELADO");
 }
 
+export async function confirmClientBooking(input: { bookingId: string; customerPhone: string }) {
+  const booking = await repository.getBookingById(input.bookingId);
+  if (!booking) {
+    throw new Error("Agendamento nao encontrado");
+  }
+
+  if (normalizePhone(booking.customerPhone) !== normalizePhone(input.customerPhone)) {
+    throw new Error("Voce nao tem permissao para confirmar este agendamento");
+  }
+
+  if (booking.status === "CANCELADO") {
+    throw new Error("Nao e possivel confirmar um agendamento cancelado");
+  }
+
+  if (booking.status === "CONFIRMADO") {
+    return booking;
+  }
+
+  return repository.updateBookingStatus(booking.id, "CONFIRMADO");
+}
+
 export async function updateBookingStatus(input: unknown) {
   const parsed = updateBookingStatusSchema.safeParse(input);
   if (!parsed.success) {
@@ -237,6 +293,20 @@ export async function updateBookingStatus(input: unknown) {
 
 export async function listBlockedSlots(date?: string) {
   return repository.listBlockedSlots(date);
+}
+
+export async function updateBookingPaymentStatus(input: unknown) {
+  const parsed = updateBookingPaymentStatusSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Status de pagamento invalido");
+  }
+
+  const updated = await repository.updateBookingPaymentStatus(parsed.data.bookingId, parsed.data.paymentStatus);
+  if (!updated) {
+    throw new Error("Agendamento nao encontrado");
+  }
+
+  return updated;
 }
 
 export async function createBlockedSlot(input: unknown) {

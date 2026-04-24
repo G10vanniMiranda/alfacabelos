@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { createAdminBookingsAction, updateBookingStatusAction } from "@/lib/actions/booking-actions";
+import {
+  createAdminBookingsAction,
+  updateAdminBookingAction,
+  updateBookingPaymentStatusAction,
+  updateBookingStatusAction,
+} from "@/lib/actions/booking-actions";
 import { DateCalendar } from "@/components/scheduler/date-calendar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
@@ -25,6 +30,16 @@ type CreateBookingDraft = {
   time: string;
   recurrence: RecurrenceOption;
   repeatUntil: string;
+};
+
+type EditBookingDraft = {
+  bookingId: string;
+  serviceId: string;
+  barberId: string;
+  customerName: string;
+  customerPhone: string;
+  date: string;
+  time: string;
 };
 
 function formatTimeLabel(iso: string) {
@@ -54,6 +69,8 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   const [allBookings, setAllBookings] = useState(bookings);
   const [lastAlert, setLastAlert] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingBooking, setEditingBooking] = useState<EditBookingDraft | null>(null);
+  const [openActionsBookingId, setOpenActionsBookingId] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState(() => formatDateInput(new Date()));
   const [barberFilter, setBarberFilter] = useState("TODOS");
   const [statusFilter, setStatusFilter] = useState("TODOS");
@@ -62,6 +79,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   );
   const knownBookingIdsRef = useRef(new Set(bookings.map((booking) => booking.id)));
   const hasLoadedPollRef = useRef(false);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   const minCalendarDate = useMemo(() => {
     if (allBookings.length === 0) {
@@ -150,7 +168,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                   void audioContext.close().catch(() => undefined);
                 }, 450);
               } catch {
-                // Se o navegador bloquear o audio, mantemos o aviso visual e o toast.
+                // Mantem apenas alerta visual e toast.
               }
             }
           }
@@ -183,6 +201,27 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
     };
   }, [syncBookings]);
 
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!actionsMenuRef.current?.contains(event.target as Node)) {
+        setOpenActionsBookingId(null);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpenActionsBookingId(null);
+      }
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
   function openCreateModal() {
     setCreateDraft(getDefaultDraft(barbers, services, dateFilter, barberFilter));
     setIsCreateModalOpen(true);
@@ -192,14 +231,57 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
     setIsCreateModalOpen(false);
   }
 
+  function openEditModal(booking: BookingWithRelations) {
+    const date = booking.dateTimeStart.slice(0, 10);
+    const local = new Date(booking.dateTimeStart);
+    const time = local.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    setEditingBooking({
+      bookingId: booking.id,
+      serviceId: booking.serviceId,
+      barberId: booking.barberId,
+      customerName: booking.customerName,
+      customerPhone: booking.customerPhone,
+      date,
+      time,
+    });
+    setOpenActionsBookingId(null);
+  }
+
+  function closeEditModal() {
+    setEditingBooking(null);
+  }
+
+  function toggleActionsMenu(bookingId: string) {
+    setOpenActionsBookingId((prev) => (prev === bookingId ? null : bookingId));
+  }
+
   function changeStatus(bookingId: string, status: "PENDENTE" | "CONFIRMADO" | "CANCELADO") {
     startStatusTransition(async () => {
       try {
         await updateBookingStatusAction({ bookingId, status });
         pushToast("Status atualizado", "success");
+        setOpenActionsBookingId(null);
         await syncBookings({ showErrorToast: true });
       } catch (error) {
         pushToast(error instanceof Error ? error.message : "Erro ao atualizar", "error");
+      }
+    });
+  }
+
+  function changePaymentStatus(bookingId: string, paymentStatus: "PENDENTE" | "CONFIRMADO") {
+    startStatusTransition(async () => {
+      try {
+        await updateBookingPaymentStatusAction({ bookingId, paymentStatus });
+        pushToast("Pagamento atualizado", "success");
+        setOpenActionsBookingId(null);
+        await syncBookings({ showErrorToast: true });
+      } catch (error) {
+        pushToast(error instanceof Error ? error.message : "Erro ao atualizar pagamento", "error");
       }
     });
   }
@@ -233,6 +315,38 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       }
 
       closeCreateModal();
+      await syncBookings({ showErrorToast: true });
+    });
+  }
+
+  function handleEditBooking() {
+    if (!editingBooking?.date || !editingBooking.time) {
+      pushToast("Selecione data e horario", "error");
+      return;
+    }
+
+    const start = new Date(`${editingBooking.date}T${editingBooking.time}:00`);
+    if (Number.isNaN(start.getTime())) {
+      pushToast("Data/hora invalida", "error");
+      return;
+    }
+
+    startCreateTransition(async () => {
+      const result = await updateAdminBookingAction({
+        bookingId: editingBooking.bookingId,
+        serviceId: editingBooking.serviceId,
+        barberId: editingBooking.barberId,
+        customerName: editingBooking.customerName,
+        customerPhone: editingBooking.customerPhone,
+        start: start.toISOString(),
+      });
+
+      pushToast(result.message, result.success ? "success" : "error");
+      if (!result.success) {
+        return;
+      }
+
+      closeEditModal();
       await syncBookings({ showErrorToast: true });
     });
   }
@@ -331,6 +445,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               <th className="px-3 py-2">Barbeiro</th>
               <th className="px-3 py-2">Horario</th>
               <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Pagamento</th>
               <th className="px-3 py-2">Acoes</th>
             </tr>
           </thead>
@@ -350,30 +465,77 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                   <StatusBadge status={booking.status} />
                 </td>
                 <td className="px-3 py-2">
-                  <div className="flex flex-wrap gap-2">
+                  <span
+                    className={`rounded-full border px-2 py-1 text-xs font-semibold ${
+                      booking.paymentStatus === "CONFIRMADO"
+                        ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-200"
+                        : "border-amber-400/50 bg-amber-500/15 text-amber-100"
+                    }`}
+                  >
+                    {booking.paymentStatus}
+                  </span>
+                </td>
+                <td className="px-3 py-2">
+                  <div className="relative" ref={openActionsBookingId === booking.id ? actionsMenuRef : null}>
                     <button
                       type="button"
                       disabled={isBusy}
-                      onClick={() => changeStatus(booking.id, "CONFIRMADO")}
-                      className="rounded border border-emerald-400/50 px-2 py-1 text-xs text-emerald-200"
+                      onClick={() => toggleActionsMenu(booking.id)}
+                      aria-haspopup="menu"
+                      aria-expanded={openActionsBookingId === booking.id}
+                      aria-label="Abrir acoes do agendamento"
+                      className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-300 disabled:opacity-40"
                     >
-                      Confirmar
+                      ⋯
                     </button>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => changeStatus(booking.id, "CANCELADO")}
-                      className="rounded border border-red-400/60 px-2 py-1 text-xs text-red-200"
-                    >
-                      Cancelar
-                    </button>
+
+                    {openActionsBookingId === booking.id ? (
+                      <div className="absolute right-0 top-12 z-20 min-w-56 rounded-xl border border-zinc-800 bg-zinc-950/98 p-2 shadow-2xl">
+                        <button
+                          type="button"
+                          disabled={isBusy || booking.status === "CONFIRMADO"}
+                          onClick={() => changeStatus(booking.id, "CONFIRMADO")}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-zinc-900 disabled:opacity-40"
+                        >
+                          <span>✅</span>
+                          <span>Confirmar agendamento</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isBusy || booking.status === "CANCELADO" || booking.paymentStatus === "CONFIRMADO"}
+                          onClick={() => changePaymentStatus(booking.id, "CONFIRMADO")}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-zinc-900 disabled:opacity-40"
+                        >
+                          <span>💰</span>
+                          <span>Confirmar pagamento</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => openEditModal(booking)}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-zinc-900 disabled:opacity-40"
+                        >
+                          <span>✏️</span>
+                          <span>Editar agendamento</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isBusy || booking.status === "CANCELADO"}
+                          onClick={() => changeStatus(booking.id, "CANCELADO")}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-red-200 transition hover:bg-red-500/10 disabled:opacity-40"
+                        >
+                          <span>❌</span>
+                          <span>Cancelar agendamento</span>
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-5 text-center text-zinc-500">
+                <td colSpan={7} className="px-3 py-5 text-center text-zinc-500">
                   Nenhum agendamento encontrado.
                 </td>
               </tr>
@@ -542,6 +704,131 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                 className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300 disabled:opacity-60"
               >
                 {isPendingCreate ? "Criando..." : "Salvar agendamento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editingBooking ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/75 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-zinc-100">Editar agendamento</h3>
+                <p className="mt-1 text-sm text-zinc-400">Corrija cliente, servico, barbeiro, data ou horario.</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditModal}
+                className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-sm text-zinc-300">Cliente</span>
+                <input
+                  type="text"
+                  value={editingBooking.customerName}
+                  onChange={(event) =>
+                    setEditingBooking((prev) => (prev ? { ...prev, customerName: event.target.value } : prev))
+                  }
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm text-zinc-300">Telefone</span>
+                <input
+                  type="text"
+                  value={editingBooking.customerPhone}
+                  onChange={(event) =>
+                    setEditingBooking((prev) =>
+                      prev ? { ...prev, customerPhone: formatPhone(event.target.value) } : prev,
+                    )
+                  }
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm text-zinc-300">Servico</span>
+                <select
+                  value={editingBooking.serviceId}
+                  onChange={(event) =>
+                    setEditingBooking((prev) => (prev ? { ...prev, serviceId: event.target.value } : prev))
+                  }
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                >
+                  {services.map((service) => (
+                    <option key={service.id} value={service.id}>
+                      {service.name} - {formatBRLFromCents(service.priceCents)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm text-zinc-300">Barbeiro</span>
+                <select
+                  value={editingBooking.barberId}
+                  onChange={(event) =>
+                    setEditingBooking((prev) => (prev ? { ...prev, barberId: event.target.value } : prev))
+                  }
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                >
+                  {barbers.map((barber) => (
+                    <option key={barber.id} value={barber.id}>
+                      {barber.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm text-zinc-300">Data</span>
+                <input
+                  type="date"
+                  value={editingBooking.date}
+                  onChange={(event) =>
+                    setEditingBooking((prev) => (prev ? { ...prev, date: event.target.value } : prev))
+                  }
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm text-zinc-300">Horario</span>
+                <input
+                  type="time"
+                  value={editingBooking.time}
+                  onChange={(event) =>
+                    setEditingBooking((prev) => (prev ? { ...prev, time: event.target.value } : prev))
+                  }
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                />
+              </label>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeEditModal}
+                disabled={isPendingCreate}
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:bg-zinc-800 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleEditBooking}
+                disabled={isPendingCreate}
+                className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300 disabled:opacity-60"
+              >
+                {isPendingCreate ? "Salvando..." : "Salvar alteracoes"}
               </button>
             </div>
           </div>

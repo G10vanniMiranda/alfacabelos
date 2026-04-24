@@ -14,6 +14,11 @@ enum BookingStatus {
   CANCELADO
 }
 
+enum BookingPaymentStatus {
+  PENDENTE
+  CONFIRMADO
+}
+
 model Barber {
   id         String       @id @default(cuid())
   name       String
@@ -42,6 +47,8 @@ model Booking {
   dateTimeStart  DateTime
   dateTimeEnd    DateTime
   status         BookingStatus @default(PENDENTE)
+  paymentStatus  BookingPaymentStatus @default(PENDENTE)
+  paymentConfirmedAt DateTime?
   createdAt      DateTime      @default(now())
 
   barber Barber @relation(fields: [barberId], references: [id])
@@ -49,6 +56,7 @@ model Booking {
 
   @@index([barberId, dateTimeStart])
   @@index([status])
+  @@index([paymentStatus])
 }
 
 model BlockedSlot {
