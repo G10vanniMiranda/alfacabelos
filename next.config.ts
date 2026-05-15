@@ -1,5 +1,11 @@
 import type { NextConfig } from "next";
 
+const scriptSrc = ["script-src 'self' 'unsafe-inline'"];
+
+if (process.env.NODE_ENV === "development") {
+  scriptSrc.push("'unsafe-eval'");
+}
+
 const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
@@ -31,7 +37,7 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              scriptSrc.join(" "),
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https:",
               "font-src 'self' data: https:",

@@ -74,6 +74,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   const [dateFilter, setDateFilter] = useState(() => formatDateInput(new Date()));
   const [barberFilter, setBarberFilter] = useState("TODOS");
   const [statusFilter, setStatusFilter] = useState("TODOS");
+  const [actionsMenuPlacement, setActionsMenuPlacement] = useState<"down" | "up">("down");
   const [createDraft, setCreateDraft] = useState<CreateBookingDraft>(() =>
     getDefaultDraft(barbers, services, formatDateInput(new Date()), "TODOS"),
   );
@@ -256,7 +257,12 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
     setEditingBooking(null);
   }
 
-  function toggleActionsMenu(bookingId: string) {
+  function toggleActionsMenu(bookingId: string, button: HTMLButtonElement) {
+    const buttonRect = button.getBoundingClientRect();
+    const estimatedMenuHeight = 210;
+    const spaceBelow = window.innerHeight - buttonRect.bottom;
+
+    setActionsMenuPlacement(spaceBelow < estimatedMenuHeight ? "up" : "down");
     setOpenActionsBookingId((prev) => (prev === bookingId ? null : bookingId));
   }
 
@@ -436,7 +442,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-zinc-800">
+      <div className="rounded-xl border border-zinc-800">
         <table className="w-full min-w-190 text-left text-sm">
           <thead className="bg-zinc-900 text-zinc-300">
             <tr>
@@ -480,17 +486,21 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                     <button
                       type="button"
                       disabled={isBusy}
-                      onClick={() => toggleActionsMenu(booking.id)}
+                      onClick={(event) => toggleActionsMenu(booking.id, event.currentTarget)}
                       aria-haspopup="menu"
                       aria-expanded={openActionsBookingId === booking.id}
                       aria-label="Abrir acoes do agendamento"
                       className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-300 disabled:opacity-40"
                     >
-                      ⋯
+                      ...
                     </button>
 
                     {openActionsBookingId === booking.id ? (
-                      <div className="absolute right-0 top-12 z-20 min-w-56 rounded-xl border border-zinc-800 bg-zinc-950/98 p-2 shadow-2xl">
+                      <div
+                        className={`absolute right-0 z-20 min-w-56 rounded-xl border border-zinc-800 bg-zinc-950/98 p-2 shadow-2xl ${
+                          actionsMenuPlacement === "up" ? "bottom-12" : "top-12"
+                        }`}
+                      >
                         <button
                           type="button"
                           disabled={isBusy || booking.status === "CONFIRMADO"}

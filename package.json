@@ -14,22 +14,22 @@
     "admin:create": "tsx --tsconfig tsconfig.json scripts/create-admin-access.ts"
   },
   "dependencies": {
-    "@prisma/client": "^6.2.1",
-    "next": "16.1.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
+    "@prisma/client": "^6.19.3",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
+    "@tailwindcss/postcss": "^4.3.0",
+    "@types/node": "^20.19.41",
+    "@types/react": "^19.2.14",
     "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "16.2.6",
     "prisma": "^6.19.3",
-    "tailwindcss": "^4",
-    "tsx": "^4.19.2",
+    "tailwindcss": "^4.3.0",
+    "tsx": "^4.22.0",
     "typescript": "^5"
   }
 }
