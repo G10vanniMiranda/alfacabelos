@@ -36,12 +36,15 @@ export function DateCalendar({
   selectedDate,
   onSelect,
   maxMonthsForward = 5,
+  density = "comfortable",
 }: {
   minDate: string;
   selectedDate?: string;
   onSelect: (isoDate: string) => void;
   maxMonthsForward?: number;
+  density?: "comfortable" | "compact";
 }) {
+  const isCompact = density === "compact";
   const min = parseIsoDate(minDate);
   const minMonthKey = `${min.year}-${min.month}`;
   const maxMonth = addMonths(min.year, min.month, maxMonthsForward);
@@ -77,8 +80,12 @@ export function DateCalendar({
   }, [view.month, view.year]);
 
   return (
-    <div className="mt-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 shadow-inner shadow-black/20 sm:p-4">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      className={`mt-2 rounded-xl border border-zinc-800 bg-zinc-950/60 shadow-inner shadow-black/20 ${
+        isCompact ? "p-3" : "p-3 sm:p-4"
+      }`}
+    >
+      <div className={`${isCompact ? "mb-3" : "mb-4"} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -90,17 +97,21 @@ export function DateCalendar({
               }
               setView({ year: today.getFullYear(), month: today.getMonth() });
             }}
-            className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-100 transition hover:border-cyan-300"
+            className={`rounded-full border border-zinc-700 text-xs font-semibold text-zinc-100 transition hover:border-cyan-300 ${
+              isCompact ? "px-2.5 py-1" : "px-3 py-1.5"
+            }`}
           >
             Hoje
           </button>
-          <div className="flex items-center rounded-full border border-zinc-800 bg-zinc-900 p-1">
+          <div className={`flex items-center rounded-full border border-zinc-800 bg-zinc-900 ${isCompact ? "p-0.5" : "p-1"}`}>
             <button
               type="button"
               onClick={() => canGoPrev && setView((prev) => addMonths(prev.year, prev.month, -1))}
               disabled={!canGoPrev}
               aria-label="Mes anterior"
-              className="grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+              className={`grid place-items-center rounded-full leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${
+                isCompact ? "h-7 w-7 text-base" : "h-8 w-8 text-lg"
+              }`}
             >
               {"<"}
             </button>
@@ -109,18 +120,24 @@ export function DateCalendar({
               onClick={() => canGoNext && setView((prev) => addMonths(prev.year, prev.month, 1))}
               disabled={!canGoNext}
               aria-label="Proximo mes"
-              className="grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+              className={`grid place-items-center rounded-full leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${
+                isCompact ? "h-7 w-7 text-base" : "h-8 w-8 text-lg"
+              }`}
             >
               {">"}
             </button>
           </div>
         </div>
-        <p className="text-sm font-semibold capitalize text-zinc-100 sm:text-base">
+        <p className={`font-semibold capitalize text-zinc-100 ${isCompact ? "text-sm" : "text-sm sm:text-base"}`}>
           {monthLabel(view.year, view.month)}
         </p>
       </div>
 
-      <div className="grid grid-cols-7 border-b border-zinc-800 pb-2 text-center text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+      <div
+        className={`grid grid-cols-7 border-b border-zinc-800 text-center font-semibold uppercase tracking-wide text-zinc-500 ${
+          isCompact ? "pb-1.5 text-[10px]" : "pb-2 text-[11px]"
+        }`}
+      >
         {["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"].map((day) => (
           <div key={day} className="py-1">
             {day}
@@ -128,10 +145,10 @@ export function DateCalendar({
         ))}
       </div>
 
-      <div className="mt-2 grid grid-cols-7 gap-1 sm:gap-2">
+      <div className={`grid grid-cols-7 ${isCompact ? "mt-1.5 gap-1" : "mt-2 gap-1 sm:gap-2"}`}>
         {cells.map((cell) => {
           if (!cell.iso || !cell.label) {
-            return <div key={cell.key} className="aspect-square rounded-full" />;
+            return <div key={cell.key} className={isCompact ? "h-9 rounded-full" : "aspect-square rounded-full"} />;
           }
 
           const disabled = cell.iso < minDate;
@@ -145,7 +162,9 @@ export function DateCalendar({
               disabled={disabled}
               onClick={() => onSelect(cell.iso!)}
               aria-pressed={selected}
-              className={`aspect-square rounded-full border text-sm font-semibold transition ${
+              className={`${isCompact ? "h-9 min-w-0" : "aspect-square"} rounded-full border font-semibold transition ${
+                isCompact ? "text-xs" : "text-sm"
+              } ${
                 selected
                   ? "border-cyan-300 bg-cyan-400 text-zinc-950 shadow-lg shadow-cyan-950/30"
                   : disabled

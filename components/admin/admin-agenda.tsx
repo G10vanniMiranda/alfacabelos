@@ -40,6 +40,15 @@ type EditBookingDraft = {
   customerPhone: string;
   date: string;
   time: string;
+  recurrence: RecurrenceOption;
+  repeatUntil: string;
+};
+
+type RecurrenceDraft = {
+  date: string;
+  time: string;
+  recurrence: RecurrenceOption;
+  repeatUntil: string;
 };
 
 type ActionsMenuPosition = {
@@ -143,7 +152,7 @@ function getDefaultRepeatUntil(date: string, recurrence: RecurrenceOption) {
   return date;
 }
 
-function buildOccurrenceStarts(draft: CreateBookingDraft) {
+function buildOccurrenceStarts(draft: RecurrenceDraft) {
   if (!draft.date || !draft.time) {
     return [];
   }
@@ -216,6 +225,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingBooking, setEditingBooking] = useState<EditBookingDraft | null>(null);
   const [openActionsBookingId, setOpenActionsBookingId] = useState<string | null>(null);
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(false);
   const [dateFilter, setDateFilter] = useState(() => formatDateInput(new Date()));
   const [barberFilter, setBarberFilter] = useState("TODOS");
   const [statusFilter, setStatusFilter] = useState("TODOS");
@@ -227,6 +237,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   const knownBookingIdsRef = useRef(new Set(bookings.map((booking) => booking.id)));
   const hasLoadedPollRef = useRef(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const notificationAudioRef = useRef<AudioContext | null>(null);
 
   const minCalendarDate = useMemo(() => {
     if (allBookings.length === 0) {
@@ -281,6 +292,79 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
     return createOccurrenceStarts.slice(0, 3).map((start) => formatDateTimeLabel(start));
   }, [createOccurrenceStarts]);
   const recurrenceHasLimitError = createDraft.recurrence !== "NONE" && createOccurrenceStarts.length >= 60;
+  const editOccurrenceStarts = useMemo(() => {
+    return editingBooking ? buildOccurrenceStarts(editingBooking) : [];
+  }, [editingBooking]);
+  const editOccurrencePreview = useMemo(() => {
+    return editOccurrenceStarts.slice(0, 3).map((start) => formatDateTimeLabel(start));
+  }, [editOccurrenceStarts]);
+  const editRecurrenceHasLimitError =
+    editingBooking?.recurrence !== "NONE" && editOccurrenceStarts.length >= 60;
+
+  const getNotificationAudioContext = useCallback(() => {
+    const AudioContextClass = window.AudioContext || (window as typeof window & {
+      webkitAudioContext?: typeof AudioContext;
+    }).webkitAudioContext;
+
+    if (!AudioContextClass) {
+      return null;
+    }
+
+    if (!notificationAudioRef.current) {
+      notificationAudioRef.current = new AudioContextClass();
+    }
+
+    return notificationAudioRef.current;
+  }, []);
+
+  const playNewBookingSound = useCallback(() => {
+    const audioContext = getNotificationAudioContext();
+    if (!audioContext || audioContext.state === "suspended") {
+      return;
+    }
+
+    const now = audioContext.currentTime;
+    const notes = [
+      { frequency: 880, start: 0, duration: 0.13 },
+      { frequency: 1174.66, start: 0.15, duration: 0.16 },
+      { frequency: 1567.98, start: 0.34, duration: 0.24 },
+    ];
+
+    for (const note of notes) {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      const start = now + note.start;
+      const end = start + note.duration;
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(note.frequency, start);
+      gainNode.gain.setValueAtTime(0.0001, start);
+      gainNode.gain.exponentialRampToValueAtTime(0.16, start + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, end);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      oscillator.start(start);
+      oscillator.stop(end + 0.02);
+    }
+  }, [getNotificationAudioContext]);
+
+  async function enableNotificationSound() {
+    const audioContext = getNotificationAudioContext();
+    if (!audioContext) {
+      pushToast("Som indisponivel neste navegador", "error");
+      return;
+    }
+
+    try {
+      await audioContext.resume();
+      setNotificationSoundEnabled(true);
+      playNewBookingSound();
+      pushToast("Som de novos agendamentos ativado", "success");
+    } catch {
+      pushToast("Nao foi possivel ativar o som", "error");
+    }
+  }
 
   const syncBookings = useCallback(async (options?: { notifyNew?: boolean; showErrorToast?: boolean }) => {
     try {
@@ -314,34 +398,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             setLastAlert(alertMessage);
             pushToast(alertMessage, "success");
 
-            const AudioContextClass = window.AudioContext || (window as typeof window & {
-              webkitAudioContext?: typeof AudioContext;
-            }).webkitAudioContext;
-
-            if (AudioContextClass) {
-              try {
-                const audioContext = new AudioContextClass();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-
-                oscillator.type = "triangle";
-                oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(660, audioContext.currentTime + 0.18);
-                gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.09, audioContext.currentTime + 0.02);
-                gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.35);
-
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.36);
-                window.setTimeout(() => {
-                  void audioContext.close().catch(() => undefined);
-                }, 450);
-              } catch {
-                // Mantem apenas alerta visual e toast.
-              }
-            }
+            playNewBookingSound();
           }
         }
 
@@ -355,7 +412,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         pushToast(error instanceof Error ? error.message : "Erro ao atualizar agenda", "error");
       }
     }
-  }, [pushToast]);
+  }, [playNewBookingSound, pushToast]);
 
   useEffect(() => {
     setAllBookings(bookings);
@@ -371,6 +428,12 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       window.clearInterval(intervalId);
     };
   }, [syncBookings]);
+
+  useEffect(() => {
+    return () => {
+      void notificationAudioRef.current?.close().catch(() => undefined);
+    };
+  }, []);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -434,6 +497,8 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       customerPhone: booking.customerPhone,
       date,
       time,
+      recurrence: "NONE",
+      repeatUntil: date,
     });
     setOpenActionsBookingId(null);
     setActionsMenuPosition(null);
@@ -552,9 +617,19 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       return;
     }
 
-    const start = new Date(`${editingBooking.date}T${editingBooking.time}:00`);
-    if (Number.isNaN(start.getTime())) {
+    const starts = buildOccurrenceStarts(editingBooking);
+    if (starts.length === 0) {
       pushToast("Data/hora invalida", "error");
+      return;
+    }
+
+    if (editingBooking.recurrence !== "NONE" && editingBooking.repeatUntil < editingBooking.date) {
+      pushToast("A data final da repeticao precisa ser igual ou posterior ao inicio", "error");
+      return;
+    }
+
+    if (editingBooking.recurrence !== "NONE" && starts.length >= 60) {
+      pushToast("Reduza o periodo da repeticao para menos de 60 ocorrencias", "error");
       return;
     }
 
@@ -565,12 +640,32 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         barberId: editingBooking.barberId,
         customerName: editingBooking.customerName,
         customerPhone: editingBooking.customerPhone,
-        start: start.toISOString(),
+        start: starts[0],
       });
 
       pushToast(result.message, result.success ? "success" : "error");
       if (!result.success) {
         return;
+      }
+
+      const extraStarts = starts.slice(1);
+      if (editingBooking.recurrence !== "NONE" && extraStarts.length > 0) {
+        const recurrenceResult = await createAdminBookingsAction({
+          serviceId: editingBooking.serviceId,
+          barberId: editingBooking.barberId,
+          customerName: editingBooking.customerName,
+          customerPhone: editingBooking.customerPhone,
+          start: extraStarts[0],
+          starts: extraStarts,
+          recurrence: editingBooking.recurrence,
+          repeatUntil: editingBooking.repeatUntil,
+        });
+
+        pushToast(recurrenceResult.message, recurrenceResult.success ? "success" : "error");
+        if (!recurrenceResult.success) {
+          await syncBookings({ showErrorToast: true });
+          return;
+        }
       }
 
       closeEditModal();
@@ -591,6 +686,17 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => void enableNotificationSound()}
+              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+                notificationSoundEnabled
+                  ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-100"
+                  : "border-zinc-700 bg-zinc-950 text-zinc-100 hover:border-cyan-400/70"
+              }`}
+            >
+              {notificationSoundEnabled ? "Som ativo" : "Ativar som"}
+            </button>
             <button
               type="button"
               onClick={() => void syncBookings({ showErrorToast: true })}
@@ -658,6 +764,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             maxMonthsForward={24}
             selectedDate={dateFilter}
             onSelect={setDateFilter}
+            density="compact"
           />
         </div>
 
@@ -1054,11 +1161,13 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
 
       {editingBooking ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/75 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-xl font-semibold text-zinc-100">Editar agendamento</h3>
-                <p className="mt-1 text-sm text-zinc-400">Corrija cliente, servico, barbeiro, data ou horario.</p>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Atualize este horario e, se precisar, crie novas ocorrencias a partir dele.
+                </p>
               </div>
               <button
                 type="button"
@@ -1136,7 +1245,18 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                   type="date"
                   value={editingBooking.date}
                   onChange={(event) =>
-                    setEditingBooking((prev) => (prev ? { ...prev, date: event.target.value } : prev))
+                    setEditingBooking((prev) =>
+                      prev
+                        ? {
+                          ...prev,
+                          date: event.target.value,
+                          repeatUntil:
+                            prev.recurrence === "NONE"
+                              ? event.target.value
+                              : getDefaultRepeatUntil(event.target.value, prev.recurrence),
+                        }
+                        : prev,
+                    )
                   }
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
                 />
@@ -1155,6 +1275,90 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               </label>
             </div>
 
+            <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold text-zinc-100">Frequencia</h4>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    A edicao altera o agendamento atual. Ao repetir, novas ocorrencias sao criadas depois dele.
+                  </p>
+                </div>
+                <span className="w-fit rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-300">
+                  Google Agenda
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr]">
+                <label className="space-y-2">
+                  <span className="text-sm text-zinc-300">Repetir</span>
+                  <select
+                    value={editingBooking.recurrence}
+                    onChange={(event) => {
+                      const recurrence = event.target.value as RecurrenceOption;
+                      setEditingBooking((prev) =>
+                        prev
+                          ? {
+                            ...prev,
+                            recurrence,
+                            repeatUntil: getDefaultRepeatUntil(prev.date, recurrence),
+                          }
+                          : prev,
+                      );
+                    }}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                  >
+                    <option value="NONE">Nao repetir</option>
+                    <option value="DAILY">Diariamente</option>
+                    <option value="WEEKLY">Semanalmente</option>
+                    <option value="MONTHLY">Mensalmente</option>
+                  </select>
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-sm text-zinc-300">Repetir ate</span>
+                  <input
+                    type="date"
+                    value={editingBooking.repeatUntil}
+                    min={editingBooking.date}
+                    disabled={editingBooking.recurrence === "NONE"}
+                    onChange={(event) =>
+                      setEditingBooking((prev) => (prev ? { ...prev, repeatUntil: event.target.value } : prev))
+                    }
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 disabled:opacity-50"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm font-semibold text-zinc-100">
+                    {getRecurrenceLabel(editingBooking.recurrence, editingBooking.date)}
+                  </p>
+                  <span
+                    className={`w-fit rounded-full border px-2 py-1 text-xs font-semibold ${
+                      editRecurrenceHasLimitError
+                        ? "border-red-400/50 bg-red-500/15 text-red-100"
+                        : "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
+                    }`}
+                  >
+                    {editingBooking.recurrence === "NONE"
+                      ? "1 atualizacao"
+                      : `${Math.max(0, editOccurrenceStarts.length - 1)} nova${
+                        editOccurrenceStarts.length - 1 === 1 ? "" : "s"
+                      }`}
+                  </span>
+                </div>
+                {editOccurrencePreview.length > 0 ? (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Previa: {editOccurrencePreview.map((item) => `${item.date} ${item.time}`).join(", ")}
+                    {editOccurrenceStarts.length > editOccurrencePreview.length ? "..." : ""}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-red-200">Revise a data final da repeticao.</p>
+                )}
+              </div>
+            </div>
+
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
@@ -1167,10 +1371,14 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               <button
                 type="button"
                 onClick={handleEditBooking}
-                disabled={isPendingCreate}
+                disabled={isPendingCreate || editOccurrenceStarts.length === 0 || editRecurrenceHasLimitError}
                 className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300 disabled:opacity-60"
               >
-                {isPendingCreate ? "Salvando..." : "Salvar alteracoes"}
+                {isPendingCreate
+                  ? "Salvando..."
+                  : editingBooking.recurrence === "NONE"
+                    ? "Salvar alteracoes"
+                    : `Salvar e criar ${Math.max(0, editOccurrenceStarts.length - 1)} repeticoes`}
               </button>
             </div>
           </div>
