@@ -16,12 +16,19 @@ function parseIsoDate(iso: string): { year: number; month: number; day: number }
 }
 
 function monthLabel(year: number, monthZeroBased: number): string {
-  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(year, monthZeroBased, 1));
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(
+    new Date(year, monthZeroBased, 1),
+  );
 }
 
 function addMonths(year: number, monthZeroBased: number, amount: number): { year: number; month: number } {
   const date = new Date(year, monthZeroBased + amount, 1);
   return { year: date.getFullYear(), month: date.getMonth() };
+}
+
+function isToday(iso: string): boolean {
+  const today = new Date();
+  return iso === toIsoDate(today.getFullYear(), today.getMonth(), today.getDate());
 }
 
 export function DateCalendar({
@@ -70,28 +77,50 @@ export function DateCalendar({
   }, [view.month, view.year]);
 
   return (
-    <div className="mt-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 sm:p-4">
-      <div className="mb-3 grid grid-cols-[auto_1fr_auto] items-center gap-2">
-        <button
-          type="button"
-          onClick={() => canGoPrev && setView((prev) => addMonths(prev.year, prev.month, -1))}
-          disabled={!canGoPrev}
-          className="rounded-md border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 sm:text-xs"
-        >
-          Mês anterior
-        </button>
-        <p className="text-center text-xs font-semibold capitalize text-zinc-100 sm:text-sm">{monthLabel(view.year, view.month)}</p>
-        <button
-          type="button"
-          onClick={() => canGoNext && setView((prev) => addMonths(prev.year, prev.month, 1))}
-          disabled={!canGoNext}
-          className="rounded-md border border-zinc-700 px-2 py-1.5 text-[11px] text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 sm:text-xs"
-        >
-          Próximo mês
-        </button>
+    <div className="mt-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 shadow-inner shadow-black/20 sm:p-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const today = new Date();
+              const todayIso = toIsoDate(today.getFullYear(), today.getMonth(), today.getDate());
+              if (todayIso >= minDate) {
+                onSelect(todayIso);
+              }
+              setView({ year: today.getFullYear(), month: today.getMonth() });
+            }}
+            className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-100 transition hover:border-cyan-300"
+          >
+            Hoje
+          </button>
+          <div className="flex items-center rounded-full border border-zinc-800 bg-zinc-900 p-1">
+            <button
+              type="button"
+              onClick={() => canGoPrev && setView((prev) => addMonths(prev.year, prev.month, -1))}
+              disabled={!canGoPrev}
+              aria-label="Mes anterior"
+              className="grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {"<"}
+            </button>
+            <button
+              type="button"
+              onClick={() => canGoNext && setView((prev) => addMonths(prev.year, prev.month, 1))}
+              disabled={!canGoNext}
+              aria-label="Proximo mes"
+              className="grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {">"}
+            </button>
+          </div>
+        </div>
+        <p className="text-sm font-semibold capitalize text-zinc-100 sm:text-base">
+          {monthLabel(view.year, view.month)}
+        </p>
       </div>
 
-      <div className="grid grid-cols-7 gap-2 text-center text-xs text-zinc-400">
+      <div className="grid grid-cols-7 border-b border-zinc-800 pb-2 text-center text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
         {["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"].map((day) => (
           <div key={day} className="py-1">
             {day}
@@ -99,14 +128,15 @@ export function DateCalendar({
         ))}
       </div>
 
-      <div className="mt-1 grid grid-cols-7 gap-2">
+      <div className="mt-2 grid grid-cols-7 gap-1 sm:gap-2">
         {cells.map((cell) => {
           if (!cell.iso || !cell.label) {
-            return <div key={cell.key} className="h-10 rounded-md" />;
+            return <div key={cell.key} className="aspect-square rounded-full" />;
           }
 
           const disabled = cell.iso < minDate;
           const selected = selectedDate === cell.iso;
+          const today = isToday(cell.iso);
 
           return (
             <button
@@ -114,12 +144,16 @@ export function DateCalendar({
               key={cell.key}
               disabled={disabled}
               onClick={() => onSelect(cell.iso!)}
-              className={`h-10 rounded-md border text-sm font-semibold transition ${selected
-                  ? "border-cyan-300 bg-cyan-400 text-zinc-950"
+              aria-pressed={selected}
+              className={`aspect-square rounded-full border text-sm font-semibold transition ${
+                selected
+                  ? "border-cyan-300 bg-cyan-400 text-zinc-950 shadow-lg shadow-cyan-950/30"
                   : disabled
-                    ? "border-zinc-800 bg-zinc-900 text-zinc-600"
-                    : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-cyan-300"
-                }`}
+                    ? "border-transparent bg-transparent text-zinc-700"
+                    : today
+                      ? "border-cyan-400/70 bg-zinc-900 text-cyan-100 hover:bg-zinc-800"
+                      : "border-transparent bg-transparent text-zinc-200 hover:bg-zinc-800"
+              }`}
             >
               {cell.label}
             </button>

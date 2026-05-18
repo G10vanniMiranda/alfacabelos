@@ -1,5 +1,6 @@
 import { barbersSeed, servicesSeed } from "@/lib/data/seed";
 import { BUSINESS_CONFIG } from "@/lib/config";
+import { CLOSED_DAY_TIME } from "@/lib/constants/availability";
 import { overlaps } from "@/lib/utils";
 import {
   Barber,
@@ -37,6 +38,21 @@ function withRelations(booking: Booking): BookingWithRelations {
 
 function createId(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function defaultAvailabilitiesForMissingDays(barberId: string, savedDays: Set<number>): BarberAvailability[] {
+  const now = new Date().toISOString();
+  return BUSINESS_CONFIG.operatingHours
+    .filter((slot) => !savedDays.has(slot.dayOfWeek))
+    .map((slot) => ({
+      id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
+      barberId,
+      dayOfWeek: slot.dayOfWeek,
+      openTime: slot.open,
+      closeTime: slot.close,
+      createdAt: now,
+      updatedAt: now,
+    }));
 }
 
 export const inMemoryRepository: BookingRepository = {
@@ -251,19 +267,10 @@ export const inMemoryRepository: BookingRepository = {
     const saved = data.availabilities
       .filter((item) => item.barberId === barberId)
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.openTime.localeCompare(b.openTime));
-    if (saved.length > 0) {
-      return saved;
-    }
-
-    return BUSINESS_CONFIG.operatingHours.map((slot) => ({
-      id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
-      barberId,
-      dayOfWeek: slot.dayOfWeek,
-      openTime: slot.open,
-      closeTime: slot.close,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
+    const savedDays = new Set(saved.map((item) => item.dayOfWeek));
+    return [...saved, ...defaultAvailabilitiesForMissingDays(barberId, savedDays)].sort(
+      (a, b) => a.dayOfWeek - b.dayOfWeek || a.openTime.localeCompare(b.openTime),
+    );
   },
 
   async replaceBarberDayAvailabilities(input) {
@@ -272,15 +279,28 @@ export const inMemoryRepository: BookingRepository = {
       (item) => !(item.barberId === input.barberId && item.dayOfWeek === input.dayOfWeek),
     );
 
-    const created = input.ranges.map((range) => ({
-      id: createId("availability"),
-      barberId: input.barberId,
-      dayOfWeek: input.dayOfWeek,
-      openTime: range.openTime,
-      closeTime: range.closeTime,
-      createdAt: now,
-      updatedAt: now,
-    }));
+    const created =
+      input.ranges.length > 0
+        ? input.ranges.map((range) => ({
+          id: createId("availability"),
+          barberId: input.barberId,
+          dayOfWeek: input.dayOfWeek,
+          openTime: range.openTime,
+          closeTime: range.closeTime,
+          createdAt: now,
+          updatedAt: now,
+        }))
+        : [
+          {
+            id: createId("availability"),
+            barberId: input.barberId,
+            dayOfWeek: input.dayOfWeek,
+            openTime: CLOSED_DAY_TIME,
+            closeTime: CLOSED_DAY_TIME,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ];
 
     data.availabilities = [...remaining, ...created];
     return created;

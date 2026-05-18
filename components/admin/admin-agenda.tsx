@@ -42,11 +42,39 @@ type EditBookingDraft = {
   time: string;
 };
 
+type ActionsMenuPosition = {
+  top: number;
+  left: number;
+};
+
 function formatTimeLabel(iso: string) {
   return new Date(iso).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatDateLabel(date: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${date}T12:00:00`));
+}
+
+function formatDateTimeLabel(iso: string) {
+  const date = new Date(iso);
+  return {
+    date: date.toLocaleDateString("pt-BR"),
+    time: date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+function getPaymentBadgeClasses(paymentStatus: "PENDENTE" | "CONFIRMADO") {
+  return paymentStatus === "CONFIRMADO"
+    ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-200"
+    : "border-amber-400/50 bg-amber-500/15 text-amber-100";
 }
 
 function getDefaultDraft(barbers: Barber[], services: Service[], selectedDate: string, selectedBarberId: string) {
@@ -75,6 +103,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   const [barberFilter, setBarberFilter] = useState("TODOS");
   const [statusFilter, setStatusFilter] = useState("TODOS");
   const [actionsMenuPlacement, setActionsMenuPlacement] = useState<"down" | "up">("down");
+  const [actionsMenuPosition, setActionsMenuPosition] = useState<ActionsMenuPosition | null>(null);
   const [createDraft, setCreateDraft] = useState<CreateBookingDraft>(() =>
     getDefaultDraft(barbers, services, formatDateInput(new Date()), "TODOS"),
   );
@@ -109,8 +138,27 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         return false;
       }
       return true;
-    });
+    }).sort((a, b) => new Date(a.dateTimeStart).getTime() - new Date(b.dateTimeStart).getTime());
   }, [allBookings, dateFilter, barberFilter, statusFilter]);
+
+  const dayBookings = useMemo(() => {
+    return allBookings.filter((booking) => !dateFilter || booking.dateTimeStart.startsWith(dateFilter));
+  }, [allBookings, dateFilter]);
+
+  const dayStats = useMemo(() => {
+    return {
+      total: dayBookings.length,
+      pending: dayBookings.filter((booking) => booking.status === "PENDENTE").length,
+      confirmed: dayBookings.filter((booking) => booking.status === "CONFIRMADO").length,
+      canceled: dayBookings.filter((booking) => booking.status === "CANCELADO").length,
+      paid: dayBookings.filter((booking) => booking.paymentStatus === "CONFIRMADO").length,
+    };
+  }, [dayBookings]);
+
+  const selectedDayLabel = useMemo(() => formatDateLabel(dateFilter), [dateFilter]);
+  const openActionsBooking = useMemo(() => {
+    return allBookings.find((booking) => booking.id === openActionsBookingId);
+  }, [allBookings, openActionsBookingId]);
 
   const syncBookings = useCallback(async (options?: { notifyNew?: boolean; showErrorToast?: boolean }) => {
     try {
@@ -204,22 +252,37 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
+      if ((event.target as HTMLElement).closest("[data-actions-trigger='true']")) {
+        return;
+      }
+
       if (!actionsMenuRef.current?.contains(event.target as Node)) {
         setOpenActionsBookingId(null);
+        setActionsMenuPosition(null);
       }
     }
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setOpenActionsBookingId(null);
+        setActionsMenuPosition(null);
       }
+    }
+
+    function closeFloatingMenu() {
+      setOpenActionsBookingId(null);
+      setActionsMenuPosition(null);
     }
 
     window.addEventListener("mousedown", handlePointerDown);
     window.addEventListener("keydown", handleEscape);
+    window.addEventListener("resize", closeFloatingMenu);
+    window.addEventListener("scroll", closeFloatingMenu, true);
     return () => {
       window.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("resize", closeFloatingMenu);
+      window.removeEventListener("scroll", closeFloatingMenu, true);
     };
   }, []);
 
@@ -251,6 +314,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       time,
     });
     setOpenActionsBookingId(null);
+    setActionsMenuPosition(null);
   }
 
   function closeEditModal() {
@@ -258,12 +322,34 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   }
 
   function toggleActionsMenu(bookingId: string, button: HTMLButtonElement) {
+    if (openActionsBookingId === bookingId) {
+      setOpenActionsBookingId(null);
+      setActionsMenuPosition(null);
+      return;
+    }
+
     const buttonRect = button.getBoundingClientRect();
+    const viewportMargin = 12;
+    const estimatedMenuWidth = 252;
     const estimatedMenuHeight = 210;
     const spaceBelow = window.innerHeight - buttonRect.bottom;
+    const spaceAbove = buttonRect.top;
+    const shouldOpenUp = spaceBelow < estimatedMenuHeight + viewportMargin && spaceAbove > spaceBelow;
+    const left = Math.min(
+      Math.max(buttonRect.right - estimatedMenuWidth, viewportMargin),
+      window.innerWidth - estimatedMenuWidth - viewportMargin,
+    );
+    const preferredTop = shouldOpenUp
+      ? buttonRect.top - estimatedMenuHeight - 8
+      : buttonRect.bottom + 8;
+    const top = Math.min(
+      Math.max(preferredTop, viewportMargin),
+      window.innerHeight - estimatedMenuHeight - viewportMargin,
+    );
 
-    setActionsMenuPlacement(spaceBelow < estimatedMenuHeight ? "up" : "down");
-    setOpenActionsBookingId((prev) => (prev === bookingId ? null : bookingId));
+    setActionsMenuPlacement(shouldOpenUp ? "up" : "down");
+    setActionsMenuPosition({ top, left });
+    setOpenActionsBookingId(bookingId);
   }
 
   function changeStatus(bookingId: string, status: "PENDENTE" | "CONFIRMADO" | "CANCELADO") {
@@ -272,6 +358,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         await updateBookingStatusAction({ bookingId, status });
         pushToast("Status atualizado", "success");
         setOpenActionsBookingId(null);
+        setActionsMenuPosition(null);
         await syncBookings({ showErrorToast: true });
       } catch (error) {
         pushToast(error instanceof Error ? error.message : "Erro ao atualizar", "error");
@@ -285,6 +372,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         await updateBookingPaymentStatusAction({ bookingId, paymentStatus });
         pushToast("Pagamento atualizado", "success");
         setOpenActionsBookingId(null);
+        setActionsMenuPosition(null);
         await syncBookings({ showErrorToast: true });
       } catch (error) {
         pushToast(error instanceof Error ? error.message : "Erro ao atualizar pagamento", "error");
@@ -361,19 +449,55 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
 
   return (
     <section className="space-y-6">
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-4 sm:px-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-5 sm:px-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-zinc-100 sm:text-2xl">Agenda</h2>
-            <p className="mt-1 text-sm text-zinc-400">Acompanhe, atualize e crie agendamentos manualmente.</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200">Operacao</p>
+            <h2 className="mt-1 text-xl font-semibold text-zinc-100 sm:text-2xl">Agenda</h2>
+            <p className="mt-1 text-sm capitalize text-zinc-400">{selectedDayLabel}</p>
           </div>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300"
-          >
-            Novo agendamento
-          </button>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => void syncBookings({ showErrorToast: true })}
+              disabled={isBusy}
+              className="rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-semibold text-zinc-100 transition hover:border-cyan-400/70 disabled:opacity-60"
+            >
+              Atualizar
+            </button>
+            <button
+              type="button"
+              onClick={openCreateModal}
+              disabled={barbers.length === 0 || services.length === 0}
+              className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300 disabled:opacity-60"
+            >
+              Novo agendamento
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-zinc-500">No dia</p>
+            <p className="mt-1 text-2xl font-semibold text-zinc-100">{dayStats.total}</p>
+          </div>
+          <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-amber-100/70">Pendentes</p>
+            <p className="mt-1 text-2xl font-semibold text-amber-100">{dayStats.pending}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-emerald-100/70">Confirmados</p>
+            <p className="mt-1 text-2xl font-semibold text-emerald-100">{dayStats.confirmed}</p>
+          </div>
+          <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-red-100/70">Cancelados</p>
+            <p className="mt-1 text-2xl font-semibold text-red-100">{dayStats.canceled}</p>
+          </div>
+          <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-cyan-100/70">Pagos</p>
+            <p className="mt-1 text-2xl font-semibold text-cyan-50">{dayStats.paid}</p>
+          </div>
         </div>
       </div>
 
@@ -392,9 +516,10 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         </div>
       ) : null}
 
-      <div className="grid gap-4 rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div>
-          <p className="text-sm text-zinc-300">Selecione o dia</p>
+          <p className="text-sm font-semibold text-zinc-100">Calendario</p>
+          <p className="mt-1 text-sm text-zinc-500">Escolha o dia para acompanhar a agenda.</p>
           <DateCalendar
             minDate={minCalendarDate}
             maxMonthsForward={24}
@@ -404,31 +529,38 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         </div>
 
         <div>
-          <p className="text-sm text-zinc-300">Filtros</p>
+          <p className="text-sm font-semibold text-zinc-100">Filtros</p>
+          <p className="mt-1 text-sm text-zinc-500">Refine a lista do dia selecionado.</p>
           <div className="mt-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 sm:p-4">
             <div className="space-y-3">
-              <select
-                value={barberFilter}
-                onChange={(event) => setBarberFilter(event.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-              >
-                <option value="TODOS">Todos os barbeiros</option>
-                {barbers.map((barber) => (
-                  <option key={barber.id} value={barber.id}>
-                    {barber.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-              >
-                <option value="TODOS">Todos os status</option>
-                <option value="PENDENTE">PENDENTE</option>
-                <option value="CONFIRMADO">CONFIRMADO</option>
-                <option value="CANCELADO">CANCELADO</option>
-              </select>
+              <label className="space-y-1">
+                <span className="text-xs font-medium text-zinc-500">Barbeiro</span>
+                <select
+                  value={barberFilter}
+                  onChange={(event) => setBarberFilter(event.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none transition focus:border-cyan-400"
+                >
+                  <option value="TODOS">Todos os barbeiros</option>
+                  {barbers.map((barber) => (
+                    <option key={barber.id} value={barber.id}>
+                      {barber.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-medium text-zinc-500">Status</span>
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none transition focus:border-cyan-400"
+                >
+                  <option value="TODOS">Todos os status</option>
+                  <option value="PENDENTE">Pendente</option>
+                  <option value="CONFIRMADO">Confirmado</option>
+                  <option value="CANCELADO">Cancelado</option>
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => setDateFilter(formatDateInput(new Date()))}
@@ -436,113 +568,93 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               >
                 Ir para hoje
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBarberFilter("TODOS");
+                  setStatusFilter("TODOS");
+                }}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60"
+              >
+                Limpar filtros
+              </button>
               <p className="text-xs text-zinc-500">Atualizacao automatica a cada 15 segundos.</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-zinc-800">
-        <table className="w-full min-w-190 text-left text-sm">
-          <thead className="bg-zinc-900 text-zinc-300">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70">
+        <div className="flex flex-col gap-2 border-b border-zinc-800 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-zinc-100">Agendamentos</h3>
+            <p className="mt-1 text-sm text-zinc-500">
+              {filtered.length} resultado{filtered.length === 1 ? "" : "s"} para os filtros atuais.
+            </p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] text-left text-sm">
+          <thead className="bg-zinc-950/80 text-zinc-300">
             <tr>
-              <th className="px-3 py-2">Cliente</th>
-              <th className="px-3 py-2">Servico</th>
-              <th className="px-3 py-2">Barbeiro</th>
-              <th className="px-3 py-2">Horario</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Pagamento</th>
-              <th className="px-3 py-2">Acoes</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Cliente</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Servico</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Barbeiro</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Horario</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Pagamento</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">Acoes</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((booking) => (
-              <tr key={booking.id} className="border-t border-zinc-800 bg-zinc-950/40">
-                <td className="px-3 py-2 text-zinc-200">
-                  {booking.customerName}
-                  <p className="text-xs text-zinc-500">{booking.customerPhone}</p>
+            {filtered.map((booking) => {
+              const dateTime = formatDateTimeLabel(booking.dateTimeStart);
+
+              return (
+              <tr key={booking.id} className="border-t border-zinc-800 bg-zinc-950/35 transition hover:bg-zinc-950/70">
+                <td className="px-4 py-3 text-zinc-200">
+                  <p className="font-semibold">{booking.customerName}</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">{booking.customerPhone}</p>
                 </td>
-                <td className="px-3 py-2 text-zinc-200">{booking.service.name}</td>
-                <td className="px-3 py-2 text-zinc-200">{booking.barber.name}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-zinc-300">
-                  {new Date(booking.dateTimeStart).toLocaleString("pt-BR")}
+                <td className="px-4 py-3 text-zinc-200">
+                  <p>{booking.service.name}</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">{booking.service.durationMinutes} min</p>
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-4 py-3 text-zinc-200">{booking.barber.name}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-300">
+                  <p className="font-semibold text-zinc-100">{dateTime.time}</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">{dateTime.date}</p>
+                </td>
+                <td className="px-4 py-3">
                   <StatusBadge status={booking.status} />
                 </td>
-                <td className="px-3 py-2">
-                  <span
-                    className={`rounded-full border px-2 py-1 text-xs font-semibold ${
-                      booking.paymentStatus === "CONFIRMADO"
-                        ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-200"
-                        : "border-amber-400/50 bg-amber-500/15 text-amber-100"
-                    }`}
-                  >
+                <td className="px-4 py-3">
+                  <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${getPaymentBadgeClasses(booking.paymentStatus)}`}>
                     {booking.paymentStatus}
                   </span>
                 </td>
-                <td className="px-3 py-2">
-                  <div className="relative" ref={openActionsBookingId === booking.id ? actionsMenuRef : null}>
+                <td className="px-4 py-3 text-right">
+                  <div className="relative">
                     <button
                       type="button"
+                      data-actions-trigger="true"
                       disabled={isBusy}
+                      onMouseDown={(event) => event.stopPropagation()}
                       onClick={(event) => toggleActionsMenu(booking.id, event.currentTarget)}
                       aria-haspopup="menu"
                       aria-expanded={openActionsBookingId === booking.id}
                       aria-label="Abrir acoes do agendamento"
-                      className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-300 disabled:opacity-40"
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-300 disabled:opacity-40"
                     >
                       ...
                     </button>
 
-                    {openActionsBookingId === booking.id ? (
-                      <div
-                        className={`absolute right-0 z-20 min-w-56 rounded-xl border border-zinc-800 bg-zinc-950/98 p-2 shadow-2xl ${
-                          actionsMenuPlacement === "up" ? "bottom-12" : "top-12"
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          disabled={isBusy || booking.status === "CONFIRMADO"}
-                          onClick={() => changeStatus(booking.id, "CONFIRMADO")}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-zinc-900 disabled:opacity-40"
-                        >
-                          <span>✅</span>
-                          <span>Confirmar agendamento</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isBusy || booking.status === "CANCELADO" || booking.paymentStatus === "CONFIRMADO"}
-                          onClick={() => changePaymentStatus(booking.id, "CONFIRMADO")}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-zinc-900 disabled:opacity-40"
-                        >
-                          <span>💰</span>
-                          <span>Confirmar pagamento</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => openEditModal(booking)}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-zinc-900 disabled:opacity-40"
-                        >
-                          <span>✏️</span>
-                          <span>Editar agendamento</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isBusy || booking.status === "CANCELADO"}
-                          onClick={() => changeStatus(booking.id, "CANCELADO")}
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-red-200 transition hover:bg-red-500/10 disabled:opacity-40"
-                        >
-                          <span>❌</span>
-                          <span>Cancelar agendamento</span>
-                        </button>
-                      </div>
-                    ) : null}
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-3 py-5 text-center text-zinc-500">
@@ -552,7 +664,62 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             )}
           </tbody>
         </table>
+        </div>
       </div>
+
+      {openActionsBooking && actionsMenuPosition ? (
+        <div
+          ref={actionsMenuRef}
+          role="menu"
+          style={{ top: actionsMenuPosition.top, left: actionsMenuPosition.left }}
+          className={`fixed z-[100] w-[252px] rounded-xl border border-zinc-800 bg-zinc-950 p-2 shadow-2xl shadow-black/40 ${
+            actionsMenuPlacement === "up" ? "origin-bottom-right" : "origin-top-right"
+          }`}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={isBusy || openActionsBooking.status === "CONFIRMADO"}
+            onClick={() => changeStatus(openActionsBooking.id, "CONFIRMADO")}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-zinc-900 disabled:opacity-40"
+          >
+            <span className="w-6 text-xs font-semibold text-emerald-200">OK</span>
+            <span>Confirmar agendamento</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={
+              isBusy || openActionsBooking.status === "CANCELADO" || openActionsBooking.paymentStatus === "CONFIRMADO"
+            }
+            onClick={() => changePaymentStatus(openActionsBooking.id, "CONFIRMADO")}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-zinc-900 disabled:opacity-40"
+          >
+            <span className="w-6 text-xs font-semibold text-cyan-200">R$</span>
+            <span>Confirmar pagamento</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={isBusy}
+            onClick={() => openEditModal(openActionsBooking)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-zinc-200 transition hover:bg-zinc-900 disabled:opacity-40"
+          >
+            <span className="w-6 text-xs font-semibold text-zinc-300">ED</span>
+            <span>Editar agendamento</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={isBusy || openActionsBooking.status === "CANCELADO"}
+            onClick={() => changeStatus(openActionsBooking.id, "CANCELADO")}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-red-200 transition hover:bg-red-500/10 disabled:opacity-40"
+          >
+            <span className="w-6 text-xs font-semibold text-red-200">X</span>
+            <span>Cancelar agendamento</span>
+          </button>
+        </div>
+      ) : null}
 
       {isCreateModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/75 p-4 backdrop-blur-sm">

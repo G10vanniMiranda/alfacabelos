@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { barbersSeed, servicesSeed } from "@/lib/data/seed";
 import { BUSINESS_CONFIG } from "@/lib/config";
+import { CLOSED_DAY_TIME } from "@/lib/constants/availability";
 import { Barber, BarberAvailability, Booking, BookingWithRelations, BlockedSlot, GalleryImage } from "@/types/domain";
 import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput, UpdateBookingInput } from "./types";
 
@@ -128,6 +129,20 @@ function toBarberAvailability(row: {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+function defaultAvailabilitiesForMissingDays(barberId: string, savedDays: Set<number>): BarberAvailability[] {
+  return BUSINESS_CONFIG.operatingHours
+    .filter((slot) => !savedDays.has(slot.dayOfWeek))
+    .map((slot) => ({
+      id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
+      barberId,
+      dayOfWeek: slot.dayOfWeek,
+      openTime: slot.open,
+      closeTime: slot.close,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
 }
 
 let galleryTableChecked = false;
@@ -700,15 +715,7 @@ export const prismaRepository: BookingRepository = {
 
   async listBarberAvailabilities(barberId) {
     const fallbackAvailabilities = () =>
-      BUSINESS_CONFIG.operatingHours.map((slot) => ({
-        id: `default-${barberId}-${slot.dayOfWeek}-${slot.open}-${slot.close}`,
-        barberId,
-        dayOfWeek: slot.dayOfWeek,
-        openTime: slot.open,
-        closeTime: slot.close,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }));
+      defaultAvailabilitiesForMissingDays(barberId, new Set());
 
     return readWithFallback(async () => {
       const hasTable = await ensureBarberAvailabilityTableExists();
@@ -727,11 +734,10 @@ export const prismaRepository: BookingRepository = {
           orderBy: [{ dayOfWeek: "asc" }, { openTime: "asc" }],
         });
 
-        if (rows.length > 0) {
-          return rows.map(toBarberAvailability);
-        }
-
-        return fallbackAvailabilities();
+        const savedDays = new Set(rows.map((row) => row.dayOfWeek));
+        return [...rows.map(toBarberAvailability), ...defaultAvailabilitiesForMissingDays(barberId, savedDays)].sort(
+          (a, b) => a.dayOfWeek - b.dayOfWeek || a.openTime.localeCompare(b.openTime),
+        );
       } catch (error) {
         if (isBarberAvailabilityTableMissing(error)) {
           availabilityTableExists = false;
@@ -773,16 +779,24 @@ export const prismaRepository: BookingRepository = {
           },
         });
 
-        if (input.ranges.length > 0) {
-          await txAvailability.createMany({
-            data: input.ranges.map((range) => ({
-              barberId: input.barberId,
-              dayOfWeek: input.dayOfWeek,
-              openTime: range.openTime,
-              closeTime: range.closeTime,
-            })),
-          });
-        }
+        await txAvailability.createMany({
+          data:
+            input.ranges.length > 0
+              ? input.ranges.map((range) => ({
+                barberId: input.barberId,
+                dayOfWeek: input.dayOfWeek,
+                openTime: range.openTime,
+                closeTime: range.closeTime,
+              }))
+              : [
+                {
+                  barberId: input.barberId,
+                  dayOfWeek: input.dayOfWeek,
+                  openTime: CLOSED_DAY_TIME,
+                  closeTime: CLOSED_DAY_TIME,
+                },
+              ],
+        });
       });
 
       const rows = await availability.findMany({

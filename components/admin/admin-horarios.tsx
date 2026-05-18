@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { replaceBarberDayAvailabilityAction } from "@/lib/actions/booking-actions";
+import { isClosedDayAvailability } from "@/lib/constants/availability";
 import { useToast } from "@/components/ui/toast";
 import { Barber, BarberAvailability } from "@/types/domain";
 
@@ -102,6 +103,11 @@ function buildDraftRows(rows: BarberAvailability[] | undefined): DayDraft[] {
   const grouped = new Map<number, TimeRange[]>();
 
   for (const row of rows ?? []) {
+    if (isClosedDayAvailability(row)) {
+      grouped.set(row.dayOfWeek, []);
+      continue;
+    }
+
     const found = grouped.get(row.dayOfWeek) ?? [];
     found.push({ openTime: row.openTime, closeTime: row.closeTime });
     grouped.set(row.dayOfWeek, found);
@@ -133,6 +139,23 @@ function hasInvalidRanges(ranges: TimeRange[]) {
   return false;
 }
 
+function getRangeSummary(ranges: TimeRange[]) {
+  if (ranges.length === 0) {
+    return "Fechado";
+  }
+
+  const sorted = [...ranges].sort((a, b) => a.openTime.localeCompare(b.openTime));
+  return `${sorted[0]?.openTime ?? "--:--"} - ${sorted[sorted.length - 1]?.closeTime ?? "--:--"}`;
+}
+
+function getOpenDaysCount(days: DayDraft[]) {
+  return days.filter((day) => day.ranges.length > 0).length;
+}
+
+function getTotalRangesCount(days: DayDraft[]) {
+  return days.reduce((total, day) => total + day.ranges.length, 0);
+}
+
 export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosProps) {
   const [isPending, startTransition] = useTransition();
   const { pushToast } = useToast();
@@ -143,6 +166,8 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
     () => barbers.find((barber) => barber.id === selectedBarberId),
     [barbers, selectedBarberId],
   );
+  const openDaysCount = useMemo(() => getOpenDaysCount(draftRows), [draftRows]);
+  const totalRangesCount = useMemo(() => getTotalRangesCount(draftRows), [draftRows]);
 
   useEffect(() => {
     setDraftRows(buildDraftRows(availabilityByBarber[selectedBarberId]));
@@ -210,7 +235,7 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
     );
   }
 
-  function clearDay(dayOfWeek: number) {
+  function setDayRanges(dayOfWeek: number, ranges: TimeRange[]) {
     setDraftRows((prev) =>
       prev.map((day) => {
         if (day.dayOfWeek !== dayOfWeek) {
@@ -218,14 +243,14 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
         }
         return {
           ...day,
-          ranges: [],
+          ranges,
         };
       }),
     );
   }
 
-  function saveDay(day: DayDraft) {
-    if (hasInvalidRanges(day.ranges)) {
+  function saveRanges(dayOfWeek: number, ranges: TimeRange[]) {
+    if (hasInvalidRanges(ranges)) {
       pushToast("Revise as faixas: horario invalido ou sobreposto", "error");
       return;
     }
@@ -234,8 +259,8 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
       try {
         await replaceBarberDayAvailabilityAction({
           barberId: selectedBarberId,
-          dayOfWeek: day.dayOfWeek,
-          ranges: [...day.ranges].sort((a, b) => a.openTime.localeCompare(b.openTime)),
+          dayOfWeek,
+          ranges: [...ranges].sort((a, b) => a.openTime.localeCompare(b.openTime)),
         });
         pushToast("Horarios salvos", "success");
         window.location.reload();
@@ -243,6 +268,15 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
         pushToast(error instanceof Error ? error.message : "Erro ao salvar horarios", "error");
       }
     });
+  }
+
+  function saveDay(day: DayDraft) {
+    saveRanges(day.dayOfWeek, day.ranges);
+  }
+
+  function closeAndSaveDay(dayOfWeek: number) {
+    setDayRanges(dayOfWeek, []);
+    saveRanges(dayOfWeek, []);
   }
 
   if (barbers.length === 0) {
@@ -258,83 +292,151 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
 
   return (
     <section className="space-y-6">
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4">
-        <h2 className="text-2xl font-semibold text-zinc-100">Horarios disponiveis</h2>
-        <p className="mt-1 text-sm text-zinc-400">
-          Configure por faixas, por exemplo: 09:00-10:00, 10:00-11:00, 11:00-12:00 e 14:00-19:00.
-        </p>
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold text-zinc-100">Horarios disponiveis</h2>
+            <p className="mt-1 max-w-2xl text-sm text-zinc-400">
+              Defina a grade semanal de atendimento por barbeiro. Cada dia pode ter uma ou mais faixas.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:min-w-72">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Dias abertos</p>
+              <p className="mt-1 text-2xl font-semibold text-zinc-100">{openDaysCount}/7</p>
+            </div>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Faixas</p>
+              <p className="mt-1 text-2xl font-semibold text-zinc-100">{totalRangesCount}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-        <label className="text-sm text-zinc-300">Barbeiro</label>
-        <select
-          value={selectedBarberId}
-          onChange={(event) => setSelectedBarberId(event.target.value)}
-          className="mt-2 w-full max-w-sm rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-        >
-          {barbers.map((barber) => (
-            <option key={barber.id} value={barber.id}>
-              {barber.name}
-            </option>
-          ))}
-        </select>
-        <p className="mt-2 text-xs text-zinc-500">Configurando: {selectedBarber?.name}</p>
+        <div className="grid gap-4 lg:grid-cols-[minmax(260px,380px)_1fr] lg:items-center">
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-zinc-300">Barbeiro</span>
+            <select
+              value={selectedBarberId}
+              onChange={(event) => setSelectedBarberId(event.target.value)}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-zinc-100 outline-none transition focus:border-cyan-400"
+            >
+              {barbers.map((barber) => (
+                <option key={barber.id} value={barber.id}>
+                  {barber.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-cyan-200/80">Configurando</p>
+            <p className="mt-1 text-sm font-semibold text-cyan-50">{selectedBarber?.name}</p>
+            <p className="mt-1 text-xs text-cyan-100/70">
+              Alteracoes sao salvas por dia. Use fechar dia para bloquear a agenda semanal inteira daquele dia.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-        <h3 className="text-lg font-semibold text-zinc-100">Grade semanal por faixas</h3>
-        <div className="mt-4 space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-zinc-100">Grade semanal</h3>
+            <p className="mt-1 text-sm text-zinc-500">Revise os dias, ajuste faixas e salve somente o dia alterado.</p>
+          </div>
+          {isPending ? <p className="text-sm text-cyan-200">Salvando alteracoes...</p> : null}
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
           {draftRows.map((day) => {
             const dayLabel = WEEK_DAYS.find((item) => item.dayOfWeek === day.dayOfWeek)?.label ?? `Dia ${day.dayOfWeek}`;
+            const isClosed = day.ranges.length === 0;
+            const hasError = hasInvalidRanges(day.ranges);
 
             return (
-              <div key={day.dayOfWeek} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="text-sm font-semibold text-zinc-100">{dayLabel}</h4>
-                  <div className="flex flex-wrap items-center gap-2">
+              <div
+                key={day.dayOfWeek}
+                className={`rounded-xl border bg-zinc-950/70 p-4 transition ${
+                  hasError ? "border-red-500/70" : isClosed ? "border-zinc-800" : "border-zinc-700"
+                }`}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-base font-semibold text-zinc-100">{dayLabel}</h4>
+                      <span
+                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                          isClosed
+                            ? "border-zinc-700 bg-zinc-900 text-zinc-400"
+                            : "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
+                        }`}
+                      >
+                        {isClosed ? "Fechado" : "Aberto"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {getRangeSummary(day.ranges)}
+                      {!isClosed ? ` - ${day.ranges.length} faixa${day.ranges.length === 1 ? "" : "s"}` : ""}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                     <button
                       type="button"
                       onClick={() => addRange(day.dayOfWeek)}
-                      className="rounded-md border border-zinc-600 px-2 py-1 text-xs text-zinc-100"
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:border-cyan-400/70"
                     >
                       Adicionar faixa
                     </button>
                     <button
                       type="button"
                       onClick={() => applyTemplate(day.dayOfWeek)}
-                      className="rounded-md border border-zinc-600 px-2 py-1 text-xs text-zinc-100"
+                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:border-cyan-400/70"
                     >
                       Modelo padrao
                     </button>
                     <button
                       type="button"
-                      onClick={() => clearDay(day.dayOfWeek)}
-                      className="rounded-md border border-red-500/60 px-2 py-1 text-xs text-red-200"
+                      disabled={isPending}
+                      onClick={() => closeAndSaveDay(day.dayOfWeek)}
+                      className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-500/15 disabled:opacity-60"
                     >
                       Fechar dia
                     </button>
                   </div>
                 </div>
 
-                <div className="mt-3 space-y-2">
+                <div className="mt-4 space-y-2">
                   {day.ranges.map((range, index) => (
-                    <div key={`${day.dayOfWeek}-${index}`} className="grid gap-2 md:grid-cols-[150px_150px_auto]">
-                      <input
-                        type="time"
-                        value={range.openTime}
-                        onChange={(event) => updateRange(day.dayOfWeek, index, { openTime: event.target.value })}
-                        className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-                      />
-                      <input
-                        type="time"
-                        value={range.closeTime}
-                        onChange={(event) => updateRange(day.dayOfWeek, index, { closeTime: event.target.value })}
-                        className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-                      />
+                    <div
+                      key={`${day.dayOfWeek}-${index}`}
+                      className="grid gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 md:grid-cols-[1fr_1fr_auto] md:items-end"
+                    >
+                      <label className="space-y-1">
+                        <span className="text-xs font-medium text-zinc-500">Inicio</span>
+                        <input
+                          type="time"
+                          value={range.openTime}
+                          onChange={(event) => updateRange(day.dayOfWeek, index, { openTime: event.target.value })}
+                          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none transition focus:border-cyan-400"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-xs font-medium text-zinc-500">Fim</span>
+                        <input
+                          type="time"
+                          value={range.closeTime}
+                          onChange={(event) => updateRange(day.dayOfWeek, index, { closeTime: event.target.value })}
+                          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none transition focus:border-cyan-400"
+                        />
+                      </label>
                       <button
                         type="button"
                         onClick={() => removeRange(day.dayOfWeek, index)}
-                        className="rounded-md border border-red-500/60 px-3 py-2 text-xs text-red-200"
+                        className="rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-500/10"
                       >
                         Remover
                       </button>
@@ -342,16 +444,27 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
                   ))}
 
                   {day.ranges.length === 0 ? (
-                    <p className="text-xs text-zinc-500">Dia sem atendimento.</p>
+                    <div className="rounded-lg border border-dashed border-zinc-800 bg-zinc-900/40 px-4 py-5 text-sm text-zinc-500">
+                      Dia sem atendimento.
+                    </div>
                   ) : null}
                 </div>
 
-                <div className="mt-4">
+                {hasError ? (
+                  <p className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                    Corrija faixas sobrepostas ou horarios em que o fim vem antes do inicio.
+                  </p>
+                ) : null}
+
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-zinc-800 pt-4">
+                  <p className="text-xs text-zinc-500">
+                    {isClosed ? "Nenhum horario sera exibido para clientes." : "Este dia aparece na agenda publica."}
+                  </p>
                   <button
                     type="button"
-                    disabled={isPending}
+                    disabled={isPending || hasError}
                     onClick={() => saveDay(day)}
-                    className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-70"
+                    className="shrink-0 rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950 transition hover:bg-cyan-300 disabled:opacity-70"
                   >
                     Salvar {dayLabel}
                   </button>

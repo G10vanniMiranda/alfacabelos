@@ -14,6 +14,29 @@ import { Stepper } from "./stepper";
 
 const STORAGE_KEY = "scheduler-draft";
 
+function formatFullDate(date?: string): string {
+  if (!date) {
+    return "Selecione um dia";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  }).format(new Date(`${date}T12:00:00`));
+}
+
+function formatBookingTime(iso?: string): string {
+  if (!iso) {
+    return "Horario pendente";
+  }
+
+  return new Date(iso).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function SchedulerWizard({
   services,
   initialCustomer,
@@ -56,6 +79,12 @@ export function SchedulerWizard({
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
   }, [draft]);
+
+  useEffect(() => {
+    if (step === 2 && draft.serviceId && !draft.date) {
+      setDraft((prev) => ({ ...prev, date: minDate }));
+    }
+  }, [draft.date, draft.serviceId, minDate, step]);
 
   const loadSlots = useCallback(
     async (date: string, serviceId?: string) => {
@@ -146,6 +175,8 @@ export function SchedulerWizard({
   }
 
   const selectedService = services.find((item) => item.id === draft.serviceId);
+  const selectedDateLabel = formatFullDate(draft.date);
+  const selectedTimeLabel = formatBookingTime(draft.time);
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 sm:p-8">
@@ -172,21 +203,58 @@ export function SchedulerWizard({
       )}
 
       {step === 2 && (
-        <div className="mt-6">
-          <label className="text-sm text-zinc-300">Selecione a data</label>
-          <DateCalendar
-            minDate={minDate}
-            selectedDate={draft.date}
-            onSelect={(date) => {
-              setDraft((prev) => ({ ...prev, date, time: undefined }));
-            }}
-          />
-          <AvailableSlots
-            slots={slots}
-            selectedStart={draft.time}
-            loading={slotsLoading}
-            onSelect={(slot) => setDraft((prev) => ({ ...prev, time: slot.start }))}
-          />
+        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-zinc-100">Escolha na agenda</p>
+                <p className="text-sm capitalize text-zinc-400">{selectedDateLabel}</p>
+              </div>
+              {selectedService ? (
+                <span className="w-fit rounded-full border border-zinc-700 px-3 py-1 text-xs font-semibold text-cyan-100">
+                  {selectedService.name} - {selectedService.durationMinutes} min
+                </span>
+              ) : null}
+            </div>
+
+            <DateCalendar
+              minDate={minDate}
+              selectedDate={draft.date}
+              onSelect={(date) => {
+                setDraft((prev) => ({ ...prev, date, time: undefined }));
+              }}
+            />
+          </div>
+
+          <aside className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 lg:mt-7">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Resumo</p>
+            <div className="mt-4 space-y-4">
+              <div>
+                <p className="text-xs text-zinc-500">Servico</p>
+                <p className="mt-1 text-sm font-semibold text-zinc-100">{selectedService?.name ?? "-"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Dia</p>
+                <p className="mt-1 text-sm font-semibold capitalize text-zinc-100">{selectedDateLabel}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Horario</p>
+                <p className="mt-1 text-sm font-semibold text-cyan-100">{selectedTimeLabel}</p>
+              </div>
+              <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-50">
+                O horario fica reservado apenas depois da confirmacao.
+              </div>
+            </div>
+          </aside>
+
+          <div className="lg:col-span-2">
+            <AvailableSlots
+              slots={slots}
+              selectedStart={draft.time}
+              loading={slotsLoading}
+              onSelect={(slot) => setDraft((prev) => ({ ...prev, time: slot.start }))}
+            />
+          </div>
         </div>
       )}
 

@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { BUSINESS_CONFIG } from "@/lib/config";
+import { isClosedOperatingWindow } from "@/lib/constants/availability";
 import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
 import { repository } from "@/lib/repositories";
 import {
@@ -135,11 +136,13 @@ export async function getAvailableSlots(params: { date: string; barberId?: strin
     serviceDurationMinutes: service.durationMinutes,
     barberBookings: bookings,
     blockedSlots,
-    operatingHours: availabilities.map((item) => ({
-      dayOfWeek: item.dayOfWeek,
-      open: item.openTime,
-      close: item.closeTime,
-    })),
+    operatingHours: availabilities
+      .map((item) => ({
+        dayOfWeek: item.dayOfWeek,
+        open: item.openTime,
+        close: item.closeTime,
+      }))
+      .filter((item) => !isClosedOperatingWindow(item)),
   });
 }
 
