@@ -10,7 +10,15 @@ import {
 import { DateCalendar } from "@/components/scheduler/date-calendar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
-import { formatBRLFromCents, formatDateInput, formatPhone, getLocalDateInput } from "@/lib/utils";
+import { BUSINESS_CONFIG } from "@/lib/config";
+import {
+  formatBRLFromCents,
+  formatDateInput,
+  formatPhone,
+  getLocalDateInput,
+  getTimeLabelInTimeZone,
+  zonedDateTimeToUtcIso,
+} from "@/lib/utils";
 import { Barber, BookingWithRelations, Service } from "@/types/domain";
 
 type AdminAgendaProps = {
@@ -57,10 +65,7 @@ type ActionsMenuPosition = {
 };
 
 function formatTimeLabel(iso: string) {
-  return new Date(iso).toLocaleTimeString("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return getTimeLabelInTimeZone(iso, BUSINESS_CONFIG.timezone);
 }
 
 function formatDateLabel(date: string) {
@@ -73,14 +78,14 @@ function formatDateLabel(date: string) {
 }
 
 function getBookingDateKey(iso: string) {
-  return getLocalDateInput(iso);
+  return getLocalDateInput(iso, BUSINESS_CONFIG.timezone);
 }
 
 function formatDateTimeLabel(iso: string) {
-  const date = new Date(iso);
+  const dateKey = getLocalDateInput(iso, BUSINESS_CONFIG.timezone);
   return {
-    date: date.toLocaleDateString("pt-BR"),
-    time: date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    date: dateKey.split("-").reverse().join("/"),
+    time: getTimeLabelInTimeZone(iso, BUSINESS_CONFIG.timezone),
   };
 }
 
@@ -158,8 +163,7 @@ function buildOccurrenceStarts(draft: RecurrenceDraft) {
   }
 
   if (draft.recurrence === "NONE") {
-    const start = new Date(`${draft.date}T${draft.time}:00`);
-    return Number.isNaN(start.getTime()) ? [] : [start.toISOString()];
+    return [zonedDateTimeToUtcIso(draft.date, `${draft.time}:00`, BUSINESS_CONFIG.timezone)];
   }
 
   if (!draft.repeatUntil || draft.repeatUntil < draft.date) {
@@ -173,12 +177,7 @@ function buildOccurrenceStarts(draft: RecurrenceDraft) {
       break;
     }
 
-    const start = new Date(`${date}T${draft.time}:00`);
-    if (Number.isNaN(start.getTime())) {
-      break;
-    }
-
-    starts.push(start.toISOString());
+    starts.push(zonedDateTimeToUtcIso(date, `${draft.time}:00`, BUSINESS_CONFIG.timezone));
   }
 
   return starts;
@@ -482,12 +481,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
 
   function openEditModal(booking: BookingWithRelations) {
     const date = getBookingDateKey(booking.dateTimeStart);
-    const local = new Date(booking.dateTimeStart);
-    const time = local.toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
+    const time = getTimeLabelInTimeZone(booking.dateTimeStart, BUSINESS_CONFIG.timezone);
 
     setEditingBooking({
       bookingId: booking.id,

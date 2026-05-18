@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAvailableSlots } from "@/lib/booking-service";
 import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   const date = request.nextUrl.searchParams.get("date");
   const barberId = request.nextUrl.searchParams.get("barberId") ?? DEFAULT_BARBER_ID;
@@ -13,7 +16,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const slots = await getAvailableSlots({ date, barberId, serviceId });
-    return NextResponse.json(slots);
+    return NextResponse.json(slots, {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    });
   } catch (error) {
     console.error("GET /api/available-slots failed", error);
     return NextResponse.json({ message: "Erro ao gerar horarios" }, { status: 400 });

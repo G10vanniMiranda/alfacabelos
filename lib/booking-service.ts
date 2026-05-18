@@ -17,7 +17,7 @@ import {
 } from "@/lib/validators/schemas";
 import { BookingFilters } from "@/types/domain";
 import { generateAvailableSlots, getDayRange } from "./time";
-import { addMinutesToIso, overlaps } from "./utils";
+import { addMinutesToIso, getLocalDateInput, overlaps } from "./utils";
 
 const HOME_REVALIDATE_SECONDS = 60 * 15;
 
@@ -170,7 +170,7 @@ export async function createBooking(input: unknown) {
     throw new Error("Este horário acabou de ser reservado. Escolha outro horário.");
   }
 
-  const blockedSlots = await repository.listBlockedSlots(data.start.slice(0, 10));
+  const blockedSlots = await repository.listBlockedSlots(getLocalDateInput(data.start, BUSINESS_CONFIG.timezone));
   const blockedConflict = blockedSlots.some((slot) => {
     if (slot.barberId && slot.barberId !== barberId) {
       return false;

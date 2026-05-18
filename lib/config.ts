@@ -3,7 +3,7 @@ import { DailyOperatingConfig } from "@/types/domain";
 export const BUSINESS_CONFIG = {
   slotIntervalMinutes: 60,
   bufferBetweenBookingsMinutes: 10,
-  timezone: "America/Sao_Paulo",
+  timezone: "America/Manaus",
   operatingHours: [
     { dayOfWeek: 1, open: "09:00", close: "12:00" },
     { dayOfWeek: 1, open: "14:00", close: "19:00" },

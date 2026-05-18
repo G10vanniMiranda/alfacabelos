@@ -28,6 +28,7 @@ import {
   getAdminLoginBlockStatus,
   registerFailedAdminLogin,
 } from "@/lib/auth/admin-login-attempt-store";
+import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
 
 const ADMIN_COOKIE = "barber_admin";
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -123,6 +124,69 @@ export async function createBookingAction(payload: {
       success: true,
       message: "Agendamento criado com sucesso.",
       bookingId: booking.id,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Falha ao criar agendamento",
+    };
+  }
+}
+
+export async function createClientBookingsAction(payload: {
+  serviceId: string;
+  customerName: string;
+  customerPhone: string;
+  start: string;
+  starts?: string[];
+  recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
+  repeatUntil?: string;
+}): Promise<ActionState> {
+  const parsed = createAdminBookingSchema.safeParse({
+    ...payload,
+    barberId: DEFAULT_BARBER_ID,
+  });
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message ?? "Dados invalidos para criar agendamento",
+    };
+  }
+
+  try {
+    const starts = parsed.data.starts?.length ? parsed.data.starts : [parsed.data.start];
+    if (parsed.data.recurrence !== "NONE" && starts.length >= 60) {
+      return {
+        success: false,
+        message: "Limite de 59 repeticoes por criacao. Reduza o periodo.",
+      };
+    }
+
+    let firstBookingId: string | undefined;
+    for (const start of starts) {
+      const booking = await createBooking({
+        serviceId: parsed.data.serviceId,
+        barberId: DEFAULT_BARBER_ID,
+        start,
+        customerName: parsed.data.customerName,
+        customerPhone: parsed.data.customerPhone,
+      });
+
+      if (!firstBookingId) {
+        firstBookingId = booking.id;
+      }
+    }
+
+    revalidatePath("/cliente");
+    revalidatePath("/agendar");
+
+    return {
+      success: true,
+      message:
+        starts.length === 1
+          ? "Agendamento criado com sucesso."
+          : `${starts.length} agendamentos criados com sucesso.`,
+      bookingId: firstBookingId,
     };
   } catch (error) {
     return {

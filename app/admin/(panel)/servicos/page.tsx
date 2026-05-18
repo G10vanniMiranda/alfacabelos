@@ -1,4 +1,4 @@
-import { AdminServices } from "@/components/admin/admin-services";
+import { AdminServices } from "../../../../components/admin/admin-services";
 import { listServices } from "@/lib/booking-service";
 
 export const metadata = {

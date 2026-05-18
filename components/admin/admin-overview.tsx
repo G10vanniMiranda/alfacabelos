@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { BUSINESS_CONFIG } from "@/lib/config";
 import { Barber, BlockedSlot, BookingWithRelations, Service } from "@/types/domain";
-import { formatDateInput, getLocalDateInput } from "@/lib/utils";
+import { formatBRLFromCents, formatDateInput, getLocalDateInput, getTimeLabelInTimeZone } from "@/lib/utils";
 
 type AdminOverviewProps = {
   bookings: BookingWithRelations[];
@@ -11,167 +13,265 @@ type AdminOverviewProps = {
 
 function formatDateTime(iso: string) {
   return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(new Date(iso));
+}
+
+function formatDay(iso: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(new Date(iso));
+}
+
+function percent(value: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.round((value / total) * 100);
 }
 
 export function AdminOverview({ bookings, blockedSlots, services, barbers }: AdminOverviewProps) {
   const now = new Date();
   const today = formatDateInput(now);
 
-  const todayBookings = bookings.filter((booking) => getLocalDateInput(booking.dateTimeStart) === today);
+  const activeBookings = bookings.filter((booking) => booking.status !== "CANCELADO");
+  const todayBookings = bookings.filter(
+    (booking) => getLocalDateInput(booking.dateTimeStart, BUSINESS_CONFIG.timezone) === today,
+  );
   const todayConfirmed = todayBookings.filter((booking) => booking.status === "CONFIRMADO");
-  const futureBookings = bookings
-    .filter((booking) => booking.status !== "CANCELADO" && new Date(booking.dateTimeStart).getTime() >= now.getTime())
+  const todayPending = todayBookings.filter((booking) => booking.status === "PENDENTE");
+  const todayRevenueCents = todayBookings
+    .filter((booking) => booking.paymentStatus === "CONFIRMADO" && booking.status !== "CANCELADO")
+    .reduce((sum, booking) => sum + booking.service.priceCents, 0);
+
+  const futureBookings = activeBookings
+    .filter((booking) => new Date(booking.dateTimeStart).getTime() >= now.getTime())
     .sort((a, b) => new Date(a.dateTimeStart).getTime() - new Date(b.dateTimeStart).getTime());
+
   const recentBookings = bookings
     .slice()
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 6);
+    .slice(0, 7);
+
   const activeBlocked = blockedSlots.filter((slot) => new Date(slot.dateTimeEnd).getTime() >= now.getTime());
+  const confirmationRate = percent(todayConfirmed.length, todayBookings.length);
+  const nextBooking = futureBookings[0];
+
+  const metrics = [
+    {
+      label: "Hoje",
+      value: String(todayBookings.length),
+      helper: `${todayConfirmed.length} confirmados, ${todayPending.length} pendentes`,
+      tone: "text-zinc-100",
+    },
+    {
+      label: "Receita confirmada",
+      value: formatBRLFromCents(todayRevenueCents),
+      helper: "pagamentos confirmados hoje",
+      tone: "text-emerald-200",
+    },
+    {
+      label: "Taxa de confirmacao",
+      value: `${confirmationRate}%`,
+      helper: "sobre os agendamentos do dia",
+      tone: "text-cyan-100",
+    },
+    {
+      label: "Bloqueios ativos",
+      value: String(activeBlocked.length),
+      helper: `${services.length} servicos e ${barbers.length} barbeiro(s)`,
+      tone: "text-amber-200",
+    },
+  ];
 
   return (
     <section className="min-w-0 space-y-6">
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
-        <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-cyan-500/20 blur-3xl" />
-        <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">Visão geral</p>
-        <h2 className="mt-2 text-2xl font-bold text-zinc-100 sm:text-3xl">Dashboard do painel</h2>
-        <p className="mt-2 text-sm text-zinc-400">
-          Controle rápido de operação, com status da agenda e atalhos para gestão.
-        </p>
-      </div>
+      <header className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">Visao geral</p>
+            <h2 className="mt-2 text-2xl font-bold text-zinc-100 sm:text-3xl">Dashboard operacional</h2>
+            <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+              Acompanhe o dia, confirme pendencias e entre rapido nas areas principais do painel.
+            </p>
+          </div>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
+            <p className="text-xs text-zinc-500">Proximo atendimento</p>
+            {nextBooking ? (
+              <>
+                <p className="mt-1 text-sm font-semibold text-zinc-100">{nextBooking.customerName}</p>
+                <p className="text-xs text-cyan-100">
+                  {getTimeLabelInTimeZone(nextBooking.dateTimeStart, BUSINESS_CONFIG.timezone)} -{" "}
+                  {nextBooking.service.name}
+                </p>
+              </>
+            ) : (
+              <p className="mt-1 text-sm font-semibold text-zinc-400">Sem proximos horarios</p>
+            )}
+          </div>
+        </div>
+      </header>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Hoje</p>
-          <p className="mt-2 text-3xl font-black text-zinc-100">{todayBookings.length}</p>
-          <p className="mt-1 text-sm text-zinc-400">agendamentos no dia</p>
-        </article>
-        <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Confirmados</p>
-          <p className="mt-2 text-3xl font-black text-emerald-300">{todayConfirmed.length}</p>
-          <p className="mt-1 text-sm text-zinc-400">confirmações para hoje</p>
-        </article>
-        <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Catálogo</p>
-          <p className="mt-2 text-3xl font-black text-zinc-100">{services.length}</p>
-          <p className="mt-1 text-sm text-zinc-400">serviços ativos</p>
-        </article>
-        <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Bloqueios</p>
-          <p className="mt-2 text-3xl font-black text-amber-300">{activeBlocked.length}</p>
-          <p className="mt-1 text-sm text-zinc-400">intervalos ativos</p>
-        </article>
+        {metrics.map((metric) => (
+          <article key={metric.label} className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{metric.label}</p>
+            <p className={`mt-3 text-3xl font-black ${metric.tone}`}>{metric.value}</p>
+            <p className="mt-1 text-sm text-zinc-400">{metric.helper}</p>
+          </article>
+        ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.45fr_0.9fr]">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="text-lg font-semibold text-zinc-100">Próximos atendimentos</h3>
+            <div>
+              <h3 className="text-lg font-semibold text-zinc-100">Proximos atendimentos</h3>
+              <p className="mt-1 text-sm text-zinc-500">Agenda ativa ordenada por horario.</p>
+            </div>
             <Link href="/admin/agenda" className="text-sm font-semibold text-cyan-300 hover:text-cyan-200">
-              Ver agenda
+              Abrir agenda
             </Link>
           </div>
-          <div className="mt-4 space-y-2">
+
+          <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800">
             {futureBookings.slice(0, 8).map((booking) => (
-              <article key={booking.id} className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
-                <p className="font-semibold text-zinc-100">{booking.customerName}</p>
-                <p className="mt-1 text-sm text-zinc-300">
-                  {booking.service.name} com {booking.barber.name}
-                </p>
-                <p className="mt-1 text-xs text-zinc-400">{formatDateTime(booking.dateTimeStart)}</p>
+              <article
+                key={booking.id}
+                className="grid gap-3 border-b border-zinc-800 bg-zinc-950/40 px-4 py-3 last:border-b-0 sm:grid-cols-[92px_1fr_auto]"
+              >
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">{formatDay(booking.dateTimeStart)}</p>
+                  <p className="mt-1 text-lg font-bold text-cyan-100">
+                    {getTimeLabelInTimeZone(booking.dateTimeStart, BUSINESS_CONFIG.timezone)}
+                  </p>
+                </div>
+                <div>
+                  <p className="font-semibold text-zinc-100">{booking.customerName}</p>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    {booking.service.name} com {booking.barber.name}
+                  </p>
+                </div>
+                <div className="self-center sm:text-right">
+                  <StatusBadge status={booking.status} />
+                  <p className="mt-2 text-xs text-zinc-500">{booking.customerPhone}</p>
+                </div>
               </article>
             ))}
-            {futureBookings.length === 0 && <p className="text-sm text-zinc-500">Sem atendimentos futuros.</p>}
+            {futureBookings.length === 0 ? (
+              <p className="bg-zinc-950/40 px-4 py-6 text-center text-sm text-zinc-500">Sem atendimentos futuros.</p>
+            ) : null}
           </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+        <aside className="space-y-4">
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
             <h3 className="text-lg font-semibold text-zinc-100">Atalhos</h3>
             <div className="mt-4 grid gap-2">
-              <Link
-                href="/admin/servicos"
-                className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
-              >
-                Gerenciar serviços
-              </Link>
-              <Link
-                href="/admin/agenda"
-                className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
-              >
-                Atualizar status da agenda
-              </Link>
-              <Link
-                href="/admin/ganhos"
-                className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
-              >
-                Controle de ganhos
-              </Link>
-              <Link
-                href="/admin/bloqueios"
-                className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
-              >
-                Configurar bloqueios
-              </Link>
-              <Link
-                href="/admin/galeria"
-                className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
-              >
-                Gerenciar galeria
-              </Link>
-              <Link
-                href="/admin/acessos"
-                className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
-              >
-                Gerenciar acessos
-              </Link>
+              {[
+                ["Agenda", "/admin/agenda"],
+                ["Horarios", "/admin/horarios"],
+                ["Servicos", "/admin/servicos"],
+                ["Ganhos", "/admin/ganhos"],
+                ["Bloqueios", "/admin/bloqueios"],
+                ["Galeria", "/admin/galeria"],
+              ].map(([label, href]) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
+                >
+                  <span>{label}</span>
+                  <span className="text-zinc-500">{">"}</span>
+                </Link>
+              ))}
             </div>
-          </div>
+          </section>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <h3 className="text-lg font-semibold text-zinc-100">Resumo rápido</h3>
-            <ul className="mt-3 space-y-2 text-sm text-zinc-300">
-              <li>Barbeiros ativos: {barbers.length}</li>
-              <li>Agendamentos totais: {bookings.length}</li>
-              <li>Últimos cadastros: {recentBookings.length}</li>
-            </ul>
-          </div>
-        </section>
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <h3 className="text-lg font-semibold text-zinc-100">Saude do dia</h3>
+            <div className="mt-4 space-y-4">
+              <div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-400">Confirmacao</span>
+                  <span className="font-semibold text-zinc-100">{confirmationRate}%</span>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-zinc-800">
+                  <div className="h-2 rounded-full bg-cyan-400" style={{ width: `${confirmationRate}%` }} />
+                </div>
+              </div>
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+                  <dt className="text-zinc-500">Ativos</dt>
+                  <dd className="mt-1 font-semibold text-zinc-100">{activeBookings.length}</dd>
+                </div>
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+                  <dt className="text-zinc-500">Recentes</dt>
+                  <dd className="mt-1 font-semibold text-zinc-100">{recentBookings.length}</dd>
+                </div>
+              </dl>
+            </div>
+          </section>
+        </aside>
       </div>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-lg font-semibold text-zinc-100">Atividade recente</h3>
-          <span className="text-xs uppercase tracking-[0.16em] text-zinc-500">últimos registros</span>
+          <div>
+            <h3 className="text-lg font-semibold text-zinc-100">Atividade recente</h3>
+            <p className="mt-1 text-sm text-zinc-500">Ultimos agendamentos criados no sistema.</p>
+          </div>
+          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+            {bookings.length} registros
+          </span>
         </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-160 text-left text-sm">
-            <thead className="text-zinc-400">
+
+        <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-800">
+          <table className="w-full min-w-170 text-left text-sm">
+            <thead className="bg-zinc-950/70 text-xs uppercase tracking-wide text-zinc-500">
               <tr>
-                <th className="px-2 py-2">Cliente</th>
-                <th className="px-2 py-2">Serviço</th>
-                <th className="px-2 py-2">Criado em</th>
-                <th className="px-2 py-2">Status</th>
+                <th className="px-4 py-3">Cliente</th>
+                <th className="px-4 py-3">Servico</th>
+                <th className="px-4 py-3">Criado em</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Pagamento</th>
               </tr>
             </thead>
             <tbody>
               {recentBookings.map((booking) => (
-                <tr key={booking.id} className="border-t border-zinc-800 text-zinc-200">
-                  <td className="px-2 py-2">{booking.customerName}</td>
-                  <td className="px-2 py-2">{booking.service.name}</td>
-                  <td className="px-2 py-2 text-zinc-400">{formatDateTime(booking.createdAt)}</td>
-                  <td className="px-2 py-2">{booking.status}</td>
+                <tr key={booking.id} className="border-t border-zinc-800 bg-zinc-950/30 text-zinc-200">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-zinc-100">{booking.customerName}</p>
+                    <p className="text-xs text-zinc-500">{booking.customerPhone}</p>
+                  </td>
+                  <td className="px-4 py-3">{booking.service.name}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-zinc-400">{formatDateTime(booking.createdAt)}</td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={booking.status} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full border px-2 py-1 text-xs font-semibold ${
+                        booking.paymentStatus === "CONFIRMADO"
+                          ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-200"
+                          : "border-amber-400/50 bg-amber-500/15 text-amber-100"
+                      }`}
+                    >
+                      {booking.paymentStatus}
+                    </span>
+                  </td>
                 </tr>
               ))}
-              {recentBookings.length === 0 && (
+              {recentBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-2 py-4 text-center text-zinc-500">
+                  <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
                     Nenhum registro recente.
                   </td>
                 </tr>
-              )}
+              ) : null}
             </tbody>
           </table>
         </div>

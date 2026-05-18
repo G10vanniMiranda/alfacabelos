@@ -136,7 +136,7 @@ export const inMemoryRepository: BookingRepository = {
       return base;
     }
 
-    return base.filter((slot) => slot.dateTimeStart.startsWith(date));
+    return base.filter((slot) => getLocalDateInput(slot.dateTimeStart, BUSINESS_CONFIG.timezone) === date);
   },
 
   async listBookingsInRange(startIso: string, endIso: string, barberId?: string) {

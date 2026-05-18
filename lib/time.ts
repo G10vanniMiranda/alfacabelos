@@ -1,5 +1,5 @@
 import { BUSINESS_CONFIG } from "@/lib/config";
-import { getDayRangeIso, getTimeLabel, overlaps, toMinutes } from "@/lib/utils";
+import { getDayRangeIso, getTimeLabelInTimeZone, overlaps, toMinutes, zonedDateTimeToUtcIso } from "@/lib/utils";
 import { AvailableSlot } from "@/types/scheduler";
 import { BlockedSlot, Booking, DailyOperatingConfig } from "@/types/domain";
 
@@ -41,7 +41,8 @@ export function generateAvailableSlots(params: {
   operatingHours?: DailyOperatingConfig[];
 }): AvailableSlot[] {
   const { date, barberId, serviceDurationMinutes, barberBookings, blockedSlots, operatingHours } = params;
-  const day = new Date(`${date}T12:00:00`).getDay();
+  const [year, month, dayOfMonth] = date.split("-").map(Number);
+  const day = new Date(Date.UTC(year, month - 1, dayOfMonth, 12)).getUTCDay();
   const windows = mergeDailyWindows(
     (operatingHours ?? BUSINESS_CONFIG.operatingHours).filter((entry) => entry.dayOfWeek === day),
   );
@@ -62,9 +63,8 @@ export function generateAvailableSlots(params: {
       const hours = Math.floor(currentMinutes / 60);
       const minutes = currentMinutes % 60;
 
-      const start = new Date(`${date}T${hours.toString().padStart(2, "0")}:${minutes
-        .toString()
-        .padStart(2, "0")}:00`);
+      const startTime = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:00`;
+      const start = new Date(zonedDateTimeToUtcIso(date, startTime, BUSINESS_CONFIG.timezone));
 
       const end = new Date(start);
       end.setMinutes(end.getMinutes() + serviceDurationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes);
@@ -98,7 +98,7 @@ export function generateAvailableSlots(params: {
       slots.push({
         start: start.toISOString(),
         end: end.toISOString(),
-        label: getTimeLabel(start),
+        label: getTimeLabelInTimeZone(start.toISOString(), BUSINESS_CONFIG.timezone),
       });
     }
   }
@@ -107,6 +107,6 @@ export function generateAvailableSlots(params: {
 }
 
 export function getDayRange(date: string) {
-  return getDayRangeIso(date);
+  return getDayRangeIso(date, BUSINESS_CONFIG.timezone);
 }
 

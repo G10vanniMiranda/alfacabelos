@@ -3,6 +3,8 @@ export type SchedulerDraft = {
   barberId?: string;
   date?: string;
   time?: string;
+  recurrence?: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
+  repeatUntil?: string;
   customerName?: string;
   customerPhone?: string;
 };

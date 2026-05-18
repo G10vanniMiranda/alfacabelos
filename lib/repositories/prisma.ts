@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { barbersSeed, servicesSeed } from "@/lib/data/seed";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { CLOSED_DAY_TIME } from "@/lib/constants/availability";
+import { getDayRangeIso } from "@/lib/utils";
 import { Barber, BarberAvailability, Booking, BookingWithRelations, BlockedSlot, GalleryImage } from "@/types/domain";
 import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput, UpdateBookingInput } from "./types";
 
@@ -488,10 +489,9 @@ export const prismaRepository: BookingRepository = {
       filters?.status && filters.status !== "TODOS"
         ? Prisma.sql`AND b.status::text = ${filters.status}`
         : Prisma.empty;
-    const dateFilter = filters?.date
-      ? Prisma.sql`AND b."dateTimeStart" >= ${new Date(`${filters.date}T00:00:00`)} AND b."dateTimeStart" <= ${new Date(
-        `${filters.date}T23:59:59.999`,
-      )}`
+    const dayRange = filters?.date ? getDayRangeIso(filters.date, BUSINESS_CONFIG.timezone) : null;
+    const dateFilter = dayRange
+      ? Prisma.sql`AND b."dateTimeStart" >= ${new Date(dayRange.start)} AND b."dateTimeStart" <= ${new Date(dayRange.end)}`
       : Prisma.empty;
 
     const rows = hasPaymentColumns
@@ -558,12 +558,13 @@ export const prismaRepository: BookingRepository = {
   },
 
   async listBlockedSlots(date) {
+    const dayRange = date ? getDayRangeIso(date, BUSINESS_CONFIG.timezone) : null;
     const rows = await prisma.blockedSlot.findMany({
-      where: date
+      where: dayRange
         ? {
           dateTimeStart: {
-            gte: new Date(`${date}T00:00:00`),
-            lte: new Date(`${date}T23:59:59.999`),
+            gte: new Date(dayRange.start),
+            lte: new Date(dayRange.end),
           },
         }
         : undefined,
