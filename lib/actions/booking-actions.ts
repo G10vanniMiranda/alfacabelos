@@ -156,6 +156,7 @@ export async function createAdminBookingsAction(payload: {
   customerName: string;
   customerPhone: string;
   start: string;
+  starts?: string[];
   recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
   repeatUntil?: string;
 }): Promise<ActionState> {
@@ -170,29 +171,35 @@ export async function createAdminBookingsAction(payload: {
   }
 
   try {
-    const starts: string[] = [];
-    const firstStart = new Date(parsed.data.start);
-    const repeatUntil = parsed.data.repeatUntil ? new Date(`${parsed.data.repeatUntil}T23:59:59`) : null;
-    let cursor = new Date(firstStart);
+    let starts = parsed.data.starts?.length ? parsed.data.starts : [];
 
-    while (starts.length < 60) {
-      if (repeatUntil && cursor > repeatUntil) {
-        break;
+    if (starts.length === 0) {
+      const fallbackStarts: string[] = [];
+      const firstStart = new Date(parsed.data.start);
+      const repeatUntil = parsed.data.repeatUntil ? new Date(`${parsed.data.repeatUntil}T23:59:59`) : null;
+      let cursor = new Date(firstStart);
+
+      while (fallbackStarts.length < 60) {
+        if (repeatUntil && cursor > repeatUntil) {
+          break;
+        }
+
+        fallbackStarts.push(cursor.toISOString());
+
+        if (parsed.data.recurrence === "NONE") {
+          break;
+        }
+
+        cursor = addRecurrenceStep(cursor, parsed.data.recurrence);
       }
 
-      starts.push(cursor.toISOString());
-
-      if (parsed.data.recurrence === "NONE") {
-        break;
-      }
-
-      cursor = addRecurrenceStep(cursor, parsed.data.recurrence);
+      starts = fallbackStarts;
     }
 
     if (parsed.data.recurrence !== "NONE" && starts.length >= 60) {
       return {
         success: false,
-        message: "Limite de 60 repeticoes por criacao. Reduza o periodo.",
+        message: "Limite de 59 repeticoes por criacao. Reduza o periodo.",
       };
     }
 
@@ -400,6 +407,7 @@ export async function deleteServiceAction(payload: { serviceId: string }) {
 export async function createGalleryImageAction(payload: {
   imageUrl: string;
   altText?: string;
+  mediaType?: "IMAGE" | "VIDEO";
 }) {
   await assertAdminSession();
   await createGalleryImage(payload);
@@ -409,12 +417,17 @@ export async function createGalleryImageAction(payload: {
 }
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
+const ACCEPTED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
 function extensionFromMime(mime: string): string {
   if (mime === "image/png") return "png";
   if (mime === "image/webp") return "webp";
   if (mime === "image/avif") return "avif";
+  if (mime === "video/mp4") return "mp4";
+  if (mime === "video/webm") return "webm";
+  if (mime === "video/quicktime") return "mov";
   return "jpg";
 }
 
@@ -426,18 +439,27 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
     const altText = altRaw.length > 0 ? altRaw : undefined;
 
     if (!(fileValue instanceof File)) {
-      return { success: false, message: "Selecione uma imagem para upload" };
+      return { success: false, message: "Selecione uma foto ou video para upload" };
     }
-    if (!ACCEPTED_IMAGE_TYPES.has(fileValue.type)) {
-      return { success: false, message: "Formato inválido. Use JPG, PNG, WEBP ou AVIF" };
+    const isImage = ACCEPTED_IMAGE_TYPES.has(fileValue.type);
+    const isVideo = ACCEPTED_VIDEO_TYPES.has(fileValue.type);
+    if (!isImage && !isVideo) {
+      return { success: false, message: "Formato invalido. Use JPG, PNG, WEBP, AVIF, MP4, WEBM ou MOV" };
     }
-    if (fileValue.size === 0 || fileValue.size > MAX_IMAGE_BYTES) {
-      return { success: false, message: "Imagem deve ter até 5MB" };
+    if (fileValue.size === 0) {
+      return { success: false, message: "Arquivo vazio" };
+    }
+    if (isImage && fileValue.size > MAX_IMAGE_BYTES) {
+      return { success: false, message: "Imagem deve ter ate 5MB" };
+    }
+    if (isVideo && fileValue.size > MAX_VIDEO_BYTES) {
+      return { success: false, message: "Video deve ter ate 50MB" };
     }
 
     const ext = extensionFromMime(fileValue.type);
     const filename = `${Date.now()}-${randomUUID()}.${ext}`;
     const objectPath = `galeria/${filename}`;
+    const mediaType = isVideo ? "VIDEO" : "IMAGE";
 
     let imageUrl = "";
     if (canUseSupabaseStorage()) {
@@ -457,11 +479,11 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
       };
     }
 
-    await createGalleryImage({ imageUrl, altText });
+    await createGalleryImage({ imageUrl, altText, mediaType });
     revalidatePath("/admin/galeria");
     revalidatePath("/");
     updateTag("gallery-images");
-    return { success: true, message: "Foto adicionada na galeria" };
+    return { success: true, message: isVideo ? "Video adicionado na galeria" : "Foto adicionada na galeria" };
   } catch (error) {
     return {
       success: false,

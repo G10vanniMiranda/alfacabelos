@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { Barber, BookingWithRelations } from "@/types/domain";
-import { formatBRLFromCents } from "@/lib/utils";
+import { formatBRLFromCents, getLocalDateInput } from "@/lib/utils";
 
 type AdminEarningsProps = {
   from: string;
@@ -99,7 +99,7 @@ function DateInputWithPicker({ name, defaultValue }: DateInputWithPickerProps) {
         className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-zinc-600 px-2 py-1 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-300"
         aria-label={`Abrir calendario de ${name === "from" ? "data inicial" : "data final"}`}
       >
-        📅
+        Abrir
       </button>
     </div>
   );
@@ -120,8 +120,8 @@ export function AdminEarnings({
 
   const dailyRevenue = groupRevenue(
     confirmedBookings,
-    (booking) => booking.dateTimeStart.slice(0, 10),
-    (booking) => formatDayLabel(booking.dateTimeStart.slice(0, 10)),
+    (booking) => getLocalDateInput(booking.dateTimeStart),
+    (booking) => formatDayLabel(getLocalDateInput(booking.dateTimeStart)),
   );
   const serviceRevenue = groupRevenue(
     confirmedBookings,

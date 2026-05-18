@@ -40,6 +40,7 @@ export type CreateBlockedSlotInput = {
 export type CreateGalleryImageInput = {
   imageUrl: string;
   altText?: string;
+  mediaType?: "IMAGE" | "VIDEO";
 };
 
 export type UpsertBarberAvailabilityInput = {

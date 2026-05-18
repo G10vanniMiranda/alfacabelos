@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Barber, BlockedSlot, BookingWithRelations, Service } from "@/types/domain";
+import { formatDateInput, getLocalDateInput } from "@/lib/utils";
 
 type AdminOverviewProps = {
   bookings: BookingWithRelations[];
@@ -17,9 +18,9 @@ function formatDateTime(iso: string) {
 
 export function AdminOverview({ bookings, blockedSlots, services, barbers }: AdminOverviewProps) {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = formatDateInput(now);
 
-  const todayBookings = bookings.filter((booking) => booking.dateTimeStart.slice(0, 10) === today);
+  const todayBookings = bookings.filter((booking) => getLocalDateInput(booking.dateTimeStart) === today);
   const todayConfirmed = todayBookings.filter((booking) => booking.status === "CONFIRMADO");
   const futureBookings = bookings
     .filter((booking) => booking.status !== "CANCELADO" && new Date(booking.dateTimeStart).getTime() >= now.getTime())

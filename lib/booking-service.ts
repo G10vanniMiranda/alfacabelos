@@ -95,6 +95,7 @@ export async function createGalleryImage(input: unknown) {
   return repository.createGalleryImage({
     imageUrl: parsed.data.imageUrl,
     altText: parsed.data.altText,
+    mediaType: parsed.data.mediaType ?? "IMAGE",
   });
 }
 

@@ -101,12 +101,14 @@ function toGalleryImage(row: {
   id: string;
   imageUrl: string;
   altText: string | null;
+  mediaType?: string | null;
   createdAt: Date;
 }): GalleryImage {
   return {
     id: row.id,
     imageUrl: row.imageUrl,
     altText: row.altText ?? undefined,
+    mediaType: row.mediaType === "VIDEO" ? "VIDEO" : "IMAGE",
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -183,8 +185,16 @@ async function readWithFallback<T>(action: () => Promise<T>, fallback: () => T |
 function getGalleryDelegate() {
   return (prisma as unknown as {
     galleryImage?: {
-      findMany: (args: unknown) => Promise<Array<{ id: string; imageUrl: string; altText: string | null; createdAt: Date }>>;
-      create: (args: unknown) => Promise<{ id: string; imageUrl: string; altText: string | null; createdAt: Date }>;
+      findMany: (args: unknown) => Promise<
+        Array<{ id: string; imageUrl: string; altText: string | null; mediaType?: string | null; createdAt: Date }>
+      >;
+      create: (args: unknown) => Promise<{
+        id: string;
+        imageUrl: string;
+        altText: string | null;
+        mediaType?: string | null;
+        createdAt: Date;
+      }>;
       deleteMany: (args: unknown) => Promise<{ count: number }>;
     }
   }).galleryImage;
@@ -860,6 +870,7 @@ export const prismaRepository: BookingRepository = {
         data: {
           imageUrl: input.imageUrl,
           altText: input.altText ?? null,
+          mediaType: input.mediaType ?? "IMAGE",
         },
       });
       return toGalleryImage(created);

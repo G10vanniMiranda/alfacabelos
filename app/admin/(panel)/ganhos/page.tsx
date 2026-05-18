@@ -1,6 +1,6 @@
 import { AdminEarnings } from "@/components/admin/admin-earnings";
 import { listAdminBookings, listBarbers } from "@/lib/booking-service";
-import { formatDateInput } from "@/lib/utils";
+import { formatDateInput, getLocalDateInput } from "@/lib/utils";
 import { BookingWithRelations } from "@/types/domain";
 
 export const metadata = {
@@ -18,7 +18,7 @@ function getDefaultRange() {
 }
 
 function isBookingInRange(booking: BookingWithRelations, from: string, to: string): boolean {
-  const date = booking.dateTimeStart.slice(0, 10);
+  const date = getLocalDateInput(booking.dateTimeStart);
   return date >= from && date <= to;
 }
 

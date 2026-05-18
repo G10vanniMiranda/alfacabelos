@@ -69,6 +69,7 @@ export type GalleryImage = {
   id: string;
   imageUrl: string;
   altText?: string;
+  mediaType?: "IMAGE" | "VIDEO";
   createdAt: string;
 };
 

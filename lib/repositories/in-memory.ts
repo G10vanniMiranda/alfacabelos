@@ -1,7 +1,7 @@
 import { barbersSeed, servicesSeed } from "@/lib/data/seed";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { CLOSED_DAY_TIME } from "@/lib/constants/availability";
-import { overlaps } from "@/lib/utils";
+import { getLocalDateInput, overlaps } from "@/lib/utils";
 import {
   Barber,
   BarberAvailability,
@@ -120,7 +120,7 @@ export const inMemoryRepository: BookingRepository = {
         return false;
       }
       if (filters?.date) {
-        const bookingDate = booking.dateTimeStart.slice(0, 10);
+        const bookingDate = getLocalDateInput(booking.dateTimeStart);
         return bookingDate === filters.date;
       }
       return true;
@@ -315,6 +315,7 @@ export const inMemoryRepository: BookingRepository = {
       id: createId("gallery"),
       imageUrl: input.imageUrl,
       altText: input.altText,
+      mediaType: input.mediaType ?? "IMAGE",
       createdAt: new Date().toISOString(),
     };
 

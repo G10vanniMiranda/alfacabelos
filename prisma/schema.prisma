@@ -118,6 +118,7 @@ model GalleryImage {
   id        String   @id @default(cuid())
   imageUrl  String
   altText   String?
+  mediaType String   @default("IMAGE")
   createdAt DateTime @default(now())
 }
 

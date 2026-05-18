@@ -10,7 +10,7 @@ import {
 import { DateCalendar } from "@/components/scheduler/date-calendar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
-import { formatBRLFromCents, formatDateInput, formatPhone } from "@/lib/utils";
+import { formatBRLFromCents, formatDateInput, formatPhone, getLocalDateInput } from "@/lib/utils";
 import { Barber, BookingWithRelations, Service } from "@/types/domain";
 
 type AdminAgendaProps = {
@@ -63,12 +63,129 @@ function formatDateLabel(date: string) {
   }).format(new Date(`${date}T12:00:00`));
 }
 
+function getBookingDateKey(iso: string) {
+  return getLocalDateInput(iso);
+}
+
 function formatDateTimeLabel(iso: string) {
   const date = new Date(iso);
   return {
     date: date.toLocaleDateString("pt-BR"),
     time: date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
   };
+}
+
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function parseDateParts(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  return { year, month, day };
+}
+
+function toDateInput(year: number, month: number, day: number) {
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+
+function daysInMonth(year: number, month: number) {
+  return new Date(year, month, 0).getDate();
+}
+
+function addDateByRecurrence(startDate: string, recurrence: RecurrenceOption, step: number) {
+  const { year, month, day } = parseDateParts(startDate);
+
+  if (recurrence === "DAILY") {
+    const date = new Date(year, month - 1, day + step);
+    return toDateInput(date.getFullYear(), date.getMonth() + 1, date.getDate());
+  }
+
+  if (recurrence === "WEEKLY") {
+    const date = new Date(year, month - 1, day + step * 7);
+    return toDateInput(date.getFullYear(), date.getMonth() + 1, date.getDate());
+  }
+
+  if (recurrence === "MONTHLY") {
+    const monthIndex = month - 1 + step;
+    const targetYear = year + Math.floor(monthIndex / 12);
+    const targetMonth = ((monthIndex % 12) + 12) % 12 + 1;
+    const targetDay = Math.min(day, daysInMonth(targetYear, targetMonth));
+    return toDateInput(targetYear, targetMonth, targetDay);
+  }
+
+  return startDate;
+}
+
+function addDaysToDateInput(date: string, amount: number) {
+  const { year, month, day } = parseDateParts(date);
+  const next = new Date(year, month - 1, day + amount);
+  return toDateInput(next.getFullYear(), next.getMonth() + 1, next.getDate());
+}
+
+function addMonthsToDateInput(date: string, amount: number) {
+  const { year, month, day } = parseDateParts(date);
+  const monthIndex = month - 1 + amount;
+  const targetYear = year + Math.floor(monthIndex / 12);
+  const targetMonth = ((monthIndex % 12) + 12) % 12 + 1;
+  return toDateInput(targetYear, targetMonth, Math.min(day, daysInMonth(targetYear, targetMonth)));
+}
+
+function getDefaultRepeatUntil(date: string, recurrence: RecurrenceOption) {
+  if (recurrence === "DAILY") {
+    return addDaysToDateInput(date, 7);
+  }
+  if (recurrence === "WEEKLY") {
+    return addMonthsToDateInput(date, 1);
+  }
+  if (recurrence === "MONTHLY") {
+    return addMonthsToDateInput(date, 6);
+  }
+  return date;
+}
+
+function buildOccurrenceStarts(draft: CreateBookingDraft) {
+  if (!draft.date || !draft.time) {
+    return [];
+  }
+
+  if (draft.recurrence === "NONE") {
+    const start = new Date(`${draft.date}T${draft.time}:00`);
+    return Number.isNaN(start.getTime()) ? [] : [start.toISOString()];
+  }
+
+  if (!draft.repeatUntil || draft.repeatUntil < draft.date) {
+    return [];
+  }
+
+  const starts: string[] = [];
+  for (let step = 0; step < 60; step += 1) {
+    const date = addDateByRecurrence(draft.date, draft.recurrence, step);
+    if (date > draft.repeatUntil) {
+      break;
+    }
+
+    const start = new Date(`${date}T${draft.time}:00`);
+    if (Number.isNaN(start.getTime())) {
+      break;
+    }
+
+    starts.push(start.toISOString());
+  }
+
+  return starts;
+}
+
+function getRecurrenceLabel(recurrence: RecurrenceOption, date: string) {
+  if (recurrence === "DAILY") {
+    return "Diariamente";
+  }
+  if (recurrence === "WEEKLY") {
+    return `Semanalmente em ${new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(new Date(`${date}T12:00:00`))}`;
+  }
+  if (recurrence === "MONTHLY") {
+    return `Mensalmente no dia ${parseDateParts(date).day}`;
+  }
+  return "Nao repetir";
 }
 
 function getPaymentBadgeClasses(paymentStatus: "PENDENTE" | "CONFIRMADO") {
@@ -116,9 +233,9 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       return formatDateInput(new Date());
     }
 
-    let minDate = allBookings[0]?.dateTimeStart.slice(0, 10) ?? formatDateInput(new Date());
+    let minDate = allBookings[0] ? getBookingDateKey(allBookings[0].dateTimeStart) : formatDateInput(new Date());
     for (const booking of allBookings) {
-      const day = booking.dateTimeStart.slice(0, 10);
+      const day = getBookingDateKey(booking.dateTimeStart);
       if (day < minDate) {
         minDate = day;
       }
@@ -128,7 +245,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
 
   const filtered = useMemo(() => {
     return allBookings.filter((booking) => {
-      if (dateFilter && !booking.dateTimeStart.startsWith(dateFilter)) {
+      if (dateFilter && getBookingDateKey(booking.dateTimeStart) !== dateFilter) {
         return false;
       }
       if (barberFilter !== "TODOS" && booking.barberId !== barberFilter) {
@@ -142,7 +259,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   }, [allBookings, dateFilter, barberFilter, statusFilter]);
 
   const dayBookings = useMemo(() => {
-    return allBookings.filter((booking) => !dateFilter || booking.dateTimeStart.startsWith(dateFilter));
+    return allBookings.filter((booking) => !dateFilter || getBookingDateKey(booking.dateTimeStart) === dateFilter);
   }, [allBookings, dateFilter]);
 
   const dayStats = useMemo(() => {
@@ -159,6 +276,11 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   const openActionsBooking = useMemo(() => {
     return allBookings.find((booking) => booking.id === openActionsBookingId);
   }, [allBookings, openActionsBookingId]);
+  const createOccurrenceStarts = useMemo(() => buildOccurrenceStarts(createDraft), [createDraft]);
+  const createOccurrencePreview = useMemo(() => {
+    return createOccurrenceStarts.slice(0, 3).map((start) => formatDateTimeLabel(start));
+  }, [createOccurrenceStarts]);
+  const recurrenceHasLimitError = createDraft.recurrence !== "NONE" && createOccurrenceStarts.length >= 60;
 
   const syncBookings = useCallback(async (options?: { notifyNew?: boolean; showErrorToast?: boolean }) => {
     try {
@@ -296,7 +418,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   }
 
   function openEditModal(booking: BookingWithRelations) {
-    const date = booking.dateTimeStart.slice(0, 10);
+    const date = getBookingDateKey(booking.dateTimeStart);
     const local = new Date(booking.dateTimeStart);
     const time = local.toLocaleTimeString("pt-BR", {
       hour: "2-digit",
@@ -386,9 +508,19 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       return;
     }
 
-    const start = new Date(`${createDraft.date}T${createDraft.time}:00`);
-    if (Number.isNaN(start.getTime())) {
+    const starts = buildOccurrenceStarts(createDraft);
+    if (starts.length === 0) {
       pushToast("Data/hora invalida", "error");
+      return;
+    }
+
+    if (createDraft.recurrence !== "NONE" && createDraft.repeatUntil < createDraft.date) {
+      pushToast("A data final da repeticao precisa ser igual ou posterior ao inicio", "error");
+      return;
+    }
+
+    if (createDraft.recurrence !== "NONE" && starts.length >= 60) {
+      pushToast("Reduza o periodo da repeticao para menos de 60 ocorrencias", "error");
       return;
     }
 
@@ -398,7 +530,8 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         barberId: createDraft.barberId,
         customerName: createDraft.customerName,
         customerPhone: createDraft.customerPhone,
-        start: start.toISOString(),
+        start: starts[0],
+        starts,
         recurrence: createDraft.recurrence,
         repeatUntil: createDraft.recurrence === "NONE" ? undefined : createDraft.repeatUntil,
       });
@@ -806,7 +939,10 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                     setCreateDraft((prev) => ({
                       ...prev,
                       date: event.target.value,
-                      repeatUntil: prev.recurrence === "NONE" ? event.target.value : prev.repeatUntil,
+                      repeatUntil:
+                        prev.recurrence === "NONE"
+                          ? event.target.value
+                          : getDefaultRepeatUntil(event.target.value, prev.recurrence),
                     }))
                   }
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
@@ -831,20 +967,20 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                   <span className="text-sm text-zinc-300">Frequencia</span>
                   <select
                     value={createDraft.recurrence}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const recurrence = event.target.value as RecurrenceOption;
                       setCreateDraft((prev) => ({
                         ...prev,
-                        recurrence: event.target.value as RecurrenceOption,
-                        repeatUntil:
-                          event.target.value === "NONE" ? prev.date : (prev.repeatUntil || prev.date),
-                      }))
-                    }
+                        recurrence,
+                        repeatUntil: getDefaultRepeatUntil(prev.date, recurrence),
+                      }));
+                    }}
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
                   >
                     <option value="NONE">Nao repetir</option>
-                    <option value="DAILY">Todos os dias</option>
-                    <option value="WEEKLY">Toda semana</option>
-                    <option value="MONTHLY">Todo mes</option>
+                    <option value="DAILY">Diariamente</option>
+                    <option value="WEEKLY">Semanalmente</option>
+                    <option value="MONTHLY">Mensalmente</option>
                   </select>
                 </label>
 
@@ -860,9 +996,34 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                   />
                 </label>
               </div>
-              <p className="mt-3 text-xs text-zinc-500">
-                Series recorrentes sao criadas ate a data final informada, com limite de 60 ocorrencias por operacao.
-              </p>
+              <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm font-semibold text-zinc-100">
+                    {getRecurrenceLabel(createDraft.recurrence, createDraft.date)}
+                  </p>
+                  <span
+                    className={`w-fit rounded-full border px-2 py-1 text-xs font-semibold ${
+                      recurrenceHasLimitError
+                        ? "border-red-400/50 bg-red-500/15 text-red-100"
+                        : "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
+                    }`}
+                  >
+                    {createOccurrenceStarts.length} ocorrencia{createOccurrenceStarts.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                {createOccurrencePreview.length > 0 ? (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Primeiros horarios:{" "}
+                    {createOccurrencePreview.map((item) => `${item.date} ${item.time}`).join(", ")}
+                    {createOccurrenceStarts.length > createOccurrencePreview.length ? "..." : ""}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-red-200">Revise a data final da repeticao.</p>
+                )}
+                <p className="mt-2 text-xs text-zinc-500">
+                  A serie usa exatamente o horario selecionado. Limite: 59 ocorrencias por operacao.
+                </p>
+              </div>
             </div>
 
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -877,10 +1038,14 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               <button
                 type="button"
                 onClick={handleCreateBooking}
-                disabled={isPendingCreate}
+                disabled={isPendingCreate || createOccurrenceStarts.length === 0 || recurrenceHasLimitError}
                 className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300 disabled:opacity-60"
               >
-                {isPendingCreate ? "Criando..." : "Salvar agendamento"}
+                {isPendingCreate
+                  ? "Criando..."
+                  : createDraft.recurrence === "NONE"
+                    ? "Salvar agendamento"
+                    : `Salvar ${createOccurrenceStarts.length} agendamentos`}
               </button>
             </div>
           </div>

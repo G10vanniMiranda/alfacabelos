@@ -12,6 +12,7 @@ import {
 import { Barber, BlockedSlot, BookingWithRelations, Service } from "@/types/domain";
 import { useToast } from "@/components/ui/toast";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { getLocalDateInput } from "@/lib/utils";
 
 type AdminDashboardProps = {
   bookings: BookingWithRelations[];
@@ -57,7 +58,7 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
 
   const filtered = useMemo(() => {
     return bookings.filter((booking) => {
-      if (dateFilter && !booking.dateTimeStart.startsWith(dateFilter)) {
+      if (dateFilter && getLocalDateInput(booking.dateTimeStart) !== dateFilter) {
         return false;
       }
       if (barberFilter !== "TODOS" && booking.barberId !== barberFilter) {

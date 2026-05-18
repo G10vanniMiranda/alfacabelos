@@ -75,11 +75,21 @@ export const createAdminBookingSchema = z
     customerName: z.string().trim().min(2, "Informe o nome do cliente"),
     customerPhone: phoneSchema,
     start: z.string().datetime("Data/hora invalida"),
+    starts: z.array(z.string().datetime("Data/hora invalida")).min(1).max(59).optional(),
     recurrence: z.enum(["NONE", "DAILY", "WEEKLY", "MONTHLY"]),
     repeatUntil: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.recurrence === "NONE") {
+      return;
+    }
+
+    if (data.starts && data.starts.length >= 60) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Limite de 59 repeticoes por criacao. Reduza o periodo.",
+        path: ["starts"],
+      });
       return;
     }
 
@@ -219,8 +229,9 @@ export const createGalleryImageSchema = z.object({
   imageUrl: z
     .string()
     .trim()
-    .url("Informe uma URL válida para a foto"),
+    .url("Informe uma URL valida para a midia"),
   altText: z.string().trim().max(120, "Texto alternativo muito longo").optional(),
+  mediaType: z.enum(["IMAGE", "VIDEO"]).optional(),
 });
 
 export const deleteGalleryImageSchema = z.object({

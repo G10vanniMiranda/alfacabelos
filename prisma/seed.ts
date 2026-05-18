@@ -44,11 +44,13 @@ async function main() {
         imageUrl:
           "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?auto=format&fit=crop&w=900&q=80",
         altText: "Cliente finalizando corte com acabamento moderno",
+        mediaType: "IMAGE",
       },
       {
         imageUrl:
           "https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=900&q=80",
         altText: "Ambiente da barbearia com cadeira e bancada profissional",
+        mediaType: "IMAGE",
       },
     ],
   });

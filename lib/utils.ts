@@ -33,6 +33,10 @@ export function formatDateInput(date: Date): string {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
 
+export function getLocalDateInput(iso: string): string {
+  return formatDateInput(new Date(iso));
+}
+
 export function getDayRangeIso(date: string): { start: string; end: string } {
   const startDate = new Date(`${date}T00:00:00`);
   const endDate = new Date(`${date}T23:59:59`);

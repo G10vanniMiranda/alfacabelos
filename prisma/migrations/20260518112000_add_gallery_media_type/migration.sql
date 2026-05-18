@@ -1,0 +1,2 @@
+ALTER TABLE "GalleryImage"
+ADD COLUMN "mediaType" TEXT NOT NULL DEFAULT 'IMAGE';
