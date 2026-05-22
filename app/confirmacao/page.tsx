@@ -2,6 +2,7 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getBookingById } from "@/lib/booking-service";
 import { formatBRLFromCents } from "@/lib/utils";
+import { buildBookingWhatsAppUrl } from "@/lib/whatsapp";
 
 export const metadata = {
   title: "Confirmacao | ALFA Barber",
@@ -14,6 +15,7 @@ export default async function ConfirmacaoPage({
 }) {
   const { id } = await searchParams;
   const booking = id ? await getBookingById(id) : undefined;
+  const whatsappUrl = booking ? buildBookingWhatsAppUrl(booking) : undefined;
 
   return (
     <div className="min-h-screen">
@@ -38,6 +40,16 @@ export default async function ConfirmacaoPage({
               <p><span className="text-zinc-400">Barbeiro:</span> {booking.barber.name}</p>
               <p><span className="text-zinc-400">Inicio:</span> {new Date(booking.dateTimeStart).toLocaleString("pt-BR")}</p>
             </div>
+            {whatsappUrl ? (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-5 inline-flex rounded-lg border border-emerald-500/60 px-4 py-2 text-sm font-bold text-emerald-200 transition hover:bg-emerald-500/15"
+              >
+                Enviar detalhes no WhatsApp
+              </a>
+            ) : null}
           </section>
         )}
 

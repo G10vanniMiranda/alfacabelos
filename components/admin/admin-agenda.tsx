@@ -19,6 +19,7 @@ import {
   getTimeLabelInTimeZone,
   zonedDateTimeToUtcIso,
 } from "@/lib/utils";
+import { buildBookingWhatsAppUrl } from "@/lib/whatsapp";
 import { Barber, BookingWithRelations, Service } from "@/types/domain";
 
 type AdminAgendaProps = {
@@ -942,6 +943,16 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             <span className="w-6 text-xs font-semibold text-zinc-300">ED</span>
             <span>Editar agendamento</span>
           </button>
+          <a
+            role="menuitem"
+            href={buildBookingWhatsAppUrl(openActionsBooking)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-emerald-200 transition hover:bg-emerald-500/10"
+          >
+            <span className="w-6 text-xs font-semibold text-emerald-200">WA</span>
+            <span>Enviar WhatsApp</span>
+          </a>
           <button
             type="button"
             role="menuitem"

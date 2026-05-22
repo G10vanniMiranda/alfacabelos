@@ -8,6 +8,7 @@ import {
   logoutClientAction,
 } from "@/lib/actions/client-auth-actions";
 import { listClientBookings } from "@/lib/booking-service";
+import { buildBookingWhatsAppUrl } from "@/lib/whatsapp";
 
 export const metadata = {
   title: "Minha Área | ALFA Barber",
@@ -112,6 +113,14 @@ export default async function ClientAreaPage() {
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
                     <StatusBadge status={booking.status} />
+                    <a
+                      href={buildBookingWhatsAppUrl(booking)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-md border border-emerald-500/60 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/15"
+                    >
+                      WhatsApp
+                    </a>
                     {booking.status === "PENDENTE" ? (
                       <form action={confirmMyBookingAction}>
                         <input type="hidden" name="bookingId" value={booking.id} />

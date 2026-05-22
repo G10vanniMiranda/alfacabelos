@@ -13,6 +13,7 @@ import { Barber, BlockedSlot, BookingWithRelations, Service } from "@/types/doma
 import { useToast } from "@/components/ui/toast";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getLocalDateInput } from "@/lib/utils";
+import { buildBookingWhatsAppUrl } from "@/lib/whatsapp";
 
 type AdminDashboardProps = {
   bookings: BookingWithRelations[];
@@ -324,6 +325,14 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
                         >
                           Confirmar
                         </button>
+                        <a
+                          href={buildBookingWhatsAppUrl(booking)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded border border-emerald-400/50 px-2 py-1 text-xs text-emerald-200"
+                        >
+                          WhatsApp
+                        </a>
                         <button
                           type="button"
                           disabled={isPending || booking.status === "CANCELADO" || booking.paymentStatus === "CONFIRMADO"}
