@@ -8,6 +8,8 @@ import {
   logoutClientAction,
 } from "@/lib/actions/client-auth-actions";
 import { listClientBookings } from "@/lib/booking-service";
+import { BUSINESS_CONFIG } from "@/lib/config";
+import { formatDateTimeInTimeZone } from "@/lib/utils";
 import { buildBookingWhatsAppUrl } from "@/lib/whatsapp";
 
 export const metadata = {
@@ -15,10 +17,7 @@ export const metadata = {
 };
 
 function formatDateTime(iso: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(iso));
+  return formatDateTimeInTimeZone(iso, BUSINESS_CONFIG.timezone);
 }
 
 export default async function ClientAreaPage() {

@@ -12,7 +12,8 @@ import {
 import { Barber, BlockedSlot, BookingWithRelations, Service } from "@/types/domain";
 import { useToast } from "@/components/ui/toast";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { getLocalDateInput } from "@/lib/utils";
+import { BUSINESS_CONFIG } from "@/lib/config";
+import { formatDateTimeInTimeZone, getLocalDateInput } from "@/lib/utils";
 import { buildBookingWhatsAppUrl } from "@/lib/whatsapp";
 
 type AdminDashboardProps = {
@@ -59,7 +60,7 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
 
   const filtered = useMemo(() => {
     return bookings.filter((booking) => {
-      if (dateFilter && getLocalDateInput(booking.dateTimeStart) !== dateFilter) {
+      if (dateFilter && getLocalDateInput(booking.dateTimeStart, BUSINESS_CONFIG.timezone) !== dateFilter) {
         return false;
       }
       if (barberFilter !== "TODOS" && booking.barberId !== barberFilter) {
@@ -302,7 +303,9 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
                     </td>
                     <td className="px-3 py-2 text-zinc-200">{booking.service.name}</td>
                     <td className="px-3 py-2 text-zinc-200">{booking.barber.name}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-zinc-300">{new Date(booking.dateTimeStart).toLocaleString("pt-BR")}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-zinc-300">
+                      {formatDateTimeInTimeZone(booking.dateTimeStart, BUSINESS_CONFIG.timezone)}
+                    </td>
                     <td className="px-3 py-2"><StatusBadge status={booking.status} /></td>
                     <td className="px-3 py-2">
                       <span
@@ -417,7 +420,8 @@ export function AdminDashboard({ bookings, barbers, blockedSlots, services }: Ad
               {blockedSlots.map((blocked) => (
                 <li key={blocked.id} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3 text-zinc-300">
                   <p>
-                    {new Date(blocked.dateTimeStart).toLocaleString("pt-BR")} - {new Date(blocked.dateTimeEnd).toLocaleString("pt-BR")}
+                    {formatDateTimeInTimeZone(blocked.dateTimeStart, BUSINESS_CONFIG.timezone)} -{" "}
+                    {formatDateTimeInTimeZone(blocked.dateTimeEnd, BUSINESS_CONFIG.timezone)}
                   </p>
                   <p className="text-zinc-400">{blocked.reason}</p>
                   <button

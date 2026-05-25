@@ -2,7 +2,8 @@
 
 import { useRef } from "react";
 import { Barber, BookingWithRelations } from "@/types/domain";
-import { formatBRLFromCents, getLocalDateInput } from "@/lib/utils";
+import { BUSINESS_CONFIG } from "@/lib/config";
+import { formatBRLFromCents, formatDateTimeInTimeZone, getLocalDateInput } from "@/lib/utils";
 
 type AdminEarningsProps = {
   from: string;
@@ -30,10 +31,7 @@ type DateInputElement = HTMLInputElement & {
 };
 
 function formatDateTime(iso: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(iso));
+  return formatDateTimeInTimeZone(iso, BUSINESS_CONFIG.timezone);
 }
 
 function formatDayLabel(date: string) {
@@ -120,8 +118,8 @@ export function AdminEarnings({
 
   const dailyRevenue = groupRevenue(
     confirmedBookings,
-    (booking) => getLocalDateInput(booking.dateTimeStart),
-    (booking) => formatDayLabel(getLocalDateInput(booking.dateTimeStart)),
+    (booking) => getLocalDateInput(booking.dateTimeStart, BUSINESS_CONFIG.timezone),
+    (booking) => formatDayLabel(getLocalDateInput(booking.dateTimeStart, BUSINESS_CONFIG.timezone)),
   );
   const serviceRevenue = groupRevenue(
     confirmedBookings,

@@ -103,3 +103,14 @@ export function getTimeLabelInTimeZone(iso: string, timeZone: string): string {
   return `${pad2(parts.hour)}:${pad2(parts.minute)}`;
 }
 
+export function formatDateTimeInTimeZone(
+  iso: string,
+  timeZone: string,
+  options: Intl.DateTimeFormatOptions = { dateStyle: "short", timeStyle: "short" },
+): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone,
+    ...options,
+  }).format(new Date(iso));
+}
+

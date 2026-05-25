@@ -1,6 +1,7 @@
 import { AdminEarnings } from "@/components/admin/admin-earnings";
 import { listAdminBookings, listBarbers } from "@/lib/booking-service";
-import { formatDateInput, getLocalDateInput } from "@/lib/utils";
+import { BUSINESS_CONFIG } from "@/lib/config";
+import { getLocalDateInput, pad2 } from "@/lib/utils";
 import { BookingWithRelations } from "@/types/domain";
 
 export const metadata = {
@@ -8,17 +9,18 @@ export const metadata = {
 };
 
 function getDefaultRange() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const today = getLocalDateInput(new Date().toISOString(), BUSINESS_CONFIG.timezone);
+  const [year, month] = today.split("-").map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+
   return {
-    from: formatDateInput(start),
-    to: formatDateInput(end),
+    from: `${year}-${pad2(month)}-01`,
+    to: `${year}-${pad2(month)}-${pad2(lastDay)}`,
   };
 }
 
 function isBookingInRange(booking: BookingWithRelations, from: string, to: string): boolean {
-  const date = getLocalDateInput(booking.dateTimeStart);
+  const date = getLocalDateInput(booking.dateTimeStart, BUSINESS_CONFIG.timezone);
   return date >= from && date <= to;
 }
 

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getBookingById } from "@/lib/booking-service";
-import { formatBRLFromCents } from "@/lib/utils";
+import { BUSINESS_CONFIG } from "@/lib/config";
+import { formatBRLFromCents, formatDateTimeInTimeZone } from "@/lib/utils";
 import { buildBookingWhatsAppUrl } from "@/lib/whatsapp";
 
 export const metadata = {
@@ -38,7 +39,10 @@ export default async function ConfirmacaoPage({
               <p><span className="text-zinc-400">Servico:</span> {booking.service.name}</p>
               <p><span className="text-zinc-400">Preco:</span> {formatBRLFromCents(booking.service.priceCents)}</p>
               <p><span className="text-zinc-400">Barbeiro:</span> {booking.barber.name}</p>
-              <p><span className="text-zinc-400">Inicio:</span> {new Date(booking.dateTimeStart).toLocaleString("pt-BR")}</p>
+              <p>
+                <span className="text-zinc-400">Inicio:</span>{" "}
+                {formatDateTimeInTimeZone(booking.dateTimeStart, BUSINESS_CONFIG.timezone)}
+              </p>
             </div>
             {whatsappUrl ? (
               <a

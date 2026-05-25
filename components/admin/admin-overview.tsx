@@ -2,7 +2,7 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { Barber, BlockedSlot, BookingWithRelations, Service } from "@/types/domain";
-import { formatBRLFromCents, formatDateInput, getLocalDateInput, getTimeLabelInTimeZone } from "@/lib/utils";
+import { formatBRLFromCents, formatDateTimeInTimeZone, getLocalDateInput, getTimeLabelInTimeZone } from "@/lib/utils";
 
 type AdminOverviewProps = {
   bookings: BookingWithRelations[];
@@ -12,20 +12,20 @@ type AdminOverviewProps = {
 };
 
 function formatDateTime(iso: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
+  return formatDateTimeInTimeZone(iso, BUSINESS_CONFIG.timezone, {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(iso));
+  });
 }
 
 function formatDay(iso: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
+  return formatDateTimeInTimeZone(iso, BUSINESS_CONFIG.timezone, {
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
-  }).format(new Date(iso));
+  });
 }
 
 function percent(value: number, total: number) {
@@ -35,7 +35,7 @@ function percent(value: number, total: number) {
 
 export function AdminOverview({ bookings, blockedSlots, services, barbers }: AdminOverviewProps) {
   const now = new Date();
-  const today = formatDateInput(now);
+  const today = getLocalDateInput(now.toISOString(), BUSINESS_CONFIG.timezone);
 
   const activeBookings = bookings.filter((booking) => booking.status !== "CANCELADO");
   const todayBookings = bookings.filter(
