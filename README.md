@@ -95,12 +95,21 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/alfa_barber
 SUPABASE_URL=https://seu-projeto.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key
 SUPABASE_STORAGE_BUCKET=galeria
+WHATSAPP_ENABLED=false
+WHATSAPP_API_URL=
+WHATSAPP_API_TOKEN=
+WHATSAPP_OWNER_PHONE=
+WHATSAPP_INSTANCE_ID=
+BARBERSHOP_ADDRESS=
 ```
 
 Observacao:
 - `DATABASE_URL` e obrigatoria no ambiente.
 - O acesso admin agora e gerenciado pela secao `/admin/acessos`.
 - Em producao, configure `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` para upload persistente da galeria.
+- Notificacoes automaticas de WhatsApp so sao enviadas quando `WHATSAPP_ENABLED=true`.
+- `WHATSAPP_OWNER_PHONE` deve ficar em formato brasileiro com DDD; o sistema normaliza para internacional, exemplo `5569999999999`.
+- `BARBERSHOP_ADDRESS` e opcional e entra apenas na mensagem de confirmacao enviada ao cliente.
 
 ## Como Rodar
 
@@ -179,6 +188,40 @@ npm run prisma:seed
 - `deleteBlockedSlotAction`
 - `adminLoginAction` / `adminLogoutAction`
 - `createAdminAccessAction` / `deleteAdminAccessAction`
+
+## WhatsApp
+
+O envio automatico fica centralizado em `lib/whatsapp.ts`.
+
+Fluxos implementados:
+
+- Cliente agenda pelo site (`createClientBookingsAction`): envia WhatsApp para o dono/barbeiro configurado em `WHATSAPP_OWNER_PHONE`.
+- Painel admin cria agendamento (`createAdminBookingsAction`): envia confirmacao por WhatsApp para o cliente.
+- `POST /api/booking`: tambem notifica o dono/barbeiro, caso esse endpoint seja usado por uma integracao externa.
+
+Variaveis:
+
+```env
+WHATSAPP_ENABLED=true
+WHATSAPP_API_URL=https://sua-api-de-whatsapp/send
+WHATSAPP_API_TOKEN=seu_token
+WHATSAPP_OWNER_PHONE=5569999999999
+WHATSAPP_INSTANCE_ID=sua_instancia
+BARBERSHOP_ADDRESS=Endereco da barbearia
+```
+
+Regras tecnicas:
+
+- Se `WHATSAPP_ENABLED=false` ou ausente, o agendamento e salvo e nenhuma mensagem e enviada.
+- Se telefone, token ou URL estiverem ausentes/invalidos, o erro e registrado no console e o agendamento continua salvo.
+- Se a API do WhatsApp falhar, o erro e registrado no console e o agendamento continua salvo.
+- O telefone e normalizado para formato internacional do Brasil (`55 + DDD + numero`).
+
+Troca futura de API:
+
+- Mantenha as credenciais somente em variaveis de ambiente.
+- Ajuste apenas `buildWhatsAppPayload` e, se necessario, `resolveWhatsAppEndpoint` em `lib/whatsapp.ts`.
+- A camada ja monta payloads basicos para URLs da WhatsApp Cloud API (`graph.facebook.com`), Evolution API (`evolution`) e Z-API (`z-api`/`zapi`). Para outro provedor, adapte o corpo JSON no mesmo arquivo.
 
 ## Fluxo de Teste (Manual)
 

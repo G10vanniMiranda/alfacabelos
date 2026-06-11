@@ -14,6 +14,7 @@ import {
   deleteService,
   deleteBlockedSlot,
   replaceBarberDayAvailability,
+  getBookingById,
   updateAdminBooking,
   updateBookingPaymentStatus,
   updateService,
@@ -29,6 +30,7 @@ import {
   registerFailedAdminLogin,
 } from "@/lib/auth/admin-login-attempt-store";
 import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
+import { notifyClientAboutAdminBooking, notifyOwnerAboutClientBooking } from "@/lib/whatsapp";
 
 const ADMIN_COOKIE = "barber_admin";
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -41,6 +43,34 @@ async function assertAdminSession() {
   const authorized = await isAdminSessionTokenValid(token);
   if (!authorized) {
     throw new Error("Não autorizado");
+  }
+}
+
+async function notifyOwnerSafely(bookingId: string) {
+  try {
+    const booking = await getBookingById(bookingId);
+    if (!booking) {
+      console.warn(`[whatsapp] agendamento ${bookingId} nao encontrado para notificar dono`);
+      return;
+    }
+
+    await notifyOwnerAboutClientBooking(booking);
+  } catch (error) {
+    console.error(`[whatsapp] falha ao notificar dono sobre agendamento ${bookingId}`, error);
+  }
+}
+
+async function notifyClientSafely(bookingId: string) {
+  try {
+    const booking = await getBookingById(bookingId);
+    if (!booking) {
+      console.warn(`[whatsapp] agendamento ${bookingId} nao encontrado para notificar cliente`);
+      return;
+    }
+
+    await notifyClientAboutAdminBooking(booking);
+  } catch (error) {
+    console.error(`[whatsapp] falha ao notificar cliente sobre agendamento ${bookingId}`, error);
   }
 }
 
@@ -120,6 +150,8 @@ export async function createBookingAction(payload: {
 }): Promise<ActionState> {
   try {
     const booking = await createBooking(payload);
+    await notifyOwnerSafely(booking.id);
+
     return {
       success: true,
       message: "Agendamento criado com sucesso.",
@@ -175,6 +207,8 @@ export async function createClientBookingsAction(payload: {
       if (!firstBookingId) {
         firstBookingId = booking.id;
       }
+
+      await notifyOwnerSafely(booking.id);
     }
 
     revalidatePath("/cliente");
@@ -281,6 +315,8 @@ export async function createAdminBookingsAction(payload: {
       if (!firstBookingId) {
         firstBookingId = booking.id;
       }
+
+      await notifyClientSafely(booking.id);
     }
 
     revalidatePath("/admin/agenda");
