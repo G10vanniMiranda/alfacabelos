@@ -2,11 +2,13 @@ import {
   Barber,
   BlockedSlot,
   Booking,
+  BookingCreatedBy,
   BookingFilters,
   BookingPaymentStatus,
   BookingStatus,
   BookingWithRelations,
   BarberAvailability,
+  ClientUser,
   GalleryImage,
   Service,
 } from "@/types/domain";
@@ -14,10 +16,16 @@ import {
 export type CreateBookingInput = {
   serviceId: string;
   barberId: string;
+  clientId?: string;
   customerName: string;
   customerPhone: string;
+  observations?: string;
   dateTimeStart: string;
   dateTimeEnd: string;
+  status?: BookingStatus;
+  confirmationToken?: string;
+  confirmationTokenExpiresAt?: string;
+  createdBy?: BookingCreatedBy;
 };
 
 export type UpdateBookingInput = {
@@ -26,6 +34,7 @@ export type UpdateBookingInput = {
   barberId: string;
   customerName: string;
   customerPhone: string;
+  observations?: string;
   dateTimeStart: string;
   dateTimeEnd: string;
 };
@@ -60,13 +69,17 @@ export interface BookingRepository {
   getBarbers(): Promise<Barber[]>;
   getServiceById(id: string): Promise<Service | undefined>;
   getBookingById(id: string): Promise<BookingWithRelations | undefined>;
+  getBookingByConfirmationToken(token: string): Promise<BookingWithRelations | undefined>;
   listBookings(filters?: BookingFilters): Promise<BookingWithRelations[]>;
   listBlockedSlots(date?: string): Promise<BlockedSlot[]>;
   listBookingsInRange(startIso: string, endIso: string, barberId?: string): Promise<Booking[]>;
   createBooking(input: CreateBookingInput): Promise<Booking>;
   updateBooking(input: UpdateBookingInput): Promise<Booking | undefined>;
   updateBookingStatus(bookingId: string, status: BookingStatus): Promise<Booking | undefined>;
+  confirmBookingByToken(token: string): Promise<BookingWithRelations | undefined>;
   updateBookingPaymentStatus(bookingId: string, paymentStatus: BookingPaymentStatus): Promise<Booking | undefined>;
+  findClientByPhone(phone: string): Promise<ClientUser | undefined>;
+  upsertPendingClient(input: { name: string; phone: string }): Promise<ClientUser>;
   createBlockedSlot(input: CreateBlockedSlotInput): Promise<BlockedSlot>;
   deleteBlockedSlot(blockedSlotId: string): Promise<boolean>;
   listBarberAvailabilities(barberId: string): Promise<BarberAvailability[]>;

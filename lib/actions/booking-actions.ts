@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import {
   createGalleryImage,
   createService,
+  createBarberBooking,
   createBlockedSlot,
   createBooking,
   deleteGalleryImage,
@@ -15,6 +16,7 @@ import {
   deleteBlockedSlot,
   replaceBarberDayAvailability,
   getBookingById,
+  confirmBookingByToken,
   updateAdminBooking,
   updateBookingPaymentStatus,
   updateService,
@@ -147,6 +149,7 @@ export async function createBookingAction(payload: {
   start: string;
   customerName: string;
   customerPhone: string;
+  observations?: string;
 }): Promise<ActionState> {
   try {
     const booking = await createBooking(payload);
@@ -165,10 +168,37 @@ export async function createBookingAction(payload: {
   }
 }
 
+export async function confirmBookingByTokenAction(payload: { token: string }): Promise<ActionState> {
+  try {
+    await confirmBookingByToken(payload.token);
+    revalidatePath("/confirmacao");
+    revalidatePath("/confirmar-agendamento");
+    revalidatePath("/admin/agenda");
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/cliente");
+    return { success: true, message: "Agendamento confirmado com sucesso." };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Nao foi possivel confirmar o agendamento",
+    };
+  }
+}
+
+export async function confirmBookingByTokenFormAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  return confirmBookingByTokenAction({
+    token: String(formData.get("token") ?? ""),
+  });
+}
+
 export async function createClientBookingsAction(payload: {
   serviceId: string;
   customerName: string;
   customerPhone: string;
+  observations?: string;
   start: string;
   starts?: string[];
   recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
@@ -202,6 +232,7 @@ export async function createClientBookingsAction(payload: {
         start,
         customerName: parsed.data.customerName,
         customerPhone: parsed.data.customerPhone,
+        observations: parsed.data.observations,
       });
 
       if (!firstBookingId) {
@@ -253,6 +284,7 @@ export async function createAdminBookingsAction(payload: {
   barberId: string;
   customerName: string;
   customerPhone: string;
+  observations?: string;
   start: string;
   starts?: string[];
   recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
@@ -304,12 +336,13 @@ export async function createAdminBookingsAction(payload: {
     let firstBookingId: string | undefined;
 
     for (const start of starts) {
-      const booking = await createBooking({
+      const booking = await createBarberBooking({
         serviceId: parsed.data.serviceId,
         barberId: parsed.data.barberId,
         start,
         customerName: parsed.data.customerName,
         customerPhone: parsed.data.customerPhone,
+        observations: parsed.data.observations,
       });
 
       if (!firstBookingId) {
@@ -418,6 +451,7 @@ export async function updateAdminBookingAction(payload: {
   barberId: string;
   customerName: string;
   customerPhone: string;
+  observations?: string;
   start: string;
 }): Promise<ActionState> {
   await assertAdminSession();

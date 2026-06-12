@@ -35,6 +35,7 @@ type CreateBookingDraft = {
   barberId: string;
   customerName: string;
   customerPhone: string;
+  observations: string;
   date: string;
   time: string;
   recurrence: RecurrenceOption;
@@ -209,6 +210,7 @@ function getDefaultDraft(barbers: Barber[], services: Service[], selectedDate: s
     barberId: selectedBarberId !== "TODOS" ? selectedBarberId : (barbers[0]?.id ?? ""),
     customerName: "",
     customerPhone: "",
+    observations: "",
     date: selectedDate,
     time: "09:00",
     recurrence: "NONE",
@@ -590,6 +592,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         barberId: createDraft.barberId,
         customerName: createDraft.customerName,
         customerPhone: createDraft.customerPhone,
+        observations: createDraft.observations,
         start: starts[0],
         starts,
         recurrence: createDraft.recurrence,
@@ -1006,6 +1009,17 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                   }
                   placeholder="(11) 99999-9999"
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                />
+              </label>
+
+              <label className="space-y-2 sm:col-span-2">
+                <span className="text-sm text-zinc-300">Observacoes</span>
+                <textarea
+                  value={createDraft.observations}
+                  onChange={(event) => setCreateDraft((prev) => ({ ...prev, observations: event.target.value }))}
+                  rows={3}
+                  maxLength={500}
+                  className="w-full resize-none rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
                 />
               </label>
 

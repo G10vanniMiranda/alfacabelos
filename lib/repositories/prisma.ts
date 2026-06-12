@@ -11,13 +11,19 @@ type BookingRow = {
   id: string;
   barberId: string;
   serviceId: string;
+  clientId?: string | null;
   customerName: string;
   customerPhone: string;
+  observations?: string | null;
   dateTimeStart: Date;
   dateTimeEnd: Date;
   status: "PENDENTE" | "CONFIRMADO" | "CANCELADO";
   paymentStatus?: "PENDENTE" | "CONFIRMADO" | null;
   paymentConfirmedAt?: Date | null;
+  confirmationToken?: string | null;
+  confirmationTokenExpiresAt?: Date | null;
+  confirmationTokenUsedAt?: Date | null;
+  createdBy?: "BARBER" | "CLIENT" | null;
   createdAt: Date;
 };
 
@@ -36,13 +42,19 @@ function toBooking(row: BookingRow): Booking {
     id: row.id,
     barberId: row.barberId,
     serviceId: row.serviceId,
+    clientId: row.clientId ?? undefined,
     customerName: row.customerName,
     customerPhone: row.customerPhone,
+    observations: row.observations ?? undefined,
     dateTimeStart: row.dateTimeStart.toISOString(),
     dateTimeEnd: row.dateTimeEnd.toISOString(),
     status: row.status,
     paymentStatus: row.paymentStatus ?? "PENDENTE",
     paymentConfirmedAt: row.paymentConfirmedAt?.toISOString(),
+    confirmationToken: row.confirmationToken ?? undefined,
+    confirmationTokenExpiresAt: row.confirmationTokenExpiresAt?.toISOString(),
+    confirmationTokenUsedAt: row.confirmationTokenUsedAt?.toISOString(),
+    createdBy: row.createdBy ?? "CLIENT",
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -146,6 +158,30 @@ function defaultAvailabilitiesForMissingDays(barberId: string, savedDays: Set<nu
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }));
+}
+
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
+function toClientUser(row: {
+  id: string;
+  name: string;
+  phone: string;
+  hasPassword?: boolean | null;
+  status?: "PENDING" | "ACTIVE" | null;
+  createdBy?: "BARBER" | "CLIENT" | null;
+  createdAt: Date;
+}) {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    hasPassword: row.hasPassword ?? true,
+    status: row.status ?? "ACTIVE",
+    createdBy: row.createdBy ?? "CLIENT",
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
 let galleryTableChecked = false;
@@ -305,16 +341,14 @@ async function ensureBookingPaymentColumnsExist(): Promise<boolean> {
   }
 
   try {
-    const result = await prisma.$queryRaw<Array<{ exists: boolean }>>`
-      SELECT EXISTS (
-        SELECT 1
+    const result = await prisma.$queryRaw<Array<{ columns: number }>>`
+      SELECT COUNT(*)::int AS "columns"
         FROM information_schema.columns
         WHERE table_schema = 'public'
           AND table_name = 'Booking'
-          AND column_name = 'paymentStatus'
-      ) AS "exists"
+          AND column_name IN ('paymentStatus', 'clientId', 'observations', 'confirmationToken')
     `;
-    bookingPaymentColumnsExist = result[0]?.exists === true;
+    bookingPaymentColumnsExist = Number(result[0]?.columns ?? 0) === 4;
   } catch {
     bookingPaymentColumnsExist = false;
   } finally {
@@ -332,13 +366,19 @@ async function getBookingWithRelationsById(id: string): Promise<BookingWithRelat
           b.id,
           b."barberId",
           b."serviceId",
+          b."clientId",
           b."customerName",
           b."customerPhone",
+          b."observations",
           b."dateTimeStart",
           b."dateTimeEnd",
           b.status::text AS status,
           COALESCE(b."paymentStatus"::text, 'PENDENTE') AS "paymentStatus",
           b."paymentConfirmedAt",
+          b."confirmationToken",
+          b."confirmationTokenExpiresAt",
+          b."confirmationTokenUsedAt",
+          b."createdBy"::text AS "createdBy",
           b."createdAt",
           br.name AS "barberName",
           br."avatarUrl" AS "barberAvatarUrl",
@@ -358,13 +398,19 @@ async function getBookingWithRelationsById(id: string): Promise<BookingWithRelat
           b.id,
           b."barberId",
           b."serviceId",
+          NULL::text AS "clientId",
           b."customerName",
           b."customerPhone",
+          NULL::text AS "observations",
           b."dateTimeStart",
           b."dateTimeEnd",
           b.status::text AS status,
           'PENDENTE' AS "paymentStatus",
           NULL::timestamp AS "paymentConfirmedAt",
+          NULL::text AS "confirmationToken",
+          NULL::timestamp AS "confirmationTokenExpiresAt",
+          NULL::timestamp AS "confirmationTokenUsedAt",
+          'CLIENT' AS "createdBy",
           b."createdAt",
           br.name AS "barberName",
           br."avatarUrl" AS "barberAvatarUrl",
@@ -482,6 +528,78 @@ export const prismaRepository: BookingRepository = {
     return getBookingWithRelationsById(id);
   },
 
+  async getBookingByConfirmationToken(token: string) {
+    const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
+    const rows = hasPaymentColumns
+      ? await prisma.$queryRaw<BookingWithRelationsRow[]>`
+          SELECT
+            b.id,
+            b."barberId",
+            b."serviceId",
+            b."clientId",
+            b."customerName",
+            b."customerPhone",
+            b."observations",
+            b."dateTimeStart",
+            b."dateTimeEnd",
+            b.status::text AS status,
+            COALESCE(b."paymentStatus"::text, 'PENDENTE') AS "paymentStatus",
+            b."paymentConfirmedAt",
+            b."confirmationToken",
+            b."confirmationTokenExpiresAt",
+            b."confirmationTokenUsedAt",
+            b."createdBy"::text AS "createdBy",
+            b."createdAt",
+            br.name AS "barberName",
+            br."avatarUrl" AS "barberAvatarUrl",
+            br."isActive" AS "barberIsActive",
+            s.name AS "serviceName",
+            s."durationMinutes" AS "serviceDurationMinutes",
+            s."priceCents" AS "servicePriceCents",
+            s."isActive" AS "serviceIsActive"
+          FROM "Booking" b
+          INNER JOIN "Barber" br ON br.id = b."barberId"
+          INNER JOIN "Service" s ON s.id = b."serviceId"
+          WHERE b."confirmationToken" = ${token}
+          LIMIT 1
+        `
+      : await prisma.$queryRaw<BookingWithRelationsRow[]>`
+          SELECT
+            b.id,
+            b."barberId",
+            b."serviceId",
+            NULL::text AS "clientId",
+            b."customerName",
+            b."customerPhone",
+            NULL::text AS "observations",
+            b."dateTimeStart",
+            b."dateTimeEnd",
+            b.status::text AS status,
+            'PENDENTE' AS "paymentStatus",
+            NULL::timestamp AS "paymentConfirmedAt",
+            NULL::text AS "confirmationToken",
+            NULL::timestamp AS "confirmationTokenExpiresAt",
+            NULL::timestamp AS "confirmationTokenUsedAt",
+            'CLIENT' AS "createdBy",
+            b."createdAt",
+            br.name AS "barberName",
+            br."avatarUrl" AS "barberAvatarUrl",
+            br."isActive" AS "barberIsActive",
+            s.name AS "serviceName",
+            s."durationMinutes" AS "serviceDurationMinutes",
+            s."priceCents" AS "servicePriceCents",
+            s."isActive" AS "serviceIsActive"
+          FROM "Booking" b
+          INNER JOIN "Barber" br ON br.id = b."barberId"
+          INNER JOIN "Service" s ON s.id = b."serviceId"
+          WHERE 1 = 0
+          LIMIT 1
+        `;
+
+    const row = rows[0];
+    return row ? toBookingWithRelations(row) : undefined;
+  },
+
   async listBookings(filters) {
     const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
     const barberFilter = filters?.barberId ? Prisma.sql`AND b."barberId" = ${filters.barberId}` : Prisma.empty;
@@ -500,13 +618,19 @@ export const prismaRepository: BookingRepository = {
             b.id,
             b."barberId",
             b."serviceId",
+            b."clientId",
             b."customerName",
             b."customerPhone",
+            b."observations",
             b."dateTimeStart",
             b."dateTimeEnd",
             b.status::text AS status,
             COALESCE(b."paymentStatus"::text, 'PENDENTE') AS "paymentStatus",
             b."paymentConfirmedAt",
+            b."confirmationToken",
+            b."confirmationTokenExpiresAt",
+            b."confirmationTokenUsedAt",
+            b."createdBy"::text AS "createdBy",
             b."createdAt",
             br.name AS "barberName",
             br."avatarUrl" AS "barberAvatarUrl",
@@ -529,13 +653,19 @@ export const prismaRepository: BookingRepository = {
             b.id,
             b."barberId",
             b."serviceId",
+            NULL::text AS "clientId",
             b."customerName",
             b."customerPhone",
+            NULL::text AS "observations",
             b."dateTimeStart",
             b."dateTimeEnd",
             b.status::text AS status,
             'PENDENTE' AS "paymentStatus",
             NULL::timestamp AS "paymentConfirmedAt",
+            NULL::text AS "confirmationToken",
+            NULL::timestamp AS "confirmationTokenExpiresAt",
+            NULL::timestamp AS "confirmationTokenUsedAt",
+            'CLIENT' AS "createdBy",
             b."createdAt",
             br.name AS "barberName",
             br."avatarUrl" AS "barberAvatarUrl",
@@ -608,10 +738,18 @@ export const prismaRepository: BookingRepository = {
           data: {
             barberId: input.barberId,
             serviceId: input.serviceId,
+            clientId: input.clientId,
             customerName: input.customerName,
             customerPhone: input.customerPhone,
+            observations: input.observations?.trim() || null,
             dateTimeStart: new Date(input.dateTimeStart),
             dateTimeEnd: new Date(input.dateTimeEnd),
+            status: input.status ?? "PENDENTE",
+            confirmationToken: input.confirmationToken,
+            confirmationTokenExpiresAt: input.confirmationTokenExpiresAt
+              ? new Date(input.confirmationTokenExpiresAt)
+              : undefined,
+            createdBy: input.createdBy ?? "CLIENT",
           },
         });
       },
@@ -652,6 +790,7 @@ export const prismaRepository: BookingRepository = {
             serviceId: input.serviceId,
             customerName: input.customerName,
             customerPhone: input.customerPhone,
+            observations: input.observations?.trim() || null,
             dateTimeStart: new Date(input.dateTimeStart),
             dateTimeEnd: new Date(input.dateTimeEnd),
           },
@@ -679,6 +818,38 @@ export const prismaRepository: BookingRepository = {
     return toBooking(updated);
   },
 
+  async confirmBookingByToken(token) {
+    const now = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findFirst({
+        where: {
+          confirmationToken: token,
+          confirmationTokenUsedAt: null,
+          confirmationTokenExpiresAt: { gt: now },
+          status: "PENDENTE",
+        },
+      });
+
+      if (!booking) {
+        return undefined;
+      }
+
+      return tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: "CONFIRMADO",
+          confirmationTokenUsedAt: now,
+        },
+      });
+    });
+
+    if (!updated) {
+      return undefined;
+    }
+
+    return getBookingWithRelationsById(updated.id);
+  },
+
   async updateBookingPaymentStatus(bookingId, paymentStatus) {
     const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
     if (!hasPaymentColumns) {
@@ -702,6 +873,55 @@ export const prismaRepository: BookingRepository = {
 
     const updated = await getBookingWithRelationsById(bookingId);
     return updated ?? undefined;
+  },
+
+  async findClientByPhone(phone) {
+    const normalized = normalizePhone(phone);
+    const client = await prisma.client.findUnique({
+      where: { phoneNormalized: normalized },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        hasPassword: true,
+        status: true,
+        createdBy: true,
+        createdAt: true,
+      },
+    });
+
+    return client ? toClientUser(client) : undefined;
+  },
+
+  async upsertPendingClient(input) {
+    const normalized = normalizePhone(input.phone);
+    const client = await prisma.client.upsert({
+      where: { phoneNormalized: normalized },
+      create: {
+        name: input.name,
+        phone: input.phone,
+        phoneNormalized: normalized,
+        passwordHash: null,
+        hasPassword: false,
+        status: "PENDING",
+        createdBy: "BARBER",
+      },
+      update: {
+        name: input.name,
+        phone: input.phone,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        hasPassword: true,
+        status: true,
+        createdBy: true,
+        createdAt: true,
+      },
+    });
+
+    return toClientUser(client);
   },
 
   async createBlockedSlot(input: CreateBlockedSlotInput) {

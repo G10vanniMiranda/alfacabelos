@@ -1,5 +1,8 @@
 export type BookingStatus = "PENDENTE" | "CONFIRMADO" | "CANCELADO";
 export type BookingPaymentStatus = "PENDENTE" | "CONFIRMADO";
+export type ClientStatus = "PENDING" | "ACTIVE";
+export type ClientCreatedBy = "BARBER" | "CLIENT";
+export type BookingCreatedBy = "BARBER" | "CLIENT";
 
 export type Barber = {
   id: string;
@@ -20,13 +23,19 @@ export type Booking = {
   id: string;
   barberId: string;
   serviceId: string;
+  clientId?: string;
   customerName: string;
   customerPhone: string;
+  observations?: string;
   dateTimeStart: string;
   dateTimeEnd: string;
   status: BookingStatus;
   paymentStatus: BookingPaymentStatus;
   paymentConfirmedAt?: string;
+  confirmationToken?: string;
+  confirmationTokenExpiresAt?: string;
+  confirmationTokenUsedAt?: string;
+  createdBy: BookingCreatedBy;
   createdAt: string;
 };
 
@@ -53,6 +62,9 @@ export type ClientUser = {
   id: string;
   name: string;
   phone: string;
+  hasPassword: boolean;
+  status: ClientStatus;
+  createdBy: ClientCreatedBy;
   createdAt: string;
 };
 

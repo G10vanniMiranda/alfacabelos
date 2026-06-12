@@ -19,6 +19,21 @@ enum BookingPaymentStatus {
   CONFIRMADO
 }
 
+enum ClientStatus {
+  PENDING
+  ACTIVE
+}
+
+enum ClientCreatedBy {
+  BARBER
+  CLIENT
+}
+
+enum BookingCreatedBy {
+  BARBER
+  CLIENT
+}
+
 model Barber {
   id         String       @id @default(cuid())
   name       String
@@ -42,21 +57,30 @@ model Booking {
   id             String        @id @default(cuid())
   barberId       String
   serviceId      String
+  clientId       String?
   customerName   String
   customerPhone  String
+  observations   String?
   dateTimeStart  DateTime
   dateTimeEnd    DateTime
   status         BookingStatus @default(PENDENTE)
   paymentStatus  BookingPaymentStatus @default(PENDENTE)
   paymentConfirmedAt DateTime?
+  confirmationToken String? @unique
+  confirmationTokenExpiresAt DateTime?
+  confirmationTokenUsedAt DateTime?
+  createdBy      BookingCreatedBy @default(CLIENT)
   createdAt      DateTime      @default(now())
 
   barber Barber @relation(fields: [barberId], references: [id])
   service Service @relation(fields: [serviceId], references: [id])
+  client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   @@index([barberId, dateTimeStart])
+  @@index([clientId])
   @@index([status])
   @@index([paymentStatus])
+  @@index([confirmationToken])
 }
 
 model BlockedSlot {
@@ -77,8 +101,13 @@ model Client {
   name            String
   phone           String
   phoneNormalized String   @unique
-  passwordHash    String
+  passwordHash    String?
+  hasPassword     Boolean  @default(true)
+  status          ClientStatus @default(ACTIVE)
+  createdBy       ClientCreatedBy @default(CLIENT)
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  bookings        Booking[]
 }
 
 model AdminAccess {

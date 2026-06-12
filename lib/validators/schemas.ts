@@ -14,6 +14,7 @@ export const createBookingSchema = z.object({
   start: z.string().datetime("Data/hora inválida"),
   customerName: z.string().trim().min(2, "Informe o nome completo"),
   customerPhone: phoneSchema,
+  observations: z.string().trim().max(500, "Observacoes devem ter ate 500 caracteres").optional(),
 });
 
 export const clientRegisterSchema = z
@@ -65,6 +66,7 @@ export const updateAdminBookingSchema = z.object({
   barberId: z.string().min(1, "Barbeiro e obrigatorio"),
   customerName: z.string().trim().min(2, "Informe o nome do cliente"),
   customerPhone: phoneSchema,
+  observations: z.string().trim().max(500, "Observacoes devem ter ate 500 caracteres").optional(),
   start: z.string().datetime("Data/hora invalida"),
 });
 
@@ -74,6 +76,7 @@ export const createAdminBookingSchema = z
     barberId: z.string().min(1, "Barbeiro e obrigatorio"),
     customerName: z.string().trim().min(2, "Informe o nome do cliente"),
     customerPhone: phoneSchema,
+    observations: z.string().trim().max(500, "Observacoes devem ter ate 500 caracteres").optional(),
     start: z.string().datetime("Data/hora invalida"),
     starts: z.array(z.string().datetime("Data/hora invalida")).min(1).max(59).optional(),
     recurrence: z.enum(["NONE", "DAILY", "WEEKLY", "MONTHLY"]),

@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { randomBytes } from "node:crypto";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { isClosedOperatingWindow } from "@/lib/constants/availability";
 import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
@@ -187,8 +188,74 @@ export async function createBooking(input: unknown) {
     serviceId: data.serviceId,
     customerName: data.customerName,
     customerPhone: data.customerPhone,
+    observations: data.observations,
     dateTimeStart: data.start,
     dateTimeEnd: computedEnd,
+    createdBy: "CLIENT",
+  });
+}
+
+function createConfirmationToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+function addHours(date: Date, hours: number): Date {
+  return new Date(date.getTime() + hours * 60 * 60 * 1000);
+}
+
+export async function createBarberBooking(input: unknown) {
+  const parsed = createBookingSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados do agendamento invalidos");
+  }
+
+  const data = parsed.data;
+  const barberId = data.barberId ?? DEFAULT_BARBER_ID;
+  const service = await repository.getServiceById(data.serviceId);
+  if (!service) {
+    throw new Error("Servico nao encontrado");
+  }
+
+  const computedEnd = addMinutesToIso(
+    data.start,
+    service.durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes,
+  );
+
+  const conflicts = await repository.listBookingsInRange(data.start, computedEnd, barberId);
+  if (conflicts.length > 0) {
+    throw new Error("Este horario acabou de ser reservado. Escolha outro horario.");
+  }
+
+  const blockedSlots = await repository.listBlockedSlots(getLocalDateInput(data.start, BUSINESS_CONFIG.timezone));
+  const blockedConflict = blockedSlots.some((slot) => {
+    if (slot.barberId && slot.barberId !== barberId) {
+      return false;
+    }
+    return overlaps(new Date(data.start), new Date(computedEnd), new Date(slot.dateTimeStart), new Date(slot.dateTimeEnd));
+  });
+
+  if (blockedConflict) {
+    throw new Error("Este horario esta bloqueado para atendimento.");
+  }
+
+  const client = await repository.upsertPendingClient({
+    name: data.customerName,
+    phone: data.customerPhone,
+  });
+
+  return repository.createBooking({
+    barberId,
+    serviceId: data.serviceId,
+    clientId: client.id,
+    customerName: data.customerName,
+    customerPhone: data.customerPhone,
+    observations: data.observations,
+    dateTimeStart: data.start,
+    dateTimeEnd: computedEnd,
+    status: "PENDENTE",
+    confirmationToken: createConfirmationToken(),
+    confirmationTokenExpiresAt: addHours(new Date(), 48).toISOString(),
+    createdBy: "BARBER",
   });
 }
 
@@ -214,6 +281,7 @@ export async function updateAdminBooking(input: unknown) {
     serviceId: parsed.data.serviceId,
     customerName: parsed.data.customerName,
     customerPhone: parsed.data.customerPhone,
+    observations: parsed.data.observations,
     dateTimeStart: parsed.data.start,
     dateTimeEnd: computedEnd,
   });
@@ -227,6 +295,61 @@ export async function updateAdminBooking(input: unknown) {
 
 export async function getBookingById(bookingId: string) {
   return repository.getBookingById(bookingId);
+}
+
+export async function getBookingByConfirmationToken(token: string) {
+  if (!token || token.length < 32) {
+    return undefined;
+  }
+
+  return repository.getBookingByConfirmationToken(token);
+}
+
+type PublicConfirmationState =
+  | {
+    valid: true;
+    reason: null;
+    booking: NonNullable<Awaited<ReturnType<typeof getBookingByConfirmationToken>>>;
+  }
+  | {
+    valid: false;
+    reason: "invalid" | "used" | "expired" | "not_pending";
+    booking?: Awaited<ReturnType<typeof getBookingByConfirmationToken>>;
+  };
+
+export function getPublicConfirmationState(
+  booking: Awaited<ReturnType<typeof getBookingByConfirmationToken>>,
+): PublicConfirmationState {
+  if (!booking) {
+    return { valid: false, reason: "invalid" as const };
+  }
+
+  if (booking.confirmationTokenUsedAt) {
+    return { valid: false, reason: "used" as const, booking };
+  }
+
+  if (!booking.confirmationTokenExpiresAt || new Date(booking.confirmationTokenExpiresAt) <= new Date()) {
+    return { valid: false, reason: "expired" as const, booking };
+  }
+
+  if (booking.status !== "PENDENTE") {
+    return { valid: false, reason: "not_pending" as const, booking };
+  }
+
+  return { valid: true, reason: null, booking };
+}
+
+export async function confirmBookingByToken(token: string) {
+  if (!token || token.length < 32) {
+    throw new Error("Link de confirmacao invalido");
+  }
+
+  const confirmed = await repository.confirmBookingByToken(token);
+  if (!confirmed) {
+    throw new Error("Link de confirmacao invalido, expirado ou ja utilizado");
+  }
+
+  return confirmed;
 }
 
 export async function listAdminBookings(filters: BookingFilters) {

@@ -164,6 +164,10 @@ export function buildOwnerBookingNotification(booking: BookingWithRelations, obs
 }
 
 export function buildClientBookingConfirmation(booking: BookingWithRelations): string {
+  if (booking.confirmationToken) {
+    return buildClientPreBookingConfirmation(booking);
+  }
+
   const lines = [
     `Olá, ${booking.customerName}! 💈`,
     "",
@@ -183,6 +187,54 @@ export function buildClientBookingConfirmation(booking: BookingWithRelations): s
     "Chegue com alguns minutos de antecedência.",
     "Qualquer dúvida, fale conosco por aqui.",
   );
+
+  return lines.join("\n");
+}
+
+function getAppBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  return "http://localhost:3000";
+}
+
+export function buildBookingConfirmationLink(booking: BookingWithRelations): string | null {
+  if (!booking.confirmationToken) {
+    return null;
+  }
+
+  return `${getAppBaseUrl()}/confirmar-agendamento?token=${encodeURIComponent(booking.confirmationToken)}`;
+}
+
+export function buildClientPreBookingConfirmation(booking: BookingWithRelations): string {
+  const link = buildBookingConfirmationLink(booking);
+  const lines = [
+    `Ola, ${booking.customerName}!`,
+    "",
+    "Seu horario na Alfa Cabelos foi pre-agendado.",
+    "",
+    `Servico: ${booking.service.name}`,
+    `Data: ${formatBookingDate(booking.dateTimeStart)}`,
+    `Horario: ${formatBookingTimeOnly(booking.dateTimeStart)}`,
+  ];
+
+  if (link) {
+    lines.push(
+      "",
+      "Para confirmar seu agendamento, clique no link abaixo:",
+      link,
+      "",
+      "Voce nao precisa ter senha para confirmar esse agendamento.",
+    );
+  } else {
+    lines.push("", "Entre em contato conosco para confirmar seu agendamento.");
+  }
 
   return lines.join("\n");
 }

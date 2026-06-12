@@ -30,11 +30,22 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
   return timingSafeEqual(hashBuffer, derived);
 }
 
-function toClientUser(row: { id: string; name: string; phone: string; createdAt: Date }): ClientUser {
+function toClientUser(row: {
+  id: string;
+  name: string;
+  phone: string;
+  hasPassword?: boolean | null;
+  status?: "PENDING" | "ACTIVE" | null;
+  createdBy?: "BARBER" | "CLIENT" | null;
+  createdAt: Date;
+}): ClientUser {
   return {
     id: row.id,
     name: row.name,
     phone: row.phone,
+    hasPassword: row.hasPassword ?? true,
+    status: row.status ?? "ACTIVE",
+    createdBy: row.createdBy ?? "CLIENT",
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -43,7 +54,7 @@ export async function findClientByPhone(phone: string): Promise<ClientUser | und
   const normalized = normalizePhone(phone);
   const client = await prisma.client.findUnique({
     where: { phoneNormalized: normalized },
-    select: { id: true, name: true, phone: true, createdAt: true },
+    select: { id: true, name: true, phone: true, hasPassword: true, status: true, createdBy: true, createdAt: true },
   });
   return client ? toClientUser(client) : undefined;
 }
@@ -51,7 +62,7 @@ export async function findClientByPhone(phone: string): Promise<ClientUser | und
 export async function findClientById(id: string): Promise<ClientUser | undefined> {
   const client = await prisma.client.findUnique({
     where: { id },
-    select: { id: true, name: true, phone: true, createdAt: true },
+    select: { id: true, name: true, phone: true, hasPassword: true, status: true, createdBy: true, createdAt: true },
   });
   return client ? toClientUser(client) : undefined;
 }
@@ -65,18 +76,47 @@ export async function createClient(input: {
   const passwordHash = await hashPassword(input.password);
 
   try {
+    const existing = await prisma.client.findUnique({
+      where: { phoneNormalized: normalizedPhone },
+    });
+
+    if (existing?.hasPassword) {
+      throw new Error("Ja existe cadastro com este telefone");
+    }
+
+    if (existing) {
+      const updated = await prisma.client.update({
+        where: { id: existing.id },
+        data: {
+          name: input.name,
+          phone: input.phone,
+          passwordHash,
+          hasPassword: true,
+          status: "ACTIVE",
+        },
+        select: { id: true, name: true, phone: true, hasPassword: true, status: true, createdBy: true, createdAt: true },
+      });
+      return toClientUser(updated);
+    }
+
     const created = await prisma.client.create({
       data: {
         name: input.name,
         phone: input.phone,
         phoneNormalized: normalizedPhone,
         passwordHash,
+        hasPassword: true,
+        status: "ACTIVE",
+        createdBy: "CLIENT",
       },
-      select: { id: true, name: true, phone: true, createdAt: true },
+      select: { id: true, name: true, phone: true, hasPassword: true, status: true, createdBy: true, createdAt: true },
     });
     return toClientUser(created);
-  } catch {
-    throw new Error("Já existe cadastro com este telefone");
+  } catch (error) {
+    if (error instanceof Error && error.message) {
+      throw error;
+    }
+    throw new Error("Ja existe cadastro com este telefone");
   }
 }
 
@@ -86,6 +126,10 @@ export async function authenticateClient(phone: string, password: string): Promi
     where: { phoneNormalized: normalized },
   });
   if (!client) {
+    return null;
+  }
+
+  if (!client.hasPassword || !client.passwordHash) {
     return null;
   }
 

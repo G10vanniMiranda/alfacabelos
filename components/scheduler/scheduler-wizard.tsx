@@ -362,7 +362,7 @@ export function SchedulerWizard({
 
       localStorage.removeItem(STORAGE_KEY);
       pushToast("Agendamento confirmado", "success");
-      router.push(`/confirmacao?id=${result.bookingId}`);
+      router.push("/cliente");
     });
   }
 

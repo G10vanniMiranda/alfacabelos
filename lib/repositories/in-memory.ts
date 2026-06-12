@@ -11,6 +11,7 @@ import {
   BookingPaymentStatus,
   BookingStatus,
   BookingWithRelations,
+  ClientUser,
   GalleryImage,
   Service,
 } from "@/types/domain";
@@ -20,6 +21,7 @@ const data = {
   barbers: [...barbersSeed] as Barber[],
   services: [...servicesSeed] as Service[],
   bookings: [] as Booking[],
+  clients: [] as ClientUser[],
   blockedSlots: [] as BlockedSlot[],
   availabilities: [] as BarberAvailability[],
   galleryImages: [] as GalleryImage[],
@@ -38,6 +40,10 @@ function withRelations(booking: Booking): BookingWithRelations {
 
 function createId(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
 }
 
 function defaultAvailabilitiesForMissingDays(barberId: string, savedDays: Set<number>): BarberAvailability[] {
@@ -104,6 +110,11 @@ export const inMemoryRepository: BookingRepository = {
 
   async getBookingById(id: string) {
     const booking = data.bookings.find((item) => item.id === id);
+    return booking ? withRelations(booking) : undefined;
+  },
+
+  async getBookingByConfirmationToken(token: string) {
+    const booking = data.bookings.find((item) => item.confirmationToken === token);
     return booking ? withRelations(booking) : undefined;
   },
 
@@ -176,12 +187,17 @@ export const inMemoryRepository: BookingRepository = {
       id: createId("booking"),
       barberId: input.barberId,
       serviceId: input.serviceId,
+      clientId: input.clientId,
       customerName: input.customerName,
       customerPhone: input.customerPhone,
+      observations: input.observations?.trim() || undefined,
       dateTimeStart: input.dateTimeStart,
       dateTimeEnd: input.dateTimeEnd,
-      status: "PENDENTE",
+      status: input.status ?? "PENDENTE",
       paymentStatus: "PENDENTE",
+      confirmationToken: input.confirmationToken,
+      confirmationTokenExpiresAt: input.confirmationTokenExpiresAt,
+      createdBy: input.createdBy ?? "CLIENT",
       createdAt: new Date().toISOString(),
     };
 
@@ -216,6 +232,7 @@ export const inMemoryRepository: BookingRepository = {
     booking.serviceId = input.serviceId;
     booking.customerName = input.customerName;
     booking.customerPhone = input.customerPhone;
+    booking.observations = input.observations?.trim() || undefined;
     booking.dateTimeStart = input.dateTimeStart;
     booking.dateTimeEnd = input.dateTimeEnd;
     return booking;
@@ -230,6 +247,23 @@ export const inMemoryRepository: BookingRepository = {
     return booking;
   },
 
+  async confirmBookingByToken(token: string) {
+    const booking = data.bookings.find((item) => item.confirmationToken === token);
+    if (
+      !booking ||
+      booking.status !== "PENDENTE" ||
+      booking.confirmationTokenUsedAt ||
+      !booking.confirmationTokenExpiresAt ||
+      new Date(booking.confirmationTokenExpiresAt) <= new Date()
+    ) {
+      return undefined;
+    }
+
+    booking.status = "CONFIRMADO";
+    booking.confirmationTokenUsedAt = new Date().toISOString();
+    return withRelations(booking);
+  },
+
   async updateBookingPaymentStatus(bookingId: string, paymentStatus: BookingPaymentStatus) {
     const booking = data.bookings.find((item) => item.id === bookingId);
     if (!booking) {
@@ -238,6 +272,33 @@ export const inMemoryRepository: BookingRepository = {
     booking.paymentStatus = paymentStatus;
     booking.paymentConfirmedAt = paymentStatus === "CONFIRMADO" ? new Date().toISOString() : undefined;
     return booking;
+  },
+
+  async findClientByPhone(phone: string) {
+    const normalized = normalizePhone(phone);
+    return data.clients.find((client) => normalizePhone(client.phone) === normalized);
+  },
+
+  async upsertPendingClient(input) {
+    const normalized = normalizePhone(input.phone);
+    const existing = data.clients.find((client) => normalizePhone(client.phone) === normalized);
+    if (existing) {
+      existing.name = input.name;
+      existing.phone = input.phone;
+      return existing;
+    }
+
+    const client: ClientUser = {
+      id: createId("client"),
+      name: input.name,
+      phone: input.phone,
+      hasPassword: false,
+      status: "PENDING",
+      createdBy: "BARBER",
+      createdAt: new Date().toISOString(),
+    };
+    data.clients.push(client);
+    return client;
   },
 
   async createBlockedSlot(input: CreateBlockedSlotInput) {
