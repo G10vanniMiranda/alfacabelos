@@ -19,6 +19,7 @@ import {
 import { BookingFilters } from "@/types/domain";
 import { generateAvailableSlots, getDayRange } from "./time";
 import { addMinutesToIso, getLocalDateInput, overlaps } from "./utils";
+import { registerRateLimitEvent, sha256 } from "./security";
 
 const HOME_REVALIDATE_SECONDS = 60 * 15;
 
@@ -199,6 +200,10 @@ function createConfirmationToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
+function hashConfirmationToken(token: string): string {
+  return sha256(token);
+}
+
 function addHours(date: Date, hours: number): Date {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
@@ -243,7 +248,8 @@ export async function createBarberBooking(input: unknown) {
     phone: data.customerPhone,
   });
 
-  return repository.createBooking({
+  const rawConfirmationToken = createConfirmationToken();
+  const booking = await repository.createBooking({
     barberId,
     serviceId: data.serviceId,
     clientId: client.id,
@@ -253,10 +259,15 @@ export async function createBarberBooking(input: unknown) {
     dateTimeStart: data.start,
     dateTimeEnd: computedEnd,
     status: "PENDENTE",
-    confirmationToken: createConfirmationToken(),
+    confirmationTokenHash: hashConfirmationToken(rawConfirmationToken),
     confirmationTokenExpiresAt: addHours(new Date(), 48).toISOString(),
     createdBy: "BARBER",
   });
+
+  return {
+    ...booking,
+    confirmationToken: rawConfirmationToken,
+  };
 }
 
 export async function updateAdminBooking(input: unknown) {
@@ -342,6 +353,16 @@ export function getPublicConfirmationState(
 export async function confirmBookingByToken(token: string) {
   if (!token || token.length < 32) {
     throw new Error("Link de confirmacao invalido");
+  }
+
+  const rateLimit = await registerRateLimitEvent({
+    scope: "booking-confirmation",
+    identifier: hashConfirmationToken(token),
+    windowSeconds: 15 * 60,
+    maxAttempts: 12,
+  });
+  if (rateLimit.blocked) {
+    throw new Error("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
   }
 
   const confirmed = await repository.confirmBookingByToken(token);

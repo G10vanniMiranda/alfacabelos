@@ -2,9 +2,23 @@
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { clientLoginSchema, clientRegisterSchema } from "@/lib/validators/schemas";
-import { authenticateClient, createClient, findClientById } from "@/lib/auth/client-store";
+import {
+  clientLoginSchema,
+  clientRegisterSchema,
+  requestPasswordResetSchema,
+  resetPasswordSchema,
+} from "@/lib/validators/schemas";
+import { authenticateClient, createClient, findClientById, normalizeClientPhone } from "@/lib/auth/client-store";
+import {
+  buildPasswordResetWhatsAppMessage,
+  createPasswordResetForIdentifier,
+  PASSWORD_RESET_GENERIC_MESSAGE,
+  registerPasswordResetAttempt,
+  resetClientPasswordWithToken,
+} from "@/lib/auth/client-password-reset-store";
 import { cancelClientBooking, confirmClientBooking } from "@/lib/booking-service";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { registerRateLimitEvent } from "@/lib/security";
 import { ActionState } from "@/types/scheduler";
 
 const CLIENT_COOKIE = "barber_client";
@@ -72,6 +86,20 @@ export async function loginClientAction(_prev: ActionState, formData: FormData):
     return { success: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
+  const blockStatus = await registerRateLimitEvent({
+    scope: "client-login",
+    identifier: normalizeClientPhone(parsed.data.phone),
+    windowSeconds: 15 * 60,
+    maxAttempts: 8,
+  });
+  if (blockStatus.blocked) {
+    const minutes = Math.ceil(blockStatus.retryAfterSeconds / 60);
+    return {
+      success: false,
+      message: `Muitas tentativas de login. Tente novamente em ${minutes} minuto(s).`,
+    };
+  }
+
   let client = null;
   try {
     client = await authenticateClient(parsed.data.phone, parsed.data.password);
@@ -89,6 +117,74 @@ export async function loginClientAction(_prev: ActionState, formData: FormData):
 
   await setClientCookie(client.id);
   return { success: true, message: "Login realizado com sucesso" };
+}
+
+export async function requestClientPasswordResetAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = requestPasswordResetSchema.safeParse({
+    identifier: String(formData.get("identifier") ?? ""),
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados invalidos" };
+  }
+
+  try {
+    const rateLimit = await registerPasswordResetAttempt(parsed.data.identifier);
+    if (rateLimit.blocked) {
+      return {
+        success: true,
+        message: "Se os dados estiverem cadastrados, aguarde alguns minutos antes de solicitar novamente.",
+      };
+    }
+
+    const reset = await createPasswordResetForIdentifier(parsed.data.identifier);
+    if (reset) {
+      await sendWhatsAppMessage({
+        to: reset.clientPhone,
+        message: buildPasswordResetWhatsAppMessage(reset.clientName, reset.resetLink),
+        context: "recuperacao-senha-cliente",
+      });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("Can't reach database server")) {
+      return { success: false, message: "Banco indisponivel no momento. Tente novamente em instantes." };
+    }
+
+    console.error("[password-reset] falha ao processar solicitacao");
+  }
+
+  return { success: true, message: PASSWORD_RESET_GENERIC_MESSAGE };
+}
+
+export async function resetClientPasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = resetPasswordSchema.safeParse({
+    token: String(formData.get("token") ?? ""),
+    password: String(formData.get("password") ?? ""),
+    confirmPassword: String(formData.get("confirmPassword") ?? ""),
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados invalidos" };
+  }
+
+  try {
+    const updated = await resetClientPasswordWithToken(parsed.data.token, parsed.data.password);
+    if (!updated) {
+      return { success: false, message: "Link invalido, expirado ou ja utilizado." };
+    }
+
+    return { success: true, message: "Senha redefinida com sucesso. Faca login para continuar." };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("Can't reach database server")) {
+      return { success: false, message: "Banco indisponivel no momento. Tente novamente em instantes." };
+    }
+    return { success: false, message: "Falha ao redefinir senha" };
+  }
 }
 
 export async function logoutClientAction() {

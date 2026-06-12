@@ -13,7 +13,14 @@ export function ClientLoginForm() {
   const router = useRouter();
   const { pushToast } = useToast();
   const next = searchParams.get("next") || "/cliente";
+  const passwordReset = searchParams.get("senha");
   const [state, formAction, isPending] = useActionState(loginClientAction, initialState);
+
+  useEffect(() => {
+    if (passwordReset === "redefinida") {
+      pushToast("Senha redefinida com sucesso. Faca login para continuar.", "success");
+    }
+  }, [passwordReset, pushToast]);
 
   useEffect(() => {
     if (!state.message) {
@@ -42,7 +49,12 @@ export function ClientLoginForm() {
           />
         </div>
         <div>
-          <label className="text-sm text-zinc-300">Senha</label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm text-zinc-300">Senha</label>
+            <Link href="/esqueci-minha-senha" className="text-xs font-medium text-cyan-300 hover:text-cyan-200">
+              Esqueci minha senha
+            </Link>
+          </div>
           <input
             type="password"
             name="password"

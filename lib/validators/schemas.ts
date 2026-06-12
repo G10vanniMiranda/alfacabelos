@@ -34,6 +34,21 @@ export const clientLoginSchema = z.object({
   password: z.string().min(1, "Senha é obrigatória"),
 });
 
+export const requestPasswordResetSchema = z.object({
+  identifier: z.string().trim().min(3, "Informe telefone ou email").max(160, "Dado informado muito longo"),
+});
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().trim().min(16, "Token invalido").max(256, "Token invalido"),
+    password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+    confirmPassword: z.string().min(6, "Confirmacao obrigatoria"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As senhas nao conferem",
+    path: ["confirmPassword"],
+  });
+
 export const adminLoginSchema = z.object({
   email: z.string().trim().email("Email inválido"),
   password: z.string().min(1, "Senha obrigatória"),

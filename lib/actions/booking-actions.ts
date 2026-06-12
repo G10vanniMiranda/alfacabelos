@@ -62,7 +62,7 @@ async function notifyOwnerSafely(bookingId: string) {
   }
 }
 
-async function notifyClientSafely(bookingId: string) {
+async function notifyClientSafely(bookingId: string, rawConfirmationToken?: string) {
   try {
     const booking = await getBookingById(bookingId);
     if (!booking) {
@@ -70,7 +70,10 @@ async function notifyClientSafely(bookingId: string) {
       return;
     }
 
-    await notifyClientAboutAdminBooking(booking);
+    await notifyClientAboutAdminBooking({
+      ...booking,
+      confirmationToken: rawConfirmationToken ?? booking.confirmationToken,
+    });
   } catch (error) {
     console.error(`[whatsapp] falha ao notificar cliente sobre agendamento ${bookingId}`, error);
   }
@@ -349,7 +352,7 @@ export async function createAdminBookingsAction(payload: {
         firstBookingId = booking.id;
       }
 
-      await notifyClientSafely(booking.id);
+      await notifyClientSafely(booking.id, booking.confirmationToken);
     }
 
     revalidatePath("/admin/agenda");

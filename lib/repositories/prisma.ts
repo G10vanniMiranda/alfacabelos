@@ -4,6 +4,7 @@ import { barbersSeed, servicesSeed } from "@/lib/data/seed";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { CLOSED_DAY_TIME } from "@/lib/constants/availability";
 import { getDayRangeIso } from "@/lib/utils";
+import { sha256 } from "@/lib/security";
 import { Barber, BarberAvailability, Booking, BookingWithRelations, BlockedSlot, GalleryImage } from "@/types/domain";
 import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput, UpdateBookingInput } from "./types";
 
@@ -21,6 +22,7 @@ type BookingRow = {
   paymentStatus?: "PENDENTE" | "CONFIRMADO" | null;
   paymentConfirmedAt?: Date | null;
   confirmationToken?: string | null;
+  confirmationTokenHash?: string | null;
   confirmationTokenExpiresAt?: Date | null;
   confirmationTokenUsedAt?: Date | null;
   createdBy?: "BARBER" | "CLIENT" | null;
@@ -346,9 +348,9 @@ async function ensureBookingPaymentColumnsExist(): Promise<boolean> {
         FROM information_schema.columns
         WHERE table_schema = 'public'
           AND table_name = 'Booking'
-          AND column_name IN ('paymentStatus', 'clientId', 'observations', 'confirmationToken')
+          AND column_name IN ('paymentStatus', 'clientId', 'observations', 'confirmationToken', 'confirmationTokenHash')
     `;
-    bookingPaymentColumnsExist = Number(result[0]?.columns ?? 0) === 4;
+    bookingPaymentColumnsExist = Number(result[0]?.columns ?? 0) === 5;
   } catch {
     bookingPaymentColumnsExist = false;
   } finally {
@@ -376,6 +378,7 @@ async function getBookingWithRelationsById(id: string): Promise<BookingWithRelat
           COALESCE(b."paymentStatus"::text, 'PENDENTE') AS "paymentStatus",
           b."paymentConfirmedAt",
           b."confirmationToken",
+          b."confirmationTokenHash",
           b."confirmationTokenExpiresAt",
           b."confirmationTokenUsedAt",
           b."createdBy"::text AS "createdBy",
@@ -408,6 +411,7 @@ async function getBookingWithRelationsById(id: string): Promise<BookingWithRelat
           'PENDENTE' AS "paymentStatus",
           NULL::timestamp AS "paymentConfirmedAt",
           NULL::text AS "confirmationToken",
+          NULL::text AS "confirmationTokenHash",
           NULL::timestamp AS "confirmationTokenExpiresAt",
           NULL::timestamp AS "confirmationTokenUsedAt",
           'CLIENT' AS "createdBy",
@@ -530,6 +534,7 @@ export const prismaRepository: BookingRepository = {
 
   async getBookingByConfirmationToken(token: string) {
     const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
+    const tokenHash = sha256(token);
     const rows = hasPaymentColumns
       ? await prisma.$queryRaw<BookingWithRelationsRow[]>`
           SELECT
@@ -546,6 +551,7 @@ export const prismaRepository: BookingRepository = {
             COALESCE(b."paymentStatus"::text, 'PENDENTE') AS "paymentStatus",
             b."paymentConfirmedAt",
             b."confirmationToken",
+            b."confirmationTokenHash",
             b."confirmationTokenExpiresAt",
             b."confirmationTokenUsedAt",
             b."createdBy"::text AS "createdBy",
@@ -560,7 +566,8 @@ export const prismaRepository: BookingRepository = {
           FROM "Booking" b
           INNER JOIN "Barber" br ON br.id = b."barberId"
           INNER JOIN "Service" s ON s.id = b."serviceId"
-          WHERE b."confirmationToken" = ${token}
+          WHERE b."confirmationTokenHash" = ${tokenHash}
+             OR b."confirmationToken" = ${token}
           LIMIT 1
         `
       : await prisma.$queryRaw<BookingWithRelationsRow[]>`
@@ -578,6 +585,7 @@ export const prismaRepository: BookingRepository = {
             'PENDENTE' AS "paymentStatus",
             NULL::timestamp AS "paymentConfirmedAt",
             NULL::text AS "confirmationToken",
+            NULL::text AS "confirmationTokenHash",
             NULL::timestamp AS "confirmationTokenExpiresAt",
             NULL::timestamp AS "confirmationTokenUsedAt",
             'CLIENT' AS "createdBy",
@@ -628,6 +636,7 @@ export const prismaRepository: BookingRepository = {
             COALESCE(b."paymentStatus"::text, 'PENDENTE') AS "paymentStatus",
             b."paymentConfirmedAt",
             b."confirmationToken",
+            b."confirmationTokenHash",
             b."confirmationTokenExpiresAt",
             b."confirmationTokenUsedAt",
             b."createdBy"::text AS "createdBy",
@@ -663,6 +672,7 @@ export const prismaRepository: BookingRepository = {
             'PENDENTE' AS "paymentStatus",
             NULL::timestamp AS "paymentConfirmedAt",
             NULL::text AS "confirmationToken",
+            NULL::text AS "confirmationTokenHash",
             NULL::timestamp AS "confirmationTokenExpiresAt",
             NULL::timestamp AS "confirmationTokenUsedAt",
             'CLIENT' AS "createdBy",
@@ -746,6 +756,7 @@ export const prismaRepository: BookingRepository = {
             dateTimeEnd: new Date(input.dateTimeEnd),
             status: input.status ?? "PENDENTE",
             confirmationToken: input.confirmationToken,
+            confirmationTokenHash: input.confirmationTokenHash,
             confirmationTokenExpiresAt: input.confirmationTokenExpiresAt
               ? new Date(input.confirmationTokenExpiresAt)
               : undefined,
@@ -820,10 +831,14 @@ export const prismaRepository: BookingRepository = {
 
   async confirmBookingByToken(token) {
     const now = new Date();
+    const tokenHash = sha256(token);
     const updated = await prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findFirst({
         where: {
-          confirmationToken: token,
+          OR: [
+            { confirmationTokenHash: tokenHash },
+            { confirmationToken: token },
+          ],
           confirmationTokenUsedAt: null,
           confirmationTokenExpiresAt: { gt: now },
           status: "PENDENTE",

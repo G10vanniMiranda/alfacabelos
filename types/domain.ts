@@ -33,6 +33,7 @@ export type Booking = {
   paymentStatus: BookingPaymentStatus;
   paymentConfirmedAt?: string;
   confirmationToken?: string;
+  confirmationTokenHash?: string;
   confirmationTokenExpiresAt?: string;
   confirmationTokenUsedAt?: string;
   createdBy: BookingCreatedBy;

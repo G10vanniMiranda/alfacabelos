@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createBlockedSlot, deleteBlockedSlot, listBlockedSlots } from "@/lib/booking-service";
 import { isAdminSessionTokenValid } from "@/lib/auth/admin-session-store";
+import { isSameOriginRequest } from "@/lib/security";
 
 async function isAuthorized(request: NextRequest): Promise<boolean> {
   const token = request.cookies.get("barber_admin")?.value ?? "";
@@ -18,6 +19,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ message: "Origem invalida" }, { status: 403 });
+  }
+
   if (!(await isAuthorized(request))) {
     return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
   }
@@ -33,6 +38,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ message: "Origem invalida" }, { status: 403 });
+  }
+
   if (!(await isAuthorized(request))) {
     return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
   }

@@ -24,6 +24,7 @@ export type CreateBookingInput = {
   dateTimeEnd: string;
   status?: BookingStatus;
   confirmationToken?: string;
+  confirmationTokenHash?: string;
   confirmationTokenExpiresAt?: string;
   createdBy?: BookingCreatedBy;
 };

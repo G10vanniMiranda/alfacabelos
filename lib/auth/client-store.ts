@@ -5,11 +5,11 @@ import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
 
-function normalizePhone(phone: string): string {
+export function normalizeClientPhone(phone: string): string {
   return phone.replace(/\D/g, "");
 }
 
-async function hashPassword(password: string): Promise<string> {
+export async function hashClientPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
   const derived = (await scrypt(password, salt, 64)) as Buffer;
   return `${salt}:${derived.toString("hex")}`;
@@ -51,7 +51,7 @@ function toClientUser(row: {
 }
 
 export async function findClientByPhone(phone: string): Promise<ClientUser | undefined> {
-  const normalized = normalizePhone(phone);
+  const normalized = normalizeClientPhone(phone);
   const client = await prisma.client.findUnique({
     where: { phoneNormalized: normalized },
     select: { id: true, name: true, phone: true, hasPassword: true, status: true, createdBy: true, createdAt: true },
@@ -72,8 +72,8 @@ export async function createClient(input: {
   phone: string;
   password: string;
 }): Promise<ClientUser> {
-  const normalizedPhone = normalizePhone(input.phone);
-  const passwordHash = await hashPassword(input.password);
+  const normalizedPhone = normalizeClientPhone(input.phone);
+  const passwordHash = await hashClientPassword(input.password);
 
   try {
     const existing = await prisma.client.findUnique({
@@ -121,7 +121,7 @@ export async function createClient(input: {
 }
 
 export async function authenticateClient(phone: string, password: string): Promise<ClientUser | null> {
-  const normalized = normalizePhone(phone);
+  const normalized = normalizeClientPhone(phone);
   const client = await prisma.client.findUnique({
     where: { phoneNormalized: normalized },
   });

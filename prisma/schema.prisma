@@ -67,6 +67,7 @@ model Booking {
   paymentStatus  BookingPaymentStatus @default(PENDENTE)
   paymentConfirmedAt DateTime?
   confirmationToken String? @unique
+  confirmationTokenHash String? @unique
   confirmationTokenExpiresAt DateTime?
   confirmationTokenUsedAt DateTime?
   createdBy      BookingCreatedBy @default(CLIENT)
@@ -81,6 +82,7 @@ model Booking {
   @@index([status])
   @@index([paymentStatus])
   @@index([confirmationToken])
+  @@index([confirmationTokenHash])
 }
 
 model BlockedSlot {
@@ -108,6 +110,30 @@ model Client {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   bookings        Booking[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  clientId  String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([expiresAt])
+}
+
+model SecurityRateLimitEvent {
+  id             String   @id @default(cuid())
+  scope          String
+  identifierHash String
+  createdAt      DateTime @default(now())
+
+  @@index([scope, identifierHash, createdAt])
 }
 
 model AdminAccess {

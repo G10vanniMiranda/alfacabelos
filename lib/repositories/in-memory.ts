@@ -1,6 +1,7 @@
 import { barbersSeed, servicesSeed } from "@/lib/data/seed";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { CLOSED_DAY_TIME } from "@/lib/constants/availability";
+import { sha256 } from "@/lib/security";
 import { getLocalDateInput, overlaps } from "@/lib/utils";
 import {
   Barber,
@@ -114,7 +115,10 @@ export const inMemoryRepository: BookingRepository = {
   },
 
   async getBookingByConfirmationToken(token: string) {
-    const booking = data.bookings.find((item) => item.confirmationToken === token);
+    const tokenHash = sha256(token);
+    const booking = data.bookings.find(
+      (item) => item.confirmationToken === token || item.confirmationTokenHash === tokenHash,
+    );
     return booking ? withRelations(booking) : undefined;
   },
 
@@ -196,6 +200,7 @@ export const inMemoryRepository: BookingRepository = {
       status: input.status ?? "PENDENTE",
       paymentStatus: "PENDENTE",
       confirmationToken: input.confirmationToken,
+      confirmationTokenHash: input.confirmationTokenHash,
       confirmationTokenExpiresAt: input.confirmationTokenExpiresAt,
       createdBy: input.createdBy ?? "CLIENT",
       createdAt: new Date().toISOString(),
@@ -248,7 +253,10 @@ export const inMemoryRepository: BookingRepository = {
   },
 
   async confirmBookingByToken(token: string) {
-    const booking = data.bookings.find((item) => item.confirmationToken === token);
+    const tokenHash = sha256(token);
+    const booking = data.bookings.find(
+      (item) => item.confirmationToken === token || item.confirmationTokenHash === tokenHash,
+    );
     if (
       !booking ||
       booking.status !== "PENDENTE" ||
