@@ -35,7 +35,7 @@ export const clientLoginSchema = z.object({
 });
 
 export const requestPasswordResetSchema = z.object({
-  identifier: z.string().trim().min(3, "Informe telefone ou email").max(160, "Dado informado muito longo"),
+  identifier: phoneSchema,
 });
 
 export const resetPasswordSchema = z

@@ -9,20 +9,16 @@ const RESET_RATE_LIMIT_WINDOW_MINUTES = 60;
 const RESET_RATE_LIMIT_MAX_ATTEMPTS = 5;
 
 export const PASSWORD_RESET_GENERIC_MESSAGE =
-  "Se os dados estiverem cadastrados, enviaremos instrucoes para recuperar sua senha.";
+  "Se o telefone estiver cadastrado, enviaremos instrucoes para recuperar sua senha.";
 
 function createRawResetToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
-function normalizeIdentifier(identifier: string): { type: "phone" | "email" | "invalid"; value: string } {
+function normalizeIdentifier(identifier: string): { type: "phone" | "invalid"; value: string } {
   const trimmed = identifier.trim();
   if (!trimmed) {
     return { type: "invalid", value: "" };
-  }
-
-  if (trimmed.includes("@")) {
-    return { type: "email", value: trimmed.toLowerCase() };
   }
 
   const phone = normalizeClientPhone(trimmed);
