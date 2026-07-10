@@ -1,12 +1,21 @@
 import { ClientUser } from "@/types/domain";
 import { prisma } from "@/lib/prisma";
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
+const CLIENT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 export function normalizeClientPhone(phone: string): string {
   return phone.replace(/\D/g, "");
+}
+
+function hashSessionToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function createRawSessionToken(): string {
+  return randomBytes(32).toString("hex");
 }
 
 export async function hashClientPassword(password: string): Promise<string> {
@@ -65,6 +74,73 @@ export async function findClientById(id: string): Promise<ClientUser | undefined
     select: { id: true, name: true, phone: true, hasPassword: true, status: true, createdBy: true, createdAt: true },
   });
   return client ? toClientUser(client) : undefined;
+}
+
+export async function createClientSession(clientId: string): Promise<{ token: string; maxAgeSeconds: number }> {
+  const token = createRawSessionToken();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + CLIENT_SESSION_TTL_SECONDS * 1000);
+
+  await prisma.clientSession.create({
+    data: {
+      tokenHash: hashSessionToken(token),
+      clientId,
+      expiresAt,
+      lastSeenAt: now,
+    },
+  });
+
+  return {
+    token,
+    maxAgeSeconds: CLIENT_SESSION_TTL_SECONDS,
+  };
+}
+
+export async function findClientBySessionToken(token: string): Promise<ClientUser | undefined> {
+  if (!token) {
+    return undefined;
+  }
+
+  const tokenHash = hashSessionToken(token);
+  const now = new Date();
+  const nextExpiresAt = new Date(now.getTime() + CLIENT_SESSION_TTL_SECONDS * 1000);
+
+  await prisma.clientSession.deleteMany({
+    where: { expiresAt: { lte: now } },
+  });
+
+  const session = await prisma.clientSession.findUnique({
+    where: { tokenHash },
+    include: {
+      client: {
+        select: { id: true, name: true, phone: true, hasPassword: true, status: true, createdBy: true, createdAt: true },
+      },
+    },
+  });
+
+  if (!session || session.expiresAt <= now) {
+    return undefined;
+  }
+
+  await prisma.clientSession.update({
+    where: { id: session.id },
+    data: {
+      expiresAt: nextExpiresAt,
+      lastSeenAt: now,
+    },
+  });
+
+  return toClientUser(session.client);
+}
+
+export async function revokeClientSession(token: string): Promise<void> {
+  if (!token) {
+    return;
+  }
+
+  await prisma.clientSession.deleteMany({
+    where: { tokenHash: hashSessionToken(token) },
+  });
 }
 
 export async function createClient(input: {

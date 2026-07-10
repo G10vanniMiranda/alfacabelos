@@ -8,7 +8,14 @@ import {
   requestPasswordResetSchema,
   resetPasswordSchema,
 } from "@/lib/validators/schemas";
-import { authenticateClient, createClient, findClientById, normalizeClientPhone } from "@/lib/auth/client-store";
+import {
+  authenticateClient,
+  createClient,
+  createClientSession,
+  findClientBySessionToken,
+  normalizeClientPhone,
+  revokeClientSession,
+} from "@/lib/auth/client-store";
 import {
   buildPasswordResetWhatsAppMessage,
   createPasswordResetForIdentifier,
@@ -24,25 +31,26 @@ import { ActionState } from "@/types/scheduler";
 const CLIENT_COOKIE = "barber_client";
 
 async function setClientCookie(clientId: string) {
+  const session = await createClientSession(clientId);
   const cookieStore = await cookies();
-  cookieStore.set(CLIENT_COOKIE, clientId, {
+  cookieStore.set(CLIENT_COOKIE, session.token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: session.maxAgeSeconds,
   });
 }
 
 export async function getCurrentClient() {
   const cookieStore = await cookies();
-  const clientId = cookieStore.get(CLIENT_COOKIE)?.value;
-  if (!clientId) {
+  const token = cookieStore.get(CLIENT_COOKIE)?.value;
+  if (!token) {
     return null;
   }
 
   try {
-    return await findClientById(clientId);
+    return await findClientBySessionToken(token);
   } catch {
     return null;
   }
@@ -189,6 +197,8 @@ export async function resetClientPasswordAction(_prev: ActionState, formData: Fo
 
 export async function logoutClientAction() {
   const cookieStore = await cookies();
+  const token = cookieStore.get(CLIENT_COOKIE)?.value ?? "";
+  await revokeClientSession(token);
   cookieStore.delete(CLIENT_COOKIE);
 }
 

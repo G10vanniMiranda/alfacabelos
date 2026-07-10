@@ -111,6 +111,7 @@ model Client {
   updatedAt       DateTime @updatedAt
   bookings        Booking[]
   passwordResetTokens PasswordResetToken[]
+  sessions        ClientSession[]
 }
 
 model PasswordResetToken {
@@ -120,6 +121,20 @@ model PasswordResetToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([expiresAt])
+}
+
+model ClientSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  clientId  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
