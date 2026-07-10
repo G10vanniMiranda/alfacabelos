@@ -4,15 +4,29 @@ import { prisma } from "@/lib/prisma";
 import { hashClientPassword, normalizeClientPhone } from "@/lib/auth/client-store";
 import { registerRateLimitEvent, sha256 } from "@/lib/security";
 
-const RESET_TOKEN_TTL_MINUTES = 60;
+const RESET_TOKEN_TTL_MINUTES = 30;
 const RESET_RATE_LIMIT_WINDOW_MINUTES = 60;
 const RESET_RATE_LIMIT_MAX_ATTEMPTS = 5;
 
 export const PASSWORD_RESET_GENERIC_MESSAGE =
-  "Se o telefone estiver cadastrado, enviaremos instrucoes para recuperar sua senha.";
+  "Se existir uma conta com os dados informados, enviaremos as instrucoes de recuperacao.";
+
+export type PasswordResetTokenStatus = "valid" | "invalid" | "expired" | "used";
+
+function logPasswordResetEvent(event: string, details: Record<string, string | number | boolean | null | undefined> = {}) {
+  console.info("[password-reset]", JSON.stringify({ event, ...details }));
+}
 
 function createRawResetToken(): string {
   return randomBytes(32).toString("base64url");
+}
+
+function normalizePhoneForLookup(identifier: string): string {
+  const digits = normalizeClientPhone(identifier);
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    return digits.slice(2);
+  }
+  return digits;
 }
 
 function normalizeIdentifier(identifier: string): { type: "phone" | "invalid"; value: string } {
@@ -21,7 +35,7 @@ function normalizeIdentifier(identifier: string): { type: "phone" | "invalid"; v
     return { type: "invalid", value: "" };
   }
 
-  const phone = normalizeClientPhone(trimmed);
+  const phone = normalizePhoneForLookup(trimmed);
   if (phone.length >= 10 && phone.length <= 11) {
     return { type: "phone", value: phone };
   }
@@ -55,7 +69,7 @@ export function buildPasswordResetWhatsAppMessage(clientName: string, resetLink:
     "Para criar uma nova senha, clique no link abaixo:",
     resetLink,
     "",
-    "Este link e valido por 1 hora.",
+    `Este link e valido por ${RESET_TOKEN_TTL_MINUTES} minutos.`,
     "",
     "Se voce nao solicitou essa alteracao, ignore esta mensagem.",
   ].join("\n");
@@ -77,12 +91,24 @@ export async function registerPasswordResetAttempt(identifier: string): Promise<
 
   await cleanupOldResetRows();
 
+  logPasswordResetEvent("request_received", {
+    identifierHash: sha256(`${normalized.type}:${normalized.value}`),
+    identifierType: normalized.type,
+  });
+
   const result = await registerRateLimitEvent({
     scope: "client-password-reset",
     identifier: `${normalized.type}:${normalized.value}`,
     windowSeconds: RESET_RATE_LIMIT_WINDOW_MINUTES * 60,
     maxAttempts: RESET_RATE_LIMIT_MAX_ATTEMPTS,
   });
+
+  if (result.blocked) {
+    logPasswordResetEvent("request_rate_limited", {
+      identifierHash: sha256(`${normalized.type}:${normalized.value}`),
+      retryAfterSeconds: result.retryAfterSeconds,
+    });
+  }
 
   return { blocked: result.blocked };
 }
@@ -97,6 +123,7 @@ export async function createPasswordResetForIdentifier(identifier: string): Prom
 > {
   const normalized = normalizeIdentifier(identifier);
   if (normalized.type !== "phone") {
+    logPasswordResetEvent("request_identifier_invalid");
     return undefined;
   }
 
@@ -106,8 +133,16 @@ export async function createPasswordResetForIdentifier(identifier: string): Prom
   });
 
   if (!client) {
+    logPasswordResetEvent("client_not_found", {
+      identifierHash: sha256(`phone:${normalized.value}`),
+    });
     return undefined;
   }
+
+  logPasswordResetEvent("client_found", {
+    clientId: client.id,
+    identifierHash: sha256(`phone:${normalized.value}`),
+  });
 
   const rawToken = createRawResetToken();
   const tokenHash = sha256(rawToken);
@@ -131,6 +166,11 @@ export async function createPasswordResetForIdentifier(identifier: string): Prom
     });
   });
 
+  logPasswordResetEvent("token_saved", {
+    clientId: client.id,
+    expiresInMinutes: RESET_TOKEN_TTL_MINUTES,
+  });
+
   return {
     clientName: client.name,
     clientPhone: client.phone,
@@ -138,9 +178,10 @@ export async function createPasswordResetForIdentifier(identifier: string): Prom
   };
 }
 
-export async function validatePasswordResetToken(rawToken: string): Promise<{ valid: boolean }> {
+export async function validatePasswordResetToken(rawToken: string): Promise<{ valid: boolean; status: PasswordResetTokenStatus }> {
   if (!rawToken || rawToken.length > 256) {
-    return { valid: false };
+    logPasswordResetEvent("token_validation_invalid");
+    return { valid: false, status: "invalid" };
   }
 
   const tokenHash = sha256(rawToken);
@@ -149,7 +190,23 @@ export async function validatePasswordResetToken(rawToken: string): Promise<{ va
     select: { expiresAt: true, usedAt: true },
   });
 
-  return { valid: Boolean(token && !token.usedAt && token.expiresAt > new Date()) };
+  if (!token) {
+    logPasswordResetEvent("token_validation_invalid");
+    return { valid: false, status: "invalid" };
+  }
+
+  if (token.usedAt) {
+    logPasswordResetEvent("token_validation_used");
+    return { valid: false, status: "used" };
+  }
+
+  if (token.expiresAt <= new Date()) {
+    logPasswordResetEvent("token_validation_expired");
+    return { valid: false, status: "expired" };
+  }
+
+  logPasswordResetEvent("token_validation_valid");
+  return { valid: true, status: "valid" };
 }
 
 export async function resetClientPasswordWithToken(rawToken: string, password: string): Promise<boolean> {
@@ -169,6 +226,7 @@ export async function resetClientPasswordWithToken(rawToken: string, password: s
       });
 
       if (!token || token.usedAt || token.expiresAt <= now) {
+        logPasswordResetEvent("reset_rejected");
         return false;
       }
 
@@ -193,6 +251,10 @@ export async function resetClientPasswordWithToken(rawToken: string, password: s
           usedAt: null,
         },
         data: { usedAt: now },
+      });
+
+      logPasswordResetEvent("password_reset_completed", {
+        clientId: token.clientId,
       });
 
       return true;

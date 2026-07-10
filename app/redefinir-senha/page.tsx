@@ -19,7 +19,7 @@ export default async function ResetPasswordPage({
     <div className="min-h-screen pb-12">
       <ToastProvider>
         <main className="mx-auto max-w-6xl px-4 sm:px-6">
-          {validation.valid ? <PasswordResetForm token={token} /> : <InvalidPasswordResetToken />}
+          {validation.valid ? <PasswordResetForm token={token} /> : <InvalidPasswordResetToken status={validation.status} />}
         </main>
       </ToastProvider>
     </div>

@@ -21,7 +21,7 @@ export function PasswordResetRequestForm() {
     <section className="mx-auto mt-12 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
       <h1 className="text-3xl font-bold text-zinc-100">Recuperar senha</h1>
       <p className="mt-2 text-sm text-zinc-400">
-        Informe seu telefone cadastrado para receber as instrucoes.
+        Informe seu telefone cadastrado para receber as instrucoes por WhatsApp.
       </p>
 
       <form action={formAction} className="mt-5 space-y-4">
@@ -32,6 +32,7 @@ export function PasswordResetRequestForm() {
             placeholder="(11) 99999-9999"
             inputMode="tel"
             autoComplete="tel"
+            required
             className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
           />
         </div>

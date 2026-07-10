@@ -52,6 +52,8 @@ export function ClientRegisterForm() {
           <input
             type="password"
             name="password"
+            autoComplete="new-password"
+            minLength={8}
             className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
           />
         </div>
@@ -60,6 +62,8 @@ export function ClientRegisterForm() {
           <input
             type="password"
             name="confirmPassword"
+            autoComplete="new-password"
+            minLength={8}
             className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
           />
         </div>

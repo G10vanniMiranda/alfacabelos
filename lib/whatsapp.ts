@@ -108,22 +108,22 @@ function buildWhatsAppPayload(phone: string, message: string) {
   };
 }
 
-export async function sendWhatsAppMessage({ to, message, context = "whatsapp" }: SendWhatsAppMessageInput) {
+export async function sendWhatsAppMessage({ to, message, context = "whatsapp" }: SendWhatsAppMessageInput): Promise<boolean> {
   if (!WHATSAPP_ENABLED) {
     console.info(`[whatsapp] notificacao ignorada (${context}): WHATSAPP_ENABLED diferente de true`);
-    return;
+    return false;
   }
 
   const phone = normalizeWhatsAppPhone(to);
   if (!phone) {
     console.warn(`[whatsapp] telefone invalido para notificacao (${context})`);
-    return;
+    return false;
   }
 
   const endpoint = resolveWhatsAppEndpoint();
   if (!endpoint || !WHATSAPP_API_TOKEN) {
     console.warn(`[whatsapp] configuracao incompleta para envio (${context})`);
-    return;
+    return false;
   }
 
   const controller = new AbortController();
@@ -146,6 +146,7 @@ export async function sendWhatsAppMessage({ to, message, context = "whatsapp" }:
   }
 
   console.info(`[whatsapp] notificacao enviada (${context})`);
+  return true;
 }
 
 export function buildOwnerBookingNotification(booking: BookingWithRelations, observations?: string): string {

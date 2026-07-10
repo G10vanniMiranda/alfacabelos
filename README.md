@@ -92,6 +92,8 @@ Crie `.env.local`:
 
 ```env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/alfa_barber
+APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 SUPABASE_URL=https://seu-projeto.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key
 SUPABASE_STORAGE_BUCKET=galeria
@@ -105,6 +107,7 @@ BARBERSHOP_ADDRESS=
 
 Observacao:
 - `DATABASE_URL` e obrigatoria no ambiente.
+- `APP_URL` ou `NEXT_PUBLIC_APP_URL` deve apontar para o dominio publico correto; ela e usada nos links de confirmacao e recuperacao de senha.
 - O acesso admin agora e gerenciado pela secao `/admin/acessos`.
 - Em producao, configure `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` para upload persistente da galeria.
 - Notificacoes automaticas de WhatsApp so sao enviadas quando `WHATSAPP_ENABLED=true`.
@@ -197,6 +200,7 @@ Fluxos implementados:
 
 - Cliente agenda pelo site (`createClientBookingsAction`): envia WhatsApp para o dono/barbeiro configurado em `WHATSAPP_OWNER_PHONE`.
 - Painel admin cria agendamento (`createAdminBookingsAction`): envia confirmacao por WhatsApp para o cliente.
+- Recuperacao de senha (`/esqueci-minha-senha`): envia um link temporario por WhatsApp para o telefone cadastrado.
 - `POST /api/booking`: tambem notifica o dono/barbeiro, caso esse endpoint seja usado por uma integracao externa.
 
 Variaveis:
@@ -208,6 +212,8 @@ WHATSAPP_API_TOKEN=seu_token
 WHATSAPP_OWNER_PHONE=5569999999999
 WHATSAPP_INSTANCE_ID=sua_instancia
 BARBERSHOP_ADDRESS=Endereco da barbearia
+APP_URL=https://seu-dominio.com
+NEXT_PUBLIC_APP_URL=https://seu-dominio.com
 ```
 
 Regras tecnicas:
@@ -216,6 +222,7 @@ Regras tecnicas:
 - Se telefone, token ou URL estiverem ausentes/invalidos, o erro e registrado no console e o agendamento continua salvo.
 - Se a API do WhatsApp falhar, o erro e registrado no console e o agendamento continua salvo.
 - O telefone e normalizado para formato internacional do Brasil (`55 + DDD + numero`).
+- Tokens de recuperacao de senha expiram em 30 minutos, sao salvos apenas como hash e sao invalidados apos o uso ou quando um novo token e solicitado.
 
 Troca futura de API:
 

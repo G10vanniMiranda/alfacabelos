@@ -8,6 +8,28 @@ export const phoneSchema = z
     message: "Telefone invalido. Use formato (11) 99999-9999",
   });
 
+const passwordSchema = z
+  .string()
+  .min(8, "Senha deve ter pelo menos 8 caracteres")
+  .refine((value) => value === value.trim(), {
+    message: "Senha nao pode comecar ou terminar com espacos",
+  });
+
+const passwordResetIdentifierSchema = z
+  .string()
+  .trim()
+  .min(1, "Informe o telefone cadastrado")
+  .max(32, "Telefone invalido")
+  .refine((value) => {
+    const digits = value.replace(/\D/g, "");
+    const localDigits = digits.startsWith("55") && (digits.length === 12 || digits.length === 13)
+      ? digits.slice(2)
+      : digits;
+    return localDigits.length >= 10 && localDigits.length <= 11;
+  }, {
+    message: "Telefone invalido. Use DDD + numero",
+  });
+
 export const createBookingSchema = z.object({
   serviceId: z.string().min(1, "Serviço é obrigatório"),
   barberId: z.string().min(1, "Barbeiro é obrigatório").optional(),
@@ -21,8 +43,8 @@ export const clientRegisterSchema = z
   .object({
     name: z.string().trim().min(2, "Nome é obrigatório"),
     phone: phoneSchema,
-    password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
-    confirmPassword: z.string().min(6, "Confirmação obrigatória"),
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "As senhas não conferem",
@@ -35,14 +57,14 @@ export const clientLoginSchema = z.object({
 });
 
 export const requestPasswordResetSchema = z.object({
-  identifier: phoneSchema,
+  identifier: passwordResetIdentifierSchema,
 });
 
 export const resetPasswordSchema = z
   .object({
     token: z.string().trim().min(16, "Token invalido").max(256, "Token invalido"),
-    password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
-    confirmPassword: z.string().min(6, "Confirmacao obrigatoria"),
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "As senhas nao conferem",

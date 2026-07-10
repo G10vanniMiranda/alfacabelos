@@ -30,6 +30,10 @@ import { ActionState } from "@/types/scheduler";
 
 const CLIENT_COOKIE = "barber_client";
 
+function logPasswordResetAction(event: string, details: Record<string, string | number | boolean | null | undefined> = {}) {
+  console.info("[password-reset]", JSON.stringify({ event, ...details }));
+}
+
 async function setClientCookie(clientId: string) {
   const session = await createClientSession(clientId);
   const cookieStore = await cookies();
@@ -150,11 +154,13 @@ export async function requestClientPasswordResetAction(
 
     const reset = await createPasswordResetForIdentifier(parsed.data.identifier);
     if (reset) {
-      await sendWhatsAppMessage({
+      logPasswordResetAction("notification_attempt");
+      const sent = await sendWhatsAppMessage({
         to: reset.clientPhone,
         message: buildPasswordResetWhatsAppMessage(reset.clientName, reset.resetLink),
         context: "recuperacao-senha-cliente",
       });
+      logPasswordResetAction(sent ? "notification_sent" : "notification_skipped");
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
@@ -182,7 +188,7 @@ export async function resetClientPasswordAction(_prev: ActionState, formData: Fo
   try {
     const updated = await resetClientPasswordWithToken(parsed.data.token, parsed.data.password);
     if (!updated) {
-      return { success: false, message: "Link invalido, expirado ou ja utilizado." };
+      return { success: false, message: "Este link de recuperacao e invalido, expirou ou ja foi utilizado." };
     }
 
     return { success: true, message: "Senha redefinida com sucesso. Faca login para continuar." };
