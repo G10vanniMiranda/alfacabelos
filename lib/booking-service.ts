@@ -149,7 +149,7 @@ export async function getAvailableSlots(params: { date: string; barberId?: strin
   });
 }
 
-export async function createBooking(input: unknown) {
+export async function createBooking(input: unknown, options?: { clientId?: string }) {
   const parsed = createBookingSchema.safeParse(input);
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Dados do agendamento inválidos");
@@ -166,6 +166,33 @@ export async function createBooking(input: unknown) {
     data.start,
     service.durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes,
   );
+
+  const requestedDate = getLocalDateInput(data.start, BUSINESS_CONFIG.timezone);
+  const { start: dayStart, end: dayEnd } = getDayRange(requestedDate);
+  const [dayBookings, dayBlockedSlots, availabilities] = await Promise.all([
+    repository.listBookingsInRange(dayStart, dayEnd, barberId),
+    repository.listBlockedSlots(requestedDate),
+    repository.listBarberAvailabilities(barberId),
+  ]);
+
+  const availableSlots = generateAvailableSlots({
+    date: requestedDate,
+    barberId,
+    serviceDurationMinutes: service.durationMinutes,
+    barberBookings: dayBookings,
+    blockedSlots: dayBlockedSlots,
+    operatingHours: availabilities
+      .map((item) => ({
+        dayOfWeek: item.dayOfWeek,
+        open: item.openTime,
+        close: item.closeTime,
+      }))
+      .filter((item) => !isClosedOperatingWindow(item)),
+  });
+
+  if (!availableSlots.some((slot) => slot.start === data.start)) {
+    throw new Error("O horario selecionado nao esta mais disponivel.");
+  }
 
   const conflicts = await repository.listBookingsInRange(data.start, computedEnd, barberId);
   if (conflicts.length > 0) {
@@ -187,6 +214,7 @@ export async function createBooking(input: unknown) {
   return repository.createBooking({
     barberId,
     serviceId: data.serviceId,
+    clientId: options?.clientId,
     customerName: data.customerName,
     customerPhone: data.customerPhone,
     observations: data.observations,

@@ -33,11 +33,25 @@ import {
 } from "@/lib/auth/admin-login-attempt-store";
 import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
 import { notifyClientAboutAdminBooking, notifyOwnerAboutClientBooking } from "@/lib/whatsapp";
+import { findClientBySessionToken } from "@/lib/auth/client-store";
 
 const ADMIN_COOKIE = "barber_admin";
+const CLIENT_COOKIE = "barber_client";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "galeria";
+const BOOKING_DIAGNOSTICS_ENABLED = process.env.BOOKING_DIAGNOSTICS === "true";
+
+function logBookingDiagnostic(event: string, details: Record<string, string | number | boolean | undefined>) {
+  if (!BOOKING_DIAGNOSTICS_ENABLED) {
+    return;
+  }
+
+  console.info("[booking-flow]", {
+    event,
+    ...details,
+  });
+}
 
 async function assertAdminSession() {
   const cookieStore = await cookies();
@@ -46,6 +60,16 @@ async function assertAdminSession() {
   if (!authorized) {
     throw new Error("Não autorizado");
   }
+}
+
+async function getAuthenticatedClient() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(CLIENT_COOKIE)?.value ?? "";
+  if (!token) {
+    return null;
+  }
+
+  return findClientBySessionToken(token);
 }
 
 async function notifyOwnerSafely(bookingId: string) {
@@ -207,11 +231,29 @@ export async function createClientBookingsAction(payload: {
   recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
   repeatUntil?: string;
 }): Promise<ActionState> {
+  const client = await getAuthenticatedClient();
+  if (!client) {
+    logBookingDiagnostic("client_session_missing", {
+      serviceId: payload.serviceId,
+      starts: payload.starts?.length ?? 0,
+    });
+    return {
+      success: false,
+      message: "Sua sessao expirou. Faca login novamente para concluir o agendamento.",
+    };
+  }
+
   const parsed = createAdminBookingSchema.safeParse({
     ...payload,
     barberId: DEFAULT_BARBER_ID,
+    customerName: client.name,
+    customerPhone: client.phone,
   });
   if (!parsed.success) {
+    logBookingDiagnostic("client_payload_invalid", {
+      serviceId: payload.serviceId,
+      reason: parsed.error.issues[0]?.message,
+    });
     return {
       success: false,
       message: parsed.error.issues[0]?.message ?? "Dados invalidos para criar agendamento",
@@ -220,6 +262,13 @@ export async function createClientBookingsAction(payload: {
 
   try {
     const starts = parsed.data.starts?.length ? parsed.data.starts : [parsed.data.start];
+    logBookingDiagnostic("client_booking_create_started", {
+      clientId: client.id,
+      serviceId: parsed.data.serviceId,
+      starts: starts.length,
+      recurrence: parsed.data.recurrence,
+    });
+
     if (parsed.data.recurrence !== "NONE" && starts.length >= 60) {
       return {
         success: false,
@@ -233,20 +282,28 @@ export async function createClientBookingsAction(payload: {
         serviceId: parsed.data.serviceId,
         barberId: DEFAULT_BARBER_ID,
         start,
-        customerName: parsed.data.customerName,
-        customerPhone: parsed.data.customerPhone,
+        customerName: client.name,
+        customerPhone: client.phone,
         observations: parsed.data.observations,
-      });
+      }, { clientId: client.id });
 
       if (!firstBookingId) {
         firstBookingId = booking.id;
       }
+
+      logBookingDiagnostic("client_booking_created", {
+        bookingId: booking.id,
+        clientId: client.id,
+        serviceId: parsed.data.serviceId,
+      });
 
       await notifyOwnerSafely(booking.id);
     }
 
     revalidatePath("/cliente");
     revalidatePath("/agendar");
+    revalidatePath("/admin/agenda");
+    revalidatePath("/admin/dashboard");
 
     return {
       success: true,
@@ -257,6 +314,11 @@ export async function createClientBookingsAction(payload: {
       bookingId: firstBookingId,
     };
   } catch (error) {
+    logBookingDiagnostic("client_booking_create_failed", {
+      clientId: client.id,
+      serviceId: parsed.data.serviceId,
+      reason: error instanceof Error ? error.message : "unknown",
+    });
     return {
       success: false,
       message: error instanceof Error ? error.message : "Falha ao criar agendamento",

@@ -302,6 +302,10 @@ export function SchedulerWizard({
   }
 
   function submitBooking() {
+    if (isPending) {
+      return;
+    }
+
     if (!draft.serviceId || !draft.time || !draft.customerName || !draft.customerPhone) {
       pushToast("Preencha todos os campos para confirmar", "error");
       return;
