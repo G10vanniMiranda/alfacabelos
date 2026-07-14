@@ -5,9 +5,14 @@ import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
 const CLIENT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+const CLIENT_SESSION_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 export function normalizeClientPhone(phone: string): string {
-  return phone.replace(/\D/g, "");
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+    return digits.slice(2);
+  }
+  return digits;
 }
 
 function hashSessionToken(token: string): string {
@@ -81,6 +86,8 @@ export async function createClientSession(clientId: string): Promise<{ token: st
   const now = new Date();
   const expiresAt = new Date(now.getTime() + CLIENT_SESSION_TTL_SECONDS * 1000);
 
+  await prisma.clientSession.deleteMany({ where: { expiresAt: { lte: now } } });
+
   await prisma.clientSession.create({
     data: {
       tokenHash: hashSessionToken(token),
@@ -105,10 +112,6 @@ export async function findClientBySessionToken(token: string): Promise<ClientUse
   const now = new Date();
   const nextExpiresAt = new Date(now.getTime() + CLIENT_SESSION_TTL_SECONDS * 1000);
 
-  await prisma.clientSession.deleteMany({
-    where: { expiresAt: { lte: now } },
-  });
-
   const session = await prisma.clientSession.findUnique({
     where: { tokenHash },
     include: {
@@ -122,13 +125,12 @@ export async function findClientBySessionToken(token: string): Promise<ClientUse
     return undefined;
   }
 
-  await prisma.clientSession.update({
-    where: { id: session.id },
-    data: {
-      expiresAt: nextExpiresAt,
-      lastSeenAt: now,
-    },
-  });
+  if (now.getTime() - session.lastSeenAt.getTime() >= CLIENT_SESSION_REFRESH_INTERVAL_MS) {
+    await prisma.clientSession.update({
+      where: { id: session.id },
+      data: { expiresAt: nextExpiresAt, lastSeenAt: now },
+    });
+  }
 
   return toClientUser(session.client);
 }

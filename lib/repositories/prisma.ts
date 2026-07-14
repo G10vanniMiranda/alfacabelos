@@ -1,10 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { barbersSeed, servicesSeed } from "@/lib/data/seed";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { CLOSED_DAY_TIME } from "@/lib/constants/availability";
 import { getDayRangeIso } from "@/lib/utils";
 import { sha256 } from "@/lib/security";
+import { isDatabaseUnavailableError } from "@/lib/errors";
 import { Barber, BarberAvailability, Booking, BookingWithRelations, BlockedSlot, GalleryImage } from "@/types/domain";
 import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput, UpdateBookingInput } from "./types";
 
@@ -18,7 +18,7 @@ type BookingRow = {
   observations?: string | null;
   dateTimeStart: Date;
   dateTimeEnd: Date;
-  status: "PENDENTE" | "CONFIRMADO" | "CANCELADO";
+  status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "CONCLUIDO" | "AUSENTE";
   paymentStatus?: "PENDENTE" | "CONFIRMADO" | null;
   paymentConfirmedAt?: Date | null;
   confirmationToken?: string | null;
@@ -193,34 +193,6 @@ let availabilityTableExists = false;
 let bookingPaymentColumnsChecked = false;
 let bookingPaymentColumnsExist = false;
 
-function isDatabaseUnavailableError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false;
-  }
-
-  const maybe = error as { code?: string; message?: string };
-  if (maybe.code === "P1001") {
-    return true;
-  }
-
-  return typeof maybe.message === "string" && maybe.message.includes("Can't reach database server");
-}
-
-function canUseReadFallback() {
-  return process.env.NODE_ENV !== "production";
-}
-
-async function readWithFallback<T>(action: () => Promise<T>, fallback: () => T | Promise<T>): Promise<T> {
-  try {
-    return await action();
-  } catch (error) {
-    if (canUseReadFallback() && isDatabaseUnavailableError(error)) {
-      return fallback();
-    }
-    throw error;
-  }
-}
-
 function getGalleryDelegate() {
   return (prisma as unknown as {
     galleryImage?: {
@@ -289,6 +261,10 @@ function isBarberAvailabilityTableMissing(error: unknown): boolean {
   );
 }
 
+function isSerializableTransactionConflict(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "P2034");
+}
+
 async function ensureGalleryTableExists(): Promise<boolean> {
   if (galleryTableChecked) {
     return galleryTableExists;
@@ -304,7 +280,8 @@ async function ensureGalleryTableExists(): Promise<boolean> {
       ) AS "exists"
     `;
     galleryTableExists = result[0]?.exists === true;
-  } catch {
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) throw error;
     galleryTableExists = false;
   } finally {
     galleryTableChecked = true;
@@ -328,7 +305,8 @@ async function ensureBarberAvailabilityTableExists(): Promise<boolean> {
       ) AS "exists"
     `;
     availabilityTableExists = result[0]?.exists === true;
-  } catch {
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) throw error;
     availabilityTableExists = false;
   } finally {
     availabilityTableChecked = true;
@@ -351,7 +329,8 @@ async function ensureBookingPaymentColumnsExist(): Promise<boolean> {
           AND column_name IN ('paymentStatus', 'clientId', 'observations', 'confirmationToken', 'confirmationTokenHash')
     `;
     bookingPaymentColumnsExist = Number(result[0]?.columns ?? 0) === 5;
-  } catch {
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) throw error;
     bookingPaymentColumnsExist = false;
   } finally {
     bookingPaymentColumnsChecked = true;
@@ -436,17 +415,10 @@ async function getBookingWithRelationsById(id: string): Promise<BookingWithRelat
 
 export const prismaRepository: BookingRepository = {
   async getServices() {
-    return readWithFallback(async () => {
-      const rows = await prisma.service.findMany({
-        where: { isActive: true },
-        orderBy: { name: "asc" },
-      });
-      if (rows.length > 0) {
-        return rows;
-      }
-
-      return servicesSeed.filter((service) => service.isActive);
-    }, () => servicesSeed.filter((service) => service.isActive));
+    return prisma.service.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    });
   },
 
   async createService(input) {
@@ -473,6 +445,7 @@ export const prismaRepository: BookingRepository = {
       data: {
         name: input.name,
         priceCents: input.priceCents,
+        durationMinutes: input.durationMinutes,
       },
     });
   },
@@ -493,39 +466,18 @@ export const prismaRepository: BookingRepository = {
   },
 
   async getBarbers() {
-    return readWithFallback(async () => {
-      let rows = await prisma.barber.findMany({
-        where: { isActive: true },
-        orderBy: { name: "asc" },
-      });
-
-      if (rows.length === 0) {
-        rows = barbersSeed
-          .filter((barber) => barber.isActive)
-          .map((barber) => ({
-            id: barber.id,
-            name: barber.name,
-            avatarUrl: barber.avatarUrl ?? null,
-            isActive: barber.isActive,
-          }));
-      }
-
-      return rows.map(toBarber);
-    }, () => barbersSeed.filter((barber) => barber.isActive));
+    const rows = await prisma.barber.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    });
+    return rows.map(toBarber);
   },
 
   async getServiceById(id: string) {
-    return readWithFallback(async () => {
-      const service = await prisma.service.findFirst({
-        where: { id, isActive: true },
-      });
-      if (service) {
-        return service;
-      }
-
-      const fallback = servicesSeed.find((item) => item.id === id && item.isActive);
-      return fallback ?? undefined;
-    }, () => servicesSeed.find((item) => item.id === id && item.isActive));
+    const service = await prisma.service.findFirst({
+      where: { id, isActive: true },
+    });
+    return service ?? undefined;
   },
 
   async getBookingById(id: string) {
@@ -611,6 +563,7 @@ export const prismaRepository: BookingRepository = {
   async listBookings(filters) {
     const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
     const barberFilter = filters?.barberId ? Prisma.sql`AND b."barberId" = ${filters.barberId}` : Prisma.empty;
+    const clientFilter = filters?.clientId ? Prisma.sql`AND b."clientId" = ${filters.clientId}` : Prisma.empty;
     const statusFilter =
       filters?.status && filters.status !== "TODOS"
         ? Prisma.sql`AND b.status::text = ${filters.status}`
@@ -653,6 +606,7 @@ export const prismaRepository: BookingRepository = {
           INNER JOIN "Service" s ON s.id = b."serviceId"
           WHERE 1 = 1
           ${barberFilter}
+          ${clientFilter}
           ${statusFilter}
           ${dateFilter}
           ORDER BY b."dateTimeStart" ASC
@@ -689,6 +643,7 @@ export const prismaRepository: BookingRepository = {
           INNER JOIN "Service" s ON s.id = b."serviceId"
           WHERE 1 = 1
           ${barberFilter}
+          ${clientFilter}
           ${statusFilter}
           ${dateFilter}
           ORDER BY b."dateTimeStart" ASC
@@ -729,8 +684,9 @@ export const prismaRepository: BookingRepository = {
   },
 
   async createBooking(input: CreateBookingInput) {
-    const created = await prisma.$transaction(
-      async (tx) => {
+    try {
+      const created = await prisma.$transaction(
+        async (tx) => {
         const conflict = await tx.booking.findFirst({
           where: {
             barberId: input.barberId,
@@ -763,11 +719,17 @@ export const prismaRepository: BookingRepository = {
             createdBy: input.createdBy ?? "CLIENT",
           },
         });
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
 
-    return toBooking(created);
+      return toBooking(created);
+    } catch (error) {
+      if (isSerializableTransactionConflict(error)) {
+        throw new Error("Este horário acabou de ser reservado. Escolha outro horário.");
+      }
+      throw error;
+    }
   },
 
   async updateBooking(input: UpdateBookingInput) {
@@ -778,8 +740,9 @@ export const prismaRepository: BookingRepository = {
       return undefined;
     }
 
-    const updated = await prisma.$transaction(
-      async (tx) => {
+    try {
+      const updated = await prisma.$transaction(
+        async (tx) => {
         const conflict = await tx.booking.findFirst({
           where: {
             id: { not: input.bookingId },
@@ -806,11 +769,17 @@ export const prismaRepository: BookingRepository = {
             dateTimeEnd: new Date(input.dateTimeEnd),
           },
         });
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
 
-    return toBooking(updated);
+      return toBooking(updated);
+    } catch (error) {
+      if (isSerializableTransactionConflict(error)) {
+        throw new Error("Este horário acabou de ser reservado. Escolha outro horário.");
+      }
+      throw error;
+    }
   },
 
   async updateBookingStatus(bookingId, status) {
@@ -910,9 +879,18 @@ export const prismaRepository: BookingRepository = {
 
   async upsertPendingClient(input) {
     const normalized = normalizePhone(input.phone);
-    const client = await prisma.client.upsert({
-      where: { phoneNormalized: normalized },
-      create: {
+    const select = {
+      id: true, name: true, phone: true, hasPassword: true, status: true,
+      createdBy: true, createdAt: true,
+    } as const;
+    const existing = await prisma.client.findUnique({ where: { phoneNormalized: normalized }, select });
+    if (existing) {
+      return toClientUser(existing);
+    }
+
+    try {
+      const client = await prisma.client.create({
+        data: {
         name: input.name,
         phone: input.phone,
         phoneNormalized: normalized,
@@ -921,22 +899,16 @@ export const prismaRepository: BookingRepository = {
         status: "PENDING",
         createdBy: "BARBER",
       },
-      update: {
-        name: input.name,
-        phone: input.phone,
-      },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        hasPassword: true,
-        status: true,
-        createdBy: true,
-        createdAt: true,
-      },
-    });
-
-    return toClientUser(client);
+        select,
+      });
+      return toClientUser(client);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const raced = await prisma.client.findUnique({ where: { phoneNormalized: normalized }, select });
+        if (raced) return toClientUser(raced);
+      }
+      throw error;
+    }
   },
 
   async createBlockedSlot(input: CreateBlockedSlotInput) {
@@ -960,38 +932,33 @@ export const prismaRepository: BookingRepository = {
   },
 
   async listBarberAvailabilities(barberId) {
-    const fallbackAvailabilities = () =>
-      defaultAvailabilitiesForMissingDays(barberId, new Set());
+    const hasTable = await ensureBarberAvailabilityTableExists();
+    if (!hasTable) {
+      throw new Error("Disponibilidade indisponível. Execute as migrations do banco.");
+    }
 
-    return readWithFallback(async () => {
-      const hasTable = await ensureBarberAvailabilityTableExists();
-      if (!hasTable) {
-        return fallbackAvailabilities();
+    const availability = getBarberAvailabilityDelegate();
+    if (!availability) {
+      throw new Error("Disponibilidade indisponível. Atualize o Prisma Client.");
+    }
+
+    try {
+      const rows = await availability.findMany({
+        where: { barberId },
+        orderBy: [{ dayOfWeek: "asc" }, { openTime: "asc" }],
+      });
+
+      const savedDays = new Set(rows.map((row) => row.dayOfWeek));
+      return [...rows.map(toBarberAvailability), ...defaultAvailabilitiesForMissingDays(barberId, savedDays)].sort(
+        (a, b) => a.dayOfWeek - b.dayOfWeek || a.openTime.localeCompare(b.openTime),
+      );
+    } catch (error) {
+      if (isBarberAvailabilityTableMissing(error)) {
+        availabilityTableExists = false;
+        throw new Error("Disponibilidade indisponível. Execute as migrations do banco.");
       }
-
-      const availability = getBarberAvailabilityDelegate();
-      if (!availability) {
-        return fallbackAvailabilities();
-      }
-
-      try {
-        const rows = await availability.findMany({
-          where: { barberId },
-          orderBy: [{ dayOfWeek: "asc" }, { openTime: "asc" }],
-        });
-
-        const savedDays = new Set(rows.map((row) => row.dayOfWeek));
-        return [...rows.map(toBarberAvailability), ...defaultAvailabilitiesForMissingDays(barberId, savedDays)].sort(
-          (a, b) => a.dayOfWeek - b.dayOfWeek || a.openTime.localeCompare(b.openTime),
-        );
-      } catch (error) {
-        if (isBarberAvailabilityTableMissing(error)) {
-          availabilityTableExists = false;
-          return fallbackAvailabilities();
-        }
-        throw error;
-      }
-    }, fallbackAvailabilities);
+      throw error;
+    }
   },
 
   async replaceBarberDayAvailabilities(input) {
@@ -1064,30 +1031,28 @@ export const prismaRepository: BookingRepository = {
   },
 
   async listGalleryImages() {
-    return readWithFallback(async () => {
-      const hasTable = await ensureGalleryTableExists();
-      if (!hasTable) {
-        return [];
-      }
+    const hasTable = await ensureGalleryTableExists();
+    if (!hasTable) {
+      throw new Error("Galeria indisponível. Execute as migrations do banco.");
+    }
 
-      const gallery = getGalleryDelegate();
-      if (!gallery) {
-        return [];
-      }
+    const gallery = getGalleryDelegate();
+    if (!gallery) {
+      throw new Error("Galeria indisponível. Atualize o Prisma Client.");
+    }
 
-      try {
-        const rows = await gallery.findMany({
-          orderBy: { createdAt: "desc" },
-        });
-        return rows.map(toGalleryImage);
-      } catch (error) {
-        if (isGalleryTableMissing(error)) {
-          galleryTableExists = false;
-          return [];
-        }
-        throw error;
+    try {
+      const rows = await gallery.findMany({
+        orderBy: { createdAt: "desc" },
+      });
+      return rows.map(toGalleryImage);
+    } catch (error) {
+      if (isGalleryTableMissing(error)) {
+        galleryTableExists = false;
+        throw new Error("Galeria indisponível. Execute as migrations do banco.");
       }
-    }, () => []);
+      throw error;
+    }
   },
 
   async createGalleryImage(input: CreateGalleryImageInput) {

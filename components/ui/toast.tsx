@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 type Toast = {
   id: string;
@@ -16,13 +16,21 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const timersRef = useRef(new Set<number>());
+
+  useEffect(() => () => {
+    for (const timer of timersRef.current) window.clearTimeout(timer);
+    timersRef.current.clear();
+  }, []);
 
   const pushToast = useCallback((message: string, tone: "success" | "error" = "success") => {
     const id = crypto.randomUUID();
     setToasts((prev) => [...prev, { id, message, tone }]);
-    window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setToasts((prev) => prev.filter((item) => item.id !== id));
+      timersRef.current.delete(timer);
     }, 3500);
+    timersRef.current.add(timer);
   }, []);
 
   const value = useMemo(() => ({ pushToast }), [pushToast]);
@@ -30,14 +38,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed right-4 bottom-20 z-50 flex w-[min(92vw,340px)] flex-col gap-2 sm:bottom-6">
+      <div aria-live="polite" aria-atomic="false" className="fixed right-4 bottom-20 z-50 flex w-[min(92vw,340px)] flex-col gap-2 sm:bottom-6">
         {toasts.map((toast) => (
           <div
             key={toast.id}
             className={`rounded-xl border px-4 py-3 text-sm backdrop-blur ${
               toast.tone === "error"
                 ? "border-red-500/60 bg-red-500/15 text-red-100"
-                : "border-cyan-400/60 bg-cyan-400/15 text-cyan-50"
+                : "border-amber-200/40 bg-amber-200/10 text-amber-50"
             }`}
           >
             {toast.message}

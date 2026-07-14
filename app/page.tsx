@@ -4,9 +4,9 @@ import { SiteHeader } from "@/components/ui/site-header";
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen overflow-x-clip">
       <SiteHeader />
-      <main>
+      <main id="conteudo">
         <HeroSection />
         <HomeSections />
       </main>

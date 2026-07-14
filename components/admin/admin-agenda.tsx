@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/toast";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import {
   formatBRLFromCents,
-  formatDateInput,
+  getTodayInTimeZone,
   formatPhone,
   getLocalDateInput,
   getTimeLabelInTimeZone,
@@ -219,6 +219,7 @@ function getDefaultDraft(barbers: Barber[], services: Service[], selectedDate: s
 }
 
 export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
+  const [businessToday] = useState(() => getTodayInTimeZone(BUSINESS_CONFIG.timezone));
   const [isPendingStatus, startStatusTransition] = useTransition();
   const [isPendingCreate, startCreateTransition] = useTransition();
   const { pushToast } = useToast();
@@ -228,13 +229,13 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   const [editingBooking, setEditingBooking] = useState<EditBookingDraft | null>(null);
   const [openActionsBookingId, setOpenActionsBookingId] = useState<string | null>(null);
   const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(false);
-  const [dateFilter, setDateFilter] = useState(() => formatDateInput(new Date()));
+  const [dateFilter, setDateFilter] = useState(() => businessToday);
   const [barberFilter, setBarberFilter] = useState("TODOS");
   const [statusFilter, setStatusFilter] = useState("TODOS");
   const [actionsMenuPlacement, setActionsMenuPlacement] = useState<"down" | "up">("down");
   const [actionsMenuPosition, setActionsMenuPosition] = useState<ActionsMenuPosition | null>(null);
   const [createDraft, setCreateDraft] = useState<CreateBookingDraft>(() =>
-    getDefaultDraft(barbers, services, formatDateInput(new Date()), "TODOS"),
+    getDefaultDraft(barbers, services, businessToday, "TODOS"),
   );
   const knownBookingIdsRef = useRef(new Set(bookings.map((booking) => booking.id)));
   const hasLoadedPollRef = useRef(false);
@@ -243,10 +244,10 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
 
   const minCalendarDate = useMemo(() => {
     if (allBookings.length === 0) {
-      return formatDateInput(new Date());
+      return businessToday;
     }
 
-    let minDate = allBookings[0] ? getBookingDateKey(allBookings[0].dateTimeStart) : formatDateInput(new Date());
+    let minDate = allBookings[0] ? getBookingDateKey(allBookings[0].dateTimeStart) : businessToday;
     for (const booking of allBookings) {
       const day = getBookingDateKey(booking.dateTimeStart);
       if (day < minDate) {
@@ -254,7 +255,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       }
     }
     return minDate;
-  }, [allBookings]);
+  }, [allBookings, businessToday]);
 
   const filtered = useMemo(() => {
     return allBookings.filter((booking) => {
@@ -536,7 +537,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
     setOpenActionsBookingId(bookingId);
   }
 
-  function changeStatus(bookingId: string, status: "PENDENTE" | "CONFIRMADO" | "CANCELADO") {
+  function changeStatus(bookingId: string, status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "CONCLUIDO" | "AUSENTE") {
     startStatusTransition(async () => {
       try {
         await updateBookingStatusAction({ bookingId, status });
@@ -801,7 +802,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               </label>
               <button
                 type="button"
-                onClick={() => setDateFilter(formatDateInput(new Date()))}
+                onClick={() => setDateFilter(businessToday)}
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60"
               >
                 Ir para hoje
@@ -914,6 +915,20 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             actionsMenuPlacement === "up" ? "origin-bottom-right" : "origin-top-right"
           }`}
         >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={isBusy || openActionsBooking.status === "CONCLUIDO"}
+            onClick={() => changeStatus(openActionsBooking.id, "CONCLUIDO")}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-cyan-100 transition hover:bg-cyan-500/10 disabled:opacity-40"
+          ><span className="w-6 text-xs font-semibold">FIM</span><span>Marcar como concluido</span></button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={isBusy || openActionsBooking.status === "AUSENTE"}
+            onClick={() => changeStatus(openActionsBooking.id, "AUSENTE")}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-amber-100 transition hover:bg-amber-500/10 disabled:opacity-40"
+          ><span className="w-6 text-xs font-semibold">NA</span><span>Registrar ausencia</span></button>
           <button
             type="button"
             role="menuitem"
@@ -1060,7 +1075,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                 <input
                   type="date"
                   value={createDraft.date}
-                  min={formatDateInput(new Date())}
+                  min={businessToday}
                   onChange={(event) =>
                     setCreateDraft((prev) => ({
                       ...prev,

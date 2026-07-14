@@ -1,18 +1,17 @@
+import { AuthShell } from "@/components/auth/auth-shell";
 import { PasswordResetRequestForm } from "@/components/client/password-reset-request-form";
-import { ToastProvider } from "@/components/ui/toast";
 
-export const metadata = {
-  title: "Recuperar Senha | ALFA Barber",
-};
+export const metadata = { title: "Recuperar senha" };
 
 export default function ForgotPasswordPage() {
   return (
-    <div className="min-h-screen pb-12">
-      <ToastProvider>
-        <main className="mx-auto max-w-6xl px-4 sm:px-6">
-          <PasswordResetRequestForm />
-        </main>
-      </ToastProvider>
-    </div>
+    <AuthShell
+      context="Recuperação de acesso"
+      title="Recupere sua senha"
+      description="Informe seu telefone cadastrado para receber instruções seguras de recuperação."
+      highlights={["Link temporário e protegido", "Instruções enviadas por WhatsApp", "Sua privacidade preservada"]}
+    >
+      <PasswordResetRequestForm />
+    </AuthShell>
   );
 }

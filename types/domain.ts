@@ -1,4 +1,5 @@
-export type BookingStatus = "PENDENTE" | "CONFIRMADO" | "CANCELADO";
+export type BookingStatus = "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "CONCLUIDO" | "AUSENTE";
+export type AccessRole = "ADMIN" | "BARBER";
 export type BookingPaymentStatus = "PENDENTE" | "CONFIRMADO";
 export type ClientStatus = "PENDING" | "ACTIVE";
 export type ClientCreatedBy = "BARBER" | "CLIENT";
@@ -73,6 +74,8 @@ export type AdminAccessUser = {
   id: string;
   email: string;
   isActive: boolean;
+  role: AccessRole;
+  barberId?: string;
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string;
@@ -100,5 +103,6 @@ export type DailyOperatingConfig = {
 export type BookingFilters = {
   date?: string;
   barberId?: string;
+  clientId?: string;
   status?: BookingStatus | "TODOS";
 };

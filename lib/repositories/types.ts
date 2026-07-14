@@ -65,7 +65,7 @@ export type UpsertBarberAvailabilityInput = {
 export interface BookingRepository {
   getServices(): Promise<Service[]>;
   createService(data: { name: string; priceCents: number; durationMinutes: number }): Promise<Service>;
-  updateService(serviceId: string, data: { name: string; priceCents: number }): Promise<Service | undefined>;
+  updateService(serviceId: string, data: { name: string; priceCents: number; durationMinutes: number }): Promise<Service | undefined>;
   deleteService(serviceId: string): Promise<boolean>;
   getBarbers(): Promise<Barber[]>;
   getServiceById(id: string): Promise<Service | undefined>;

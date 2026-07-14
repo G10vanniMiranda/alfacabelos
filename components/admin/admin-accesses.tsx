@@ -7,12 +7,13 @@ import {
   updateAdminAccessAction,
 } from "@/lib/actions/admin-access-actions";
 import { useToast } from "@/components/ui/toast";
-import { AdminAccessUser } from "@/types/domain";
+import { AdminAccessUser, Barber } from "@/types/domain";
 
 const initialState = { success: false, message: "" };
 
 type AdminAccessesProps = {
   accesses: AdminAccessUser[];
+  barbers: Barber[];
   loadError?: string;
 };
 
@@ -21,6 +22,8 @@ type EditDraft = {
   email: string;
   password: string;
   confirmPassword: string;
+  role: "ADMIN" | "BARBER";
+  barberId: string;
 };
 
 function formatDateTime(iso?: string) {
@@ -34,7 +37,7 @@ function formatDateTime(iso?: string) {
   }).format(new Date(iso));
 }
 
-export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
+export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesProps) {
   const { pushToast } = useToast();
   const [state, formAction, isPendingCreate] = useActionState(createAdminAccessAction, initialState);
   const [isPendingDelete, startDeleteTransition] = useTransition();
@@ -68,6 +71,8 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
       email: access.email,
       password: "",
       confirmPassword: "",
+      role: access.role,
+      barberId: access.barberId ?? "",
     });
   }
 
@@ -105,13 +110,15 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
         <h3 className="text-lg font-semibold text-zinc-100">Criar novo acesso</h3>
-        <form action={formAction} className="mt-4 grid gap-2 md:grid-cols-[1fr_220px_220px_auto]">
+        <form action={formAction} className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-6">
           <input
             type="email"
             name="email"
             placeholder="novo-admin@alfa.com"
             className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
           />
+          <select name="role" className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"><option value="ADMIN">Administrador</option><option value="BARBER">Barbeiro</option></select>
+          <select name="barberId" className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"><option value="">Sem vinculo</option>{barbers.map((barber) => <option key={barber.id} value={barber.id}>{barber.name}</option>)}</select>
           <input
             type="password"
             name="password"
@@ -141,6 +148,7 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
             <thead className="text-zinc-400">
               <tr>
                 <th className="px-2 py-2">Email</th>
+                <th className="px-2 py-2">Perfil</th>
                 <th className="px-2 py-2">Criado em</th>
                 <th className="px-2 py-2">Ultimo login</th>
                 <th className="px-2 py-2">Acoes</th>
@@ -189,6 +197,7 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
                         access.email
                       )}
                     </td>
+                    <td className="px-2 py-2 text-zinc-300">{currentEdit ? <div className="space-y-2"><select value={currentEdit.role} onChange={(event) => setEditDraft((prev) => prev ? { ...prev, role: event.target.value as "ADMIN" | "BARBER" } : prev)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2"><option value="ADMIN">Administrador</option><option value="BARBER">Barbeiro</option></select>{currentEdit.role === "BARBER" ? <select value={currentEdit.barberId} onChange={(event) => setEditDraft((prev) => prev ? { ...prev, barberId: event.target.value } : prev)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2"><option value="">Selecione</option>{barbers.map((barber) => <option key={barber.id} value={barber.id}>{barber.name}</option>)}</select> : null}</div> : access.role === "ADMIN" ? "Administrador" : barbers.find((barber) => barber.id === access.barberId)?.name ?? "Barbeiro"}</td>
                     <td className="px-2 py-2 text-zinc-400">{formatDateTime(access.createdAt)}</td>
                     <td className="px-2 py-2 text-zinc-400">{formatDateTime(access.lastLoginAt)}</td>
                     <td className="px-2 py-2">
@@ -247,7 +256,7 @@ export function AdminAccesses({ accesses, loadError }: AdminAccessesProps) {
               })}
               {accesses.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-2 py-4 text-center text-zinc-500">
+                  <td colSpan={5} className="px-2 py-4 text-center text-zinc-500">
                     Nenhum acesso admin cadastrado.
                   </td>
                 </tr>

@@ -1,7 +1,10 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { isDatabaseUnavailableError } from "@/lib/errors";
+import type { AccessRole } from "@/types/domain";
 
 const ADMIN_SESSION_TTL_SECONDS = 60 * 60 * 8;
+const ADMIN_SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const ADMIN_SESSION_TABLE_ERROR = "Sessão admin indisponível. Execute as migrations do banco.";
 
 let adminSessionTableChecked = false;
@@ -43,7 +46,8 @@ async function ensureAdminSessionTableExists(): Promise<boolean> {
       ) AS "exists"
     `;
     adminSessionTableExists = result[0]?.exists === true;
-  } catch {
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) throw error;
     adminSessionTableExists = false;
   } finally {
     adminSessionTableChecked = true;
@@ -65,6 +69,7 @@ export async function createAdminSession(input: { email: string; adminAccessId?:
   const sessionId = randomUUID();
 
   try {
+    await prisma.$executeRaw`DELETE FROM "AdminSession" WHERE "expiresAt" <= ${now}`;
     await prisma.$executeRaw`
       INSERT INTO "AdminSession" ("id", "tokenHash", "adminAccessId", "email", "expiresAt", "createdAt", "lastSeenAt")
       VALUES (${sessionId}, ${tokenHash}, ${input.adminAccessId ?? null}, ${input.email}, ${expiresAt}, ${now}, ${now})
@@ -84,13 +89,24 @@ export async function createAdminSession(input: { email: string; adminAccessId?:
 }
 
 export async function isAdminSessionTokenValid(token: string): Promise<boolean> {
+  return Boolean(await getAdminSessionPrincipal(token));
+}
+
+export type StaffPrincipal = {
+  accessId: string;
+  email: string;
+  role: AccessRole;
+  barberId?: string;
+};
+
+export async function getAdminSessionPrincipal(token: string): Promise<StaffPrincipal | null> {
   if (!token) {
-    return false;
+    return null;
   }
 
   const hasTable = await ensureAdminSessionTableExists();
   if (!hasTable) {
-    return false;
+    return null;
   }
 
   const tokenHash = hashToken(token);
@@ -98,23 +114,37 @@ export async function isAdminSessionTokenValid(token: string): Promise<boolean> 
   const nextExpiresAt = new Date(now.getTime() + ADMIN_SESSION_TTL_SECONDS * 1000);
 
   try {
-    await prisma.$executeRaw`
-      DELETE FROM "AdminSession"
-      WHERE "expiresAt" <= ${now}
+    const rows = await prisma.$queryRaw<Array<{
+      sessionId: string;
+      accessId: string;
+      email: string;
+      role: AccessRole;
+      barberId: string | null;
+      lastSeenAt: Date;
+    }>>`
+      SELECT s."id" AS "sessionId", a."id" AS "accessId", a."email",
+             a."role"::text AS "role", a."barberId", s."lastSeenAt"
+      FROM "AdminSession" s
+      INNER JOIN "AdminAccess" a ON a."id" = s."adminAccessId"
+      WHERE s."tokenHash" = ${tokenHash}
+        AND s."expiresAt" > ${now}
+        AND a."isActive" = true
+      LIMIT 1
     `;
-
-    const updated = await prisma.$executeRaw`
-      UPDATE "AdminSession"
-      SET "lastSeenAt" = ${now}, "expiresAt" = ${nextExpiresAt}
-      WHERE "tokenHash" = ${tokenHash}
-        AND "expiresAt" > ${now}
-    `;
-
-    return updated > 0;
+    const principal = rows[0];
+    if (principal && now.getTime() - principal.lastSeenAt.getTime() >= ADMIN_SESSION_REFRESH_INTERVAL_MS) {
+      await prisma.$executeRaw`
+        UPDATE "AdminSession" SET "lastSeenAt" = ${now}, "expiresAt" = ${nextExpiresAt}
+        WHERE "id" = ${principal.sessionId} AND "expiresAt" > ${now}
+      `;
+    }
+    return principal
+      ? { accessId: principal.accessId, email: principal.email, role: principal.role, barberId: principal.barberId ?? undefined }
+      : null;
   } catch (error) {
     if (isTableMissingError(error)) {
       adminSessionTableExists = false;
-      return false;
+      return null;
     }
     throw error;
   }

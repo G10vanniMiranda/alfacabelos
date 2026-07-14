@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
@@ -12,6 +12,30 @@ enum BookingStatus {
   PENDENTE
   CONFIRMADO
   CANCELADO
+  CONCLUIDO
+  AUSENTE
+}
+
+enum AccessRole {
+  ADMIN
+  BARBER
+}
+
+enum NotificationStatus {
+  NOT_CONFIGURED
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+enum NotificationEvent {
+  BOOKING_CREATED_BY_CLIENT
+  BOOKING_CREATED_BY_STAFF
+  BOOKING_RESCHEDULED
+  BOOKING_CANCELLED
+  BOOKING_REMINDER
+  PASSWORD_RESET
 }
 
 enum BookingPaymentStatus {
@@ -35,13 +59,14 @@ enum BookingCreatedBy {
 }
 
 model Barber {
-  id         String       @id @default(cuid())
-  name       String
-  avatarUrl  String?
-  isActive   Boolean      @default(true)
-  bookings   Booking[]
-  blocked    BlockedSlot[]
+  id           String               @id @default(cuid())
+  name         String
+  avatarUrl    String?
+  isActive     Boolean              @default(true)
+  bookings     Booking[]
+  blocked      BlockedSlot[]
   availability BarberAvailability[]
+  access       AdminAccess?
 }
 
 model Service {
@@ -54,28 +79,29 @@ model Service {
 }
 
 model Booking {
-  id             String        @id @default(cuid())
-  barberId       String
-  serviceId      String
-  clientId       String?
-  customerName   String
-  customerPhone  String
-  observations   String?
-  dateTimeStart  DateTime
-  dateTimeEnd    DateTime
-  status         BookingStatus @default(PENDENTE)
-  paymentStatus  BookingPaymentStatus @default(PENDENTE)
-  paymentConfirmedAt DateTime?
-  confirmationToken String? @unique
-  confirmationTokenHash String? @unique
+  id                         String               @id @default(cuid())
+  barberId                   String
+  serviceId                  String
+  clientId                   String?
+  customerName               String
+  customerPhone              String
+  observations               String?
+  dateTimeStart              DateTime
+  dateTimeEnd                DateTime
+  status                     BookingStatus        @default(PENDENTE)
+  paymentStatus              BookingPaymentStatus @default(PENDENTE)
+  paymentConfirmedAt         DateTime?
+  confirmationToken          String?              @unique
+  confirmationTokenHash      String?              @unique
   confirmationTokenExpiresAt DateTime?
-  confirmationTokenUsedAt DateTime?
-  createdBy      BookingCreatedBy @default(CLIENT)
-  createdAt      DateTime      @default(now())
+  confirmationTokenUsedAt    DateTime?
+  createdBy                  BookingCreatedBy     @default(CLIENT)
+  createdAt                  DateTime             @default(now())
 
-  barber Barber @relation(fields: [barberId], references: [id])
-  service Service @relation(fields: [serviceId], references: [id])
-  client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  barber        Barber                 @relation(fields: [barberId], references: [id])
+  service       Service                @relation(fields: [serviceId], references: [id])
+  client        Client?                @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  notifications NotificationDelivery[]
 
   @@index([barberId, dateTimeStart])
   @@index([clientId])
@@ -83,6 +109,30 @@ model Booking {
   @@index([paymentStatus])
   @@index([confirmationToken])
   @@index([confirmationTokenHash])
+}
+
+model NotificationDelivery {
+  id              String             @id @default(cuid())
+  event           NotificationEvent
+  channel         String             @default("WHATSAPP")
+  recipient       String
+  recipientMasked String
+  message         String
+  context         String
+  idempotencyKey  String             @unique
+  status          NotificationStatus @default(PENDING)
+  attempts        Int                @default(0)
+  lastError       String?
+  nextRetryAt     DateTime?
+  sentAt          DateTime?
+  bookingId       String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextRetryAt])
+  @@index([bookingId, event])
 }
 
 model BlockedSlot {
@@ -99,19 +149,19 @@ model BlockedSlot {
 }
 
 model Client {
-  id              String   @id @default(cuid())
-  name            String
-  phone           String
-  phoneNormalized String   @unique
-  passwordHash    String?
-  hasPassword     Boolean  @default(true)
-  status          ClientStatus @default(ACTIVE)
-  createdBy       ClientCreatedBy @default(CLIENT)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  bookings        Booking[]
+  id                  String               @id @default(cuid())
+  name                String
+  phone               String
+  phoneNormalized     String               @unique
+  passwordHash        String?
+  hasPassword         Boolean              @default(true)
+  status              ClientStatus         @default(ACTIVE)
+  createdBy           ClientCreatedBy      @default(CLIENT)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  bookings            Booking[]
   passwordResetTokens PasswordResetToken[]
-  sessions        ClientSession[]
+  sessions            ClientSession[]
 }
 
 model PasswordResetToken {
@@ -129,11 +179,11 @@ model PasswordResetToken {
 }
 
 model ClientSession {
-  id        String   @id @default(cuid())
-  tokenHash String   @unique
-  clientId  String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  clientId   String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
   lastSeenAt DateTime @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -149,27 +199,33 @@ model SecurityRateLimitEvent {
   createdAt      DateTime @default(now())
 
   @@index([scope, identifierHash, createdAt])
+  @@index([createdAt])
 }
 
 model AdminAccess {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String         @id @default(cuid())
+  email        String         @unique
   passwordHash String
-  isActive     Boolean  @default(true)
+  isActive     Boolean        @default(true)
+  role         AccessRole     @default(ADMIN)
+  barberId     String?        @unique
   lastLoginAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   sessions     AdminSession[]
+  barber       Barber?        @relation(fields: [barberId], references: [id], onDelete: SetNull)
+
+  @@index([role, isActive])
 }
 
 model AdminSession {
-  id            String      @id @default(cuid())
-  tokenHash     String      @unique
+  id            String   @id @default(cuid())
+  tokenHash     String   @unique
   adminAccessId String?
   email         String
   expiresAt     DateTime
-  createdAt     DateTime    @default(now())
-  lastSeenAt    DateTime    @default(now())
+  createdAt     DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
 
   adminAccess AdminAccess? @relation(fields: [adminAccessId], references: [id], onDelete: SetNull)
 

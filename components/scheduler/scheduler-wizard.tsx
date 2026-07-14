@@ -4,16 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { useRouter } from "next/navigation";
 import { createClientBookingsAction } from "@/lib/actions/booking-actions";
 import { BUSINESS_CONFIG } from "@/lib/config";
-import { DEFAULT_BARBER_ID, DEFAULT_BARBER_NAME } from "@/lib/constants/barber";
 import {
   formatBRLFromCents,
-  formatDateInput,
   formatPhone,
   getLocalDateInput,
   getTimeLabelInTimeZone,
+  getTodayInTimeZone,
   zonedDateTimeToUtcIso,
 } from "@/lib/utils";
-import { Service } from "@/types/domain";
+import { Barber, Service } from "@/types/domain";
 import { AvailableSlot, SchedulerDraft } from "@/types/scheduler";
 import { useToast } from "@/components/ui/toast";
 import { AvailableSlots } from "./available-slots";
@@ -49,9 +48,9 @@ function formatBookingTime(iso?: string): string {
   return getTimeLabelInTimeZone(iso, BUSINESS_CONFIG.timezone);
 }
 
-async function fetchAvailableSlots(date: string, serviceId: string, signal?: AbortSignal) {
+async function fetchAvailableSlots(date: string, serviceId: string, barberId: string, signal?: AbortSignal) {
   const response = await fetch(
-    `/api/available-slots?date=${date}&barberId=${DEFAULT_BARBER_ID}&serviceId=${serviceId}`,
+    `/api/available-slots?date=${date}&barberId=${barberId}&serviceId=${serviceId}`,
     {
       cache: "no-store",
       signal,
@@ -175,21 +174,25 @@ function buildOccurrenceStarts(draft: RecurrenceDraft) {
 
 export function SchedulerWizard({
   services,
+  barbers,
+  initialSelection,
   initialCustomer,
 }: {
   services: Service[];
+  barbers: Barber[];
+  initialSelection?: { serviceId?: string; barberId?: string; rescheduleBookingId?: string };
   initialCustomer?: { name: string; phone: string };
 }) {
   const router = useRouter();
   const { pushToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [step, setStep] = useState(1);
-  const [draft, setDraft] = useState<SchedulerDraft>({ barberId: DEFAULT_BARBER_ID });
+  const [draft, setDraft] = useState<SchedulerDraft>({ ...initialSelection });
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const slotsRequestRef = useRef<AbortController | null>(null);
 
-  const minDate = useMemo(() => formatDateInput(new Date()), []);
+  const minDate = useMemo(() => getTodayInTimeZone(BUSINESS_CONFIG.timezone), []);
   const occurrenceStarts = useMemo(() => buildOccurrenceStarts(draft), [draft]);
   const occurrencePreview = useMemo(() => {
     return occurrenceStarts.slice(0, 3).map((start) => ({
@@ -203,36 +206,44 @@ export function SchedulerWizard({
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const fromStorage = JSON.parse(raw) as SchedulerDraft;
-      setDraft({
-        ...fromStorage,
-        barberId: DEFAULT_BARBER_ID,
-        recurrence: fromStorage.recurrence ?? "NONE",
-        repeatUntil: fromStorage.repeatUntil ?? fromStorage.date,
-        customerName: fromStorage.customerName || initialCustomer?.name,
-        customerPhone: fromStorage.customerPhone || initialCustomer?.phone,
-      });
-      return;
+      try {
+        const fromStorage = JSON.parse(raw) as SchedulerDraft;
+        const storedRecurrence = ["NONE", "DAILY", "WEEKLY", "MONTHLY"].includes(fromStorage.recurrence ?? "")
+          ? fromStorage.recurrence
+          : "NONE";
+        setDraft({
+          ...fromStorage,
+          serviceId: initialSelection?.serviceId ?? (services.some((service) => service.id === fromStorage.serviceId) ? fromStorage.serviceId : undefined),
+          barberId: initialSelection?.barberId ?? (barbers.some((barber) => barber.id === fromStorage.barberId) ? fromStorage.barberId : undefined),
+          recurrence: storedRecurrence,
+          repeatUntil: fromStorage.repeatUntil ?? fromStorage.date,
+          customerName: fromStorage.customerName || initialCustomer?.name,
+          customerPhone: fromStorage.customerPhone || initialCustomer?.phone,
+        });
+        return;
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+      }
     }
 
     setDraft((prev) => ({
       ...prev,
-      barberId: DEFAULT_BARBER_ID,
+      ...initialSelection,
       recurrence: "NONE",
       customerName: initialCustomer?.name,
       customerPhone: initialCustomer?.phone,
     }));
-  }, [initialCustomer?.name, initialCustomer?.phone]);
+  }, [barbers, services, initialCustomer?.name, initialCustomer?.phone, initialSelection]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
   }, [draft]);
 
   useEffect(() => {
-    if (step === 2 && draft.serviceId && !draft.date) {
+    if (step === 3 && draft.serviceId && draft.barberId && !draft.date) {
       setDraft((prev) => ({ ...prev, date: minDate, repeatUntil: minDate }));
     }
-  }, [draft.date, draft.serviceId, minDate, step]);
+  }, [draft.barberId, draft.date, draft.serviceId, minDate, step]);
 
   const loadSlots = useCallback(
     async (date: string, serviceId?: string) => {
@@ -248,7 +259,11 @@ export function SchedulerWizard({
       setSlotsLoading(true);
 
       try {
-        const data = await fetchAvailableSlots(date, serviceId, controller.signal);
+      if (!draft.barberId) {
+        setSlots([]);
+        return;
+      }
+      const data = await fetchAvailableSlots(date, serviceId, draft.barberId, controller.signal);
 
         setSlots(data);
         setDraft((prev) => {
@@ -272,14 +287,14 @@ export function SchedulerWizard({
         }
       }
     },
-    [pushToast],
+    [draft.barberId, pushToast],
   );
 
   useEffect(() => {
-    if (step === 2 && draft.date && draft.serviceId) {
+    if (step === 3 && draft.date && draft.serviceId && draft.barberId) {
       loadSlots(draft.date, draft.serviceId);
     }
-  }, [step, draft.date, draft.serviceId, loadSlots]);
+  }, [step, draft.date, draft.serviceId, draft.barberId, loadSlots]);
 
   useEffect(() => {
     return () => slotsRequestRef.current?.abort();
@@ -290,6 +305,9 @@ export function SchedulerWizard({
       return Boolean(draft.serviceId);
     }
     if (step === 2) {
+      return Boolean(draft.barberId);
+    }
+    if (step === 3) {
       return Boolean(
         draft.date &&
           draft.time &&
@@ -306,48 +324,51 @@ export function SchedulerWizard({
       return;
     }
 
-    if (!draft.serviceId || !draft.time || !draft.customerName || !draft.customerPhone) {
+    if (!draft.serviceId || !draft.barberId || !draft.time || !draft.customerName || !draft.customerPhone) {
       pushToast("Preencha todos os campos para confirmar", "error");
       return;
     }
 
     const serviceId = draft.serviceId;
+    const barberId = draft.barberId;
     const starts = occurrenceStarts.length > 0 ? occurrenceStarts : [draft.time];
     const firstStart = starts[0] ?? draft.time;
     const payload = {
       serviceId,
+      barberId,
       start: firstStart,
       starts,
       recurrence,
       repeatUntil: recurrence === "NONE" ? undefined : draft.repeatUntil,
       customerName: draft.customerName,
       customerPhone: draft.customerPhone,
+      rescheduleBookingId: initialSelection?.rescheduleBookingId,
     };
 
     startTransition(async () => {
       if (!draft.date) {
         pushToast("Selecione uma data para confirmar", "error");
-        setStep(2);
+        setStep(3);
         return;
       }
 
       if (starts.length === 0 || recurrenceHasLimitError) {
         pushToast("Revise a frequencia do agendamento", "error");
-        setStep(2);
+        setStep(3);
         return;
       }
 
       try {
         for (const start of starts) {
           const date = getLocalDateInput(start, BUSINESS_CONFIG.timezone);
-          const freshSlots = await fetchAvailableSlots(date, serviceId);
+          const freshSlots = await fetchAvailableSlots(date, serviceId, barberId);
           const stillAvailable = freshSlots.some((slot) => slot.start === start);
           if (!stillAvailable) {
             if (date === draft.date) {
               setSlots(freshSlots);
             }
             setDraft((prev) => ({ ...prev, time: date === draft.date ? undefined : prev.time }));
-            setStep(2);
+            setStep(3);
             pushToast("Uma das repeticoes ja esta ocupada. Ajuste a frequencia ou escolha outro horario.", "error");
             return;
           }
@@ -371,12 +392,18 @@ export function SchedulerWizard({
   }
 
   const selectedService = services.find((item) => item.id === draft.serviceId);
+  const selectedBarber = barbers.find((item) => item.id === draft.barberId);
   const selectedDateLabel = formatFullDate(draft.date);
   const selectedTimeLabel = formatBookingTime(draft.time);
   const selectedServicePrice = selectedService ? formatBRLFromCents(selectedService.priceCents) : "-";
 
   return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 shadow-2xl shadow-black/20 sm:p-6">
+    <section className="premium-card rounded-3xl p-4 sm:p-6">
+      {initialSelection?.rescheduleBookingId ? (
+        <div role="status" className="mb-5 rounded-2xl border border-amber-200/30 bg-amber-200/10 p-4 text-sm text-amber-100">
+          Você está reagendando um horário existente. O horário antigo só será liberado depois da confirmação do novo.
+        </div>
+      ) : null}
       <Stepper currentStep={step} />
 
       {step === 1 && (
@@ -393,8 +420,8 @@ export function SchedulerWizard({
               onClick={() => setDraft((prev) => ({ ...prev, serviceId: service.id, time: undefined }))}
               className={`rounded-xl border p-4 text-left transition ${
                 draft.serviceId === service.id
-                  ? "border-cyan-300 bg-cyan-500/10 shadow-lg shadow-cyan-950/20"
-                  : "border-zinc-800 bg-zinc-950/50 hover:border-cyan-500 hover:bg-zinc-950"
+                  ? "border-amber-200/70 bg-amber-200/10 shadow-lg shadow-black/20"
+                  : "border-zinc-800 bg-zinc-950/50 hover:border-amber-200/40 hover:bg-zinc-950"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -402,7 +429,7 @@ export function SchedulerWizard({
                   <p className="font-semibold text-zinc-50">{service.name}</p>
                   <p className="mt-1 text-xs text-zinc-500">{service.durationMinutes} minutos</p>
                 </div>
-                <p className="rounded-full border border-zinc-700 px-3 py-1 text-xs font-semibold text-cyan-100">
+                <p className="rounded-full border border-zinc-700 px-3 py-1 text-xs font-semibold text-amber-100">
                   {formatBRLFromCents(service.priceCents)}
                 </p>
               </div>
@@ -413,6 +440,32 @@ export function SchedulerWizard({
       )}
 
       {step === 2 && (
+        <div className="mt-6">
+          <p className="text-base font-semibold text-zinc-100">Com quem você quer agendar?</p>
+          <p className="mt-1 text-sm text-zinc-400">Escolha o profissional para consultar a agenda individual.</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {barbers.map((barber) => {
+              const selected = draft.barberId === barber.id;
+              return (
+                <button
+                  type="button"
+                  key={barber.id}
+                  aria-pressed={selected}
+                  onClick={() => setDraft((prev) => ({ ...prev, barberId: barber.id, date: undefined, time: undefined }))}
+                  className={`flex min-h-24 items-center gap-4 rounded-2xl border p-4 text-left transition ${selected ? "border-amber-200/70 bg-amber-200/10" : "border-zinc-800 bg-zinc-950/50 hover:border-amber-200/40"}`}
+                >
+                  <span className={`grid size-12 shrink-0 place-items-center rounded-full text-lg font-black ${selected ? "bg-amber-200 text-zinc-950" : "bg-zinc-800 text-zinc-300"}`}>
+                    {barber.name.charAt(0).toUpperCase()}
+                  </span>
+                  <span><span className="block font-semibold text-zinc-100">{barber.name}</span><span className="mt-1 block text-xs text-zinc-500">Ver agenda disponível</span></span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
         <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
           <div className="space-y-4">
             <div className="flex flex-col gap-1">
@@ -550,7 +603,7 @@ export function SchedulerWizard({
         </div>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4">
             <div>
@@ -591,7 +644,7 @@ export function SchedulerWizard({
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-zinc-500">Barbeiro</span>
-                <span className="font-semibold text-zinc-100">{DEFAULT_BARBER_NAME}</span>
+                <span className="font-semibold text-zinc-100">{selectedBarber?.name ?? "-"}</span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-zinc-500">Dia</span>
@@ -612,6 +665,9 @@ export function SchedulerWizard({
                 <span className="font-semibold text-zinc-100">{selectedServicePrice}</span>
               </div>
             </div>
+            <p className="mt-5 border-t border-zinc-800 pt-4 text-xs leading-5 text-zinc-500">
+              Ao confirmar, seu horário será reservado. Se precisar cancelar, avise a equipe com antecedência pela sua área.
+            </p>
           </aside>
         </div>
       )}
@@ -626,7 +682,7 @@ export function SchedulerWizard({
           Voltar
         </button>
 
-        {step < 3 ? (
+        {step < 4 ? (
           <button
             type="button"
             onClick={() => {
@@ -634,9 +690,9 @@ export function SchedulerWizard({
                 pushToast("Conclua o passo atual para avancar", "error");
                 return;
               }
-              setStep((prev) => Math.min(3, prev + 1));
+              setStep((prev) => Math.min(4, prev + 1));
             }}
-            className="w-full rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950 sm:w-auto"
+            className="button-primary w-full sm:w-auto"
           >
             Continuar
           </button>
@@ -645,9 +701,9 @@ export function SchedulerWizard({
             type="button"
             onClick={submitBooking}
             disabled={isPending}
-            className="w-full rounded-lg bg-cyan-400 px-5 py-2 text-sm font-bold text-zinc-950 disabled:opacity-70 sm:w-auto"
+            className="button-primary w-full disabled:opacity-70 sm:w-auto"
           >
-            {isPending ? "Confirmando..." : "Confirmar agendamento"}
+            {isPending ? "Confirmando..." : initialSelection?.rescheduleBookingId ? "Confirmar reagendamento" : "Confirmar agendamento"}
           </button>
         )}
       </div>

@@ -81,6 +81,10 @@ export function getLocalDateInput(iso: string, timeZone?: string): string {
   return formatDateInput(new Date(iso));
 }
 
+export function getTodayInTimeZone(timeZone: string): string {
+  return getLocalDateInput(new Date().toISOString(), timeZone);
+}
+
 export function getDayRangeIso(date: string, timeZone?: string): { start: string; end: string } {
   if (timeZone) {
     return {

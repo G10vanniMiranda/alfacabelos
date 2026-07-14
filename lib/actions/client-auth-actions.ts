@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import {
   clientLoginSchema,
@@ -12,6 +12,7 @@ import {
   authenticateClient,
   createClient,
   createClientSession,
+  findClientByPhone,
   findClientBySessionToken,
   normalizeClientPhone,
   revokeClientSession,
@@ -23,10 +24,12 @@ import {
   registerPasswordResetAttempt,
   resetClientPasswordWithToken,
 } from "@/lib/auth/client-password-reset-store";
-import { cancelClientBooking, confirmClientBooking } from "@/lib/booking-service";
+import { cancelClientBooking, confirmClientBooking, getBookingById } from "@/lib/booking-service";
+import { notifyOwnerAboutBookingEvent } from "@/lib/whatsapp";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
-import { registerRateLimitEvent } from "@/lib/security";
+import { clearRateLimitEvents, registerRateLimitEvent } from "@/lib/security";
 import { ActionState } from "@/types/scheduler";
+import { prisma } from "@/lib/prisma";
 
 const CLIENT_COOKIE = "barber_client";
 
@@ -76,13 +79,27 @@ export async function registerClientAction(
   }
 
   try {
+    const requestHeaders = await headers();
+    const clientIp = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim()
+      || requestHeaders.get("x-real-ip")
+      || "unknown";
+    const rateLimit = await registerRateLimitEvent({
+      scope: "client-register",
+      identifier: clientIp,
+      windowSeconds: 15 * 60,
+      maxAttempts: 5,
+    });
+    if (rateLimit.blocked) {
+      return { success: false, message: "Muitas tentativas de cadastro. Aguarde alguns minutos." };
+    }
+
     const client = await createClient(parsed.data);
     await setClientCookie(client.id);
     return { success: true, message: "Cadastro realizado com sucesso" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha no cadastro";
     if (message.includes("Can't reach database server")) {
-      return { success: false, message: "Banco indisponivel no momento. Tente novamente em instantes." };
+      return { success: false, message: "Não foi possível acessar sua conta agora. Tente novamente em alguns instantes." };
     }
     return { success: false, message };
   }
@@ -118,15 +135,24 @@ export async function loginClientAction(_prev: ActionState, formData: FormData):
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("Can't reach database server")) {
-      return { success: false, message: "Banco indisponivel no momento. Tente novamente em instantes." };
+      return { success: false, message: "Não foi possível acessar sua conta agora. Tente novamente em alguns instantes." };
     }
-    return { success: false, message: "Falha ao realizar login" };
+    return { success: false, message: "Não foi possível acessar sua conta agora. Tente novamente em alguns instantes." };
   }
 
   if (!client) {
-    return { success: false, message: "Telefone ou senha incorretos" };
+    const existing = await findClientByPhone(parsed.data.phone).catch(() => undefined);
+    if (existing && !existing.hasPassword) {
+      return {
+        success: false,
+        code: "PASSWORD_SETUP_REQUIRED",
+        message: "Seu cadastro já existe, mas você ainda precisa criar uma senha para acessar.",
+      };
+    }
+    return { success: false, message: "Telefone ou senha incorretos." };
   }
 
+  await clearRateLimitEvents("client-login", normalizeClientPhone(parsed.data.phone));
   await setClientCookie(client.id);
   return { success: true, message: "Login realizado com sucesso" };
 }
@@ -148,7 +174,7 @@ export async function requestClientPasswordResetAction(
     if (rateLimit.blocked) {
       return {
         success: true,
-        message: "Se os dados estiverem cadastrados, aguarde alguns minutos antes de solicitar novamente.",
+        message: PASSWORD_RESET_GENERIC_MESSAGE,
       };
     }
 
@@ -165,7 +191,7 @@ export async function requestClientPasswordResetAction(
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("Can't reach database server")) {
-      return { success: false, message: "Banco indisponivel no momento. Tente novamente em instantes." };
+      return { success: false, message: "Não foi possível acessar sua conta agora. Tente novamente em alguns instantes." };
     }
 
     console.error("[password-reset] falha ao processar solicitacao");
@@ -195,7 +221,7 @@ export async function resetClientPasswordAction(_prev: ActionState, formData: Fo
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("Can't reach database server")) {
-      return { success: false, message: "Banco indisponivel no momento. Tente novamente em instantes." };
+      return { success: false, message: "Não foi possível acessar sua conta agora. Tente novamente em alguns instantes." };
     }
     return { success: false, message: "Falha ao redefinir senha" };
   }
@@ -206,6 +232,20 @@ export async function logoutClientAction() {
   const token = cookieStore.get(CLIENT_COOKIE)?.value ?? "";
   await revokeClientSession(token);
   cookieStore.delete(CLIENT_COOKIE);
+}
+
+export async function updateMyProfileAction(formData: FormData) {
+  const client = await getCurrentClient();
+  if (!client) return;
+  const name = String(formData.get("name") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const phoneNormalized = normalizeClientPhone(phone);
+  if (name.length < 2 || phoneNormalized.length < 10 || phoneNormalized.length > 13) return;
+  await prisma.$transaction([
+    prisma.client.update({ where: { id: client.id }, data: { name, phone, phoneNormalized } }),
+    prisma.booking.updateMany({ where: { clientId: client.id }, data: { customerName: name, customerPhone: phone } }),
+  ]);
+  revalidatePath("/cliente");
 }
 
 export async function cancelMyBookingAction(formData: FormData) {
@@ -220,6 +260,8 @@ export async function cancelMyBookingAction(formData: FormData) {
   }
 
   await cancelClientBooking({ bookingId, customerPhone: client.phone });
+  const cancelled = await getBookingById(bookingId);
+  if (cancelled) await notifyOwnerAboutBookingEvent(cancelled, "BOOKING_CANCELLED").catch(() => undefined);
   revalidatePath("/cliente");
   revalidatePath("/admin/agenda");
 }

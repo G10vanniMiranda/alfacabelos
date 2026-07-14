@@ -14,7 +14,7 @@ Projeto completo de barbearia com Next.js (App Router), TypeScript e TailwindCSS
   - buffer entre atendimentos (10 min)
   - bloqueio de conflitos por barbeiro/horario
 - Pagina `/confirmacao` com resumo e status do agendamento.
-- `/admin` com login por email + senha em variaveis de ambiente, filtros e acoes de confirmar/cancelar e bloqueios.
+- `/admin` com login persistido no banco, RBAC `ADMIN`/`BARBER`, filtros e acoes de confirmar/cancelar e bloqueios.
 - `/admin/acessos` para gerenciar contas de acesso ao painel (email + senha com hash).
 - `/admin/ganhos` para acompanhar faturamento por periodo (confirmados, previsao pendente, ticket medio e detalhamento).
 - Validacao com Zod e Server Actions para operacoes criticas.
@@ -49,7 +49,6 @@ app/
   page.tsx
 components/
   admin/
-    admin-dashboard.tsx
     admin-login.tsx
   home/
     hero-section.tsx
@@ -59,7 +58,6 @@ components/
     scheduler-wizard.tsx
     stepper.tsx
   ui/
-    mobile-cta.tsx
     site-header.tsx
     status-badge.tsx
     toast.tsx
@@ -69,7 +67,6 @@ lib/
   data/
     seed.ts
   repositories/
-    in-memory.ts
     index.ts
     types.ts
   validators/
@@ -104,6 +101,8 @@ WHATSAPP_OWNER_PHONE=
 WHATSAPP_INSTANCE_ID=
 BARBERSHOP_ADDRESS=
 ```
+
+Use [`.env.example`](.env.example) como checklist. Em produção, `APP_URL` deve conter o domínio HTTPS público; o sistema não gera links de confirmação apontando para `localhost` quando essa variável está ausente.
 
 Observacao:
 - `DATABASE_URL` e obrigatoria no ambiente.
@@ -157,6 +156,9 @@ npm run prisma:seed
 
 1. Configure no projeto da Vercel:
    - `DATABASE_URL`
+   - `DIRECT_URL`
+   - `APP_URL` e/ou `NEXT_PUBLIC_APP_URL`
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e `SUPABASE_STORAGE_BUCKET`
 2. Aplique migrations no banco:
 
 ```bash
@@ -176,7 +178,7 @@ npm run prisma:seed
 - `GET /api/services` -> lista servicos ativos
 - `GET /api/barbers` -> lista barbeiros ativos
 - `GET /api/available-slots?date=YYYY-MM-DD&barberId=...&serviceId=...` -> horarios disponiveis
-- `POST /api/booking` -> cria agendamento
+- `POST /api/booking` -> cria agendamento para cliente autenticado
 - `GET /api/admin/bookings` -> lista agendamentos (filtros opcionais)
 - `PATCH /api/admin/bookings` -> atualiza status
 - `GET /api/admin/blocked-slots` -> lista bloqueios
@@ -185,7 +187,7 @@ npm run prisma:seed
 
 ### Server Actions
 
-- `createBookingAction`
+- `createClientBookingsAction` / `createAdminBookingsAction`
 - `updateBookingStatusAction`
 - `createBlockedSlotAction`
 - `deleteBlockedSlotAction`

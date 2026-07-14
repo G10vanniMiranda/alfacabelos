@@ -7,6 +7,14 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "tsx --test tests/*.test.ts",
+    "validate:production": "tsx scripts/validate-production.ts",
+    "test:integration": "tsx scripts/validate-production.ts --write-tests",
+    "test:api": "tsx scripts/test-api-concurrency.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:report": "playwright show-report",
+    "screenshots:auth": "tsx scripts/capture-auth-screenshots.ts",
+    "notifications:retry": "tsx scripts/retry-notifications.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
@@ -21,6 +29,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.3.0",
     "@types/node": "^20.19.41",
     "@types/react": "^19.2.14",

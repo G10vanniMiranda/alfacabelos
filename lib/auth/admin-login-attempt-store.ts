@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { isDatabaseUnavailableError } from "@/lib/errors";
 import { randomUUID } from "node:crypto";
 
 const WINDOW_MINUTES = 15;
@@ -38,7 +39,8 @@ async function ensureTableExists(): Promise<boolean> {
       ) AS "exists"
     `;
     tableExists = result[0]?.exists === true;
-  } catch {
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) throw error;
     tableExists = false;
   } finally {
     tableChecked = true;

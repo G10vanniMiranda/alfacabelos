@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAvailableSlots } from "@/lib/booking-service";
 import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
+import { isDatabaseUnavailableError } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,6 +24,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("GET /api/available-slots failed", error);
-    return NextResponse.json({ message: "Erro ao gerar horarios" }, { status: 400 });
+    if (isDatabaseUnavailableError(error)) {
+      return NextResponse.json({ message: "Agenda temporariamente indisponível." }, { status: 503 });
+    }
+    return NextResponse.json({ message: "Não foi possível consultar os horários." }, { status: 400 });
   }
 }

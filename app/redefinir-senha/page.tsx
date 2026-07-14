@@ -1,27 +1,22 @@
+import { AuthShell } from "@/components/auth/auth-shell";
 import { InvalidPasswordResetToken, PasswordResetForm } from "@/components/client/password-reset-form";
-import { ToastProvider } from "@/components/ui/toast";
 import { validatePasswordResetToken } from "@/lib/auth/client-password-reset-store";
 
-export const metadata = {
-  title: "Redefinir Senha | ALFA Barber",
-};
+export const metadata = { title: "Redefinir senha" };
 
-export default async function ResetPasswordPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ token?: string }>;
-}) {
-  const params = await searchParams;
-  const token = params.token ?? "";
+export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
+  const { token = "" } = await searchParams;
   const validation = await validatePasswordResetToken(token);
+  const valid = validation.valid;
 
   return (
-    <div className="min-h-screen pb-12">
-      <ToastProvider>
-        <main className="mx-auto max-w-6xl px-4 sm:px-6">
-          {validation.valid ? <PasswordResetForm token={token} /> : <InvalidPasswordResetToken status={validation.status} />}
-        </main>
-      </ToastProvider>
-    </div>
+    <AuthShell
+      context={valid ? "Segurança da conta" : "Link indisponível"}
+      title={valid ? "Crie uma nova senha" : "Não foi possível continuar"}
+      description={valid ? "Escolha uma senha segura e diferente das que você já utiliza." : "Confira o estado do link e solicite novas instruções, se necessário."}
+      highlights={["Sessões antigas serão encerradas", "Token de uso único", "Acesso protegido"]}
+    >
+      {valid ? <PasswordResetForm token={token} /> : <InvalidPasswordResetToken status={validation.status} />}
+    </AuthShell>
   );
 }

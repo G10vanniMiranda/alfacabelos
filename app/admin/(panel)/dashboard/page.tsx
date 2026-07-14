@@ -7,21 +7,17 @@ export const metadata = {
 };
 
 export default async function AdminDashboardPage() {
-  let bookings: BookingWithRelations[] = [];
-  let barbers: Barber[] = [];
-  let blockedSlots: BlockedSlot[] = [];
-  let services: Service[] = [];
-
-  try {
-    [bookings, barbers, blockedSlots, services] = await Promise.all([
-      listAdminBookings({}),
-      listBarbers(),
-      listBlockedSlots(),
-      listServices(),
-    ]);
-  } catch (error) {
-    console.error("Falha ao carregar dashboard admin", error);
-  }
+  const [bookings, barbers, blockedSlots, services]: [
+    BookingWithRelations[],
+    Barber[],
+    BlockedSlot[],
+    Service[],
+  ] = await Promise.all([
+    listAdminBookings({}),
+    listBarbers(),
+    listBlockedSlots(),
+    listServices(),
+  ]);
 
   return <AdminOverview bookings={bookings} barbers={barbers} blockedSlots={blockedSlots} services={services} />;
 }

@@ -26,40 +26,28 @@ export async function registerRateLimitEvent(input: {
       where: { createdAt: { lt: cleanupBefore } },
     });
 
-    const firstEvent = await prisma.securityRateLimitEvent.findFirst({
-      where: {
-        scope: input.scope,
-        identifierHash,
-        createdAt: { gte: windowStart },
-      },
-      orderBy: { createdAt: "asc" },
-      select: { createdAt: true },
+    return prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${input.scope}:${identifierHash}`}))`;
+      const [firstEvent, count] = await Promise.all([
+        tx.securityRateLimitEvent.findFirst({
+          where: { scope: input.scope, identifierHash, createdAt: { gte: windowStart } },
+          orderBy: { createdAt: "asc" }, select: { createdAt: true },
+        }),
+        tx.securityRateLimitEvent.count({
+          where: { scope: input.scope, identifierHash, createdAt: { gte: windowStart } },
+        }),
+      ]);
+      if (count >= input.maxAttempts) {
+        const retryAfterSeconds = firstEvent
+          ? Math.max(1, Math.ceil((firstEvent.createdAt.getTime() + input.windowSeconds * 1000 - now.getTime()) / 1000))
+          : input.windowSeconds;
+        return { blocked: true, retryAfterSeconds };
+      }
+      await tx.securityRateLimitEvent.create({
+        data: { id: randomUUID(), scope: input.scope, identifierHash },
+      });
+      return { blocked: false, retryAfterSeconds: 0 };
     });
-
-    const count = await prisma.securityRateLimitEvent.count({
-      where: {
-        scope: input.scope,
-        identifierHash,
-        createdAt: { gte: windowStart },
-      },
-    });
-
-    if (count >= input.maxAttempts) {
-      const retryAfterSeconds = firstEvent
-        ? Math.max(1, Math.ceil((firstEvent.createdAt.getTime() + input.windowSeconds * 1000 - now.getTime()) / 1000))
-        : input.windowSeconds;
-      return { blocked: true, retryAfterSeconds };
-    }
-
-    await prisma.securityRateLimitEvent.create({
-      data: {
-        id: randomUUID(),
-        scope: input.scope,
-        identifierHash,
-      },
-    });
-
-    return { blocked: false, retryAfterSeconds: 0 };
   } catch (error) {
     const maybe = error as { code?: string; message?: string };
     if (maybe?.code === "P2021" || maybe?.message?.includes("SecurityRateLimitEvent")) {
@@ -69,7 +57,18 @@ export async function registerRateLimitEvent(input: {
   }
 }
 
+export async function clearRateLimitEvents(scope: string, identifier: string): Promise<void> {
+  await prisma.securityRateLimitEvent.deleteMany({
+    where: { scope, identifierHash: hashRateLimitIdentifier(identifier) },
+  });
+}
+
 export function isSameOriginRequest(request: NextRequest): boolean {
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite === "cross-site") {
+    return false;
+  }
+
   const origin = request.headers.get("origin");
   if (!origin) {
     return true;

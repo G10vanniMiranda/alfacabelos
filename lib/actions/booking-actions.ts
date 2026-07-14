@@ -15,6 +15,7 @@ import {
   deleteService,
   deleteBlockedSlot,
   replaceBarberDayAvailability,
+  rescheduleClientBooking,
   getBookingById,
   confirmBookingByToken,
   updateAdminBooking,
@@ -25,15 +26,12 @@ import {
 import { adminLoginSchema, createAdminBookingSchema } from "@/lib/validators/schemas";
 import { ActionState } from "@/types/scheduler";
 import { authenticateAdminAccess, registerAdminLogin } from "@/lib/auth/admin-access-store";
-import { createAdminSession, isAdminSessionTokenValid, revokeAdminSession } from "@/lib/auth/admin-session-store";
-import {
-  clearAdminLoginAttempts,
-  getAdminLoginBlockStatus,
-  registerFailedAdminLogin,
-} from "@/lib/auth/admin-login-attempt-store";
-import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
-import { notifyClientAboutAdminBooking, notifyOwnerAboutClientBooking } from "@/lib/whatsapp";
+import { createAdminSession, revokeAdminSession } from "@/lib/auth/admin-session-store";
+import { assertBlockedSlotScope, assertBookingScope, getCurrentStaff, requireStaff, scopeBarber } from "@/lib/auth/staff-auth";
+import { notifyClientAboutAdminBooking, notifyOwnerAboutBookingEvent, notifyOwnerAboutClientBooking } from "@/lib/whatsapp";
 import { findClientBySessionToken } from "@/lib/auth/client-store";
+import { prisma } from "@/lib/prisma";
+import { clearRateLimitEvents, registerRateLimitEvent } from "@/lib/security";
 
 const ADMIN_COOKIE = "barber_admin";
 const CLIENT_COOKIE = "barber_client";
@@ -54,12 +52,7 @@ function logBookingDiagnostic(event: string, details: Record<string, string | nu
 }
 
 async function assertAdminSession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
-  const authorized = await isAdminSessionTokenValid(token);
-  if (!authorized) {
-    throw new Error("Não autorizado");
-  }
+  return requireStaff(["ADMIN"]);
 }
 
 async function getAuthenticatedClient() {
@@ -162,36 +155,15 @@ async function deleteFromSupabase(publicUrl: string) {
   }
 
   const endpoint = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${objectPath}`;
-  await fetch(endpoint, {
+  const response = await fetch(endpoint, {
     method: "DELETE",
     headers: {
       authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       apikey: SUPABASE_SERVICE_ROLE_KEY,
     },
   });
-}
-
-export async function createBookingAction(payload: {
-  serviceId: string;
-  start: string;
-  customerName: string;
-  customerPhone: string;
-  observations?: string;
-}): Promise<ActionState> {
-  try {
-    const booking = await createBooking(payload);
-    await notifyOwnerSafely(booking.id);
-
-    return {
-      success: true,
-      message: "Agendamento criado com sucesso.",
-      bookingId: booking.id,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : "Falha ao criar agendamento",
-    };
+  if (!response.ok && response.status !== 404) {
+    console.warn(`[storage] falha ao remover objeto (${response.status})`);
   }
 }
 
@@ -223,6 +195,7 @@ export async function confirmBookingByTokenFormAction(
 
 export async function createClientBookingsAction(payload: {
   serviceId: string;
+  barberId: string;
   customerName: string;
   customerPhone: string;
   observations?: string;
@@ -230,6 +203,7 @@ export async function createClientBookingsAction(payload: {
   starts?: string[];
   recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
   repeatUntil?: string;
+  rescheduleBookingId?: string;
 }): Promise<ActionState> {
   const client = await getAuthenticatedClient();
   if (!client) {
@@ -245,7 +219,7 @@ export async function createClientBookingsAction(payload: {
 
   const parsed = createAdminBookingSchema.safeParse({
     ...payload,
-    barberId: DEFAULT_BARBER_ID,
+    barberId: payload.barberId,
     customerName: client.name,
     customerPhone: client.phone,
   });
@@ -260,6 +234,7 @@ export async function createClientBookingsAction(payload: {
     };
   }
 
+  const createdBookingIds: string[] = [];
   try {
     const starts = parsed.data.starts?.length ? parsed.data.starts : [parsed.data.start];
     logBookingDiagnostic("client_booking_create_started", {
@@ -276,11 +251,31 @@ export async function createClientBookingsAction(payload: {
       };
     }
 
+    if (payload.rescheduleBookingId) {
+      if (parsed.data.recurrence !== "NONE" || starts.length !== 1) {
+        return { success: false, message: "Reagendamentos não podem criar uma série recorrente." };
+      }
+      const updated = await rescheduleClientBooking({
+        bookingId: payload.rescheduleBookingId,
+        clientId: client.id,
+        serviceId: parsed.data.serviceId,
+        barberId: parsed.data.barberId,
+        start: starts[0],
+      });
+      const updatedWithRelations = await getBookingById(updated.id);
+      if (updatedWithRelations) await notifyOwnerAboutBookingEvent(updatedWithRelations, "BOOKING_RESCHEDULED").catch(() => undefined);
+      revalidatePath("/cliente");
+      revalidatePath("/agendar");
+      revalidatePath("/admin/agenda");
+      revalidatePath("/admin/dashboard");
+      return { success: true, message: "Agendamento reagendado com sucesso.", bookingId: updated.id };
+    }
+
     let firstBookingId: string | undefined;
     for (const start of starts) {
       const booking = await createBooking({
         serviceId: parsed.data.serviceId,
-        barberId: DEFAULT_BARBER_ID,
+        barberId: parsed.data.barberId,
         start,
         customerName: client.name,
         customerPhone: client.phone,
@@ -290,6 +285,7 @@ export async function createClientBookingsAction(payload: {
       if (!firstBookingId) {
         firstBookingId = booking.id;
       }
+      createdBookingIds.push(booking.id);
 
       logBookingDiagnostic("client_booking_created", {
         bookingId: booking.id,
@@ -297,8 +293,9 @@ export async function createClientBookingsAction(payload: {
         serviceId: parsed.data.serviceId,
       });
 
-      await notifyOwnerSafely(booking.id);
     }
+
+    await Promise.all(createdBookingIds.map((bookingId) => notifyOwnerSafely(bookingId)));
 
     revalidatePath("/cliente");
     revalidatePath("/agendar");
@@ -314,6 +311,13 @@ export async function createClientBookingsAction(payload: {
       bookingId: firstBookingId,
     };
   } catch (error) {
+    if (createdBookingIds.length > 0) {
+      await prisma.booking.deleteMany({
+        where: { id: { in: createdBookingIds }, clientId: client.id },
+      }).catch((rollbackError) => {
+        console.error("[booking-flow] falha no rollback de serie do cliente", rollbackError);
+      });
+    }
     logBookingDiagnostic("client_booking_create_failed", {
       clientId: client.id,
       serviceId: parsed.data.serviceId,
@@ -355,7 +359,7 @@ export async function createAdminBookingsAction(payload: {
   recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
   repeatUntil?: string;
 }): Promise<ActionState> {
-  await assertAdminSession();
+  const principal = await requireStaff(["ADMIN", "BARBER"]);
 
   const parsed = createAdminBookingSchema.safeParse(payload);
   if (!parsed.success) {
@@ -365,6 +369,8 @@ export async function createAdminBookingsAction(payload: {
     };
   }
 
+  const createdBookingIds: string[] = [];
+  const confirmationTokens = new Map<string, string | undefined>();
   try {
     let starts = parsed.data.starts?.length ? parsed.data.starts : [];
 
@@ -403,7 +409,7 @@ export async function createAdminBookingsAction(payload: {
     for (const start of starts) {
       const booking = await createBarberBooking({
         serviceId: parsed.data.serviceId,
-        barberId: parsed.data.barberId,
+        barberId: scopeBarber(principal, parsed.data.barberId)!,
         start,
         customerName: parsed.data.customerName,
         customerPhone: parsed.data.customerPhone,
@@ -413,9 +419,14 @@ export async function createAdminBookingsAction(payload: {
       if (!firstBookingId) {
         firstBookingId = booking.id;
       }
+      createdBookingIds.push(booking.id);
+      confirmationTokens.set(booking.id, booking.confirmationToken);
 
-      await notifyClientSafely(booking.id, booking.confirmationToken);
     }
+
+    await Promise.all(createdBookingIds.map((bookingId) =>
+      notifyClientSafely(bookingId, confirmationTokens.get(bookingId)),
+    ));
 
     revalidatePath("/admin/agenda");
     revalidatePath("/admin/dashboard");
@@ -429,6 +440,13 @@ export async function createAdminBookingsAction(payload: {
       bookingId: firstBookingId,
     };
   } catch (error) {
+    if (createdBookingIds.length > 0) {
+      await prisma.booking.deleteMany({
+        where: { id: { in: createdBookingIds } },
+      }).catch((rollbackError) => {
+        console.error("[booking-flow] falha no rollback de serie administrativa", rollbackError);
+      });
+    }
     return {
       success: false,
       message: error instanceof Error ? error.message : "Falha ao criar agendamento",
@@ -449,7 +467,13 @@ export async function adminLoginAction(
     return { success: false, message: parsed.error.issues[0]?.message ?? "Credenciais inválidas" };
   }
 
-  const blockStatus = await getAdminLoginBlockStatus(parsed.data.email);
+  const normalizedEmail = parsed.data.email.trim().toLowerCase();
+  const blockStatus = await registerRateLimitEvent({
+    scope: "admin-login",
+    identifier: normalizedEmail,
+    windowSeconds: 15 * 60,
+    maxAttempts: 5,
+  });
   if (blockStatus.blocked) {
     const minutes = Math.ceil(blockStatus.retryAfterSeconds / 60);
     return {
@@ -458,30 +482,27 @@ export async function adminLoginAction(
     };
   }
 
-  const adminByDatabase = await authenticateAdminAccess(parsed.data.email, parsed.data.password);
-  if (!adminByDatabase) {
-    await registerFailedAdminLogin(parsed.data.email);
-    return { success: false, message: "Email ou senha incorretos" };
+  try {
+    const staff = await authenticateAdminAccess(parsed.data.email, parsed.data.password);
+    if (!staff) {
+      return { success: false, message: "E-mail ou senha incorretos." };
+    }
+
+    await clearRateLimitEvents("admin-login", normalizedEmail);
+    await registerAdminLogin(staff.id);
+    const session = await createAdminSession({ email: normalizedEmail, adminAccessId: staff.id });
+    const cookieStore = await cookies();
+    cookieStore.set(ADMIN_COOKIE, session.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: session.maxAgeSeconds,
+    });
+    return { success: true, message: "Acesso confirmado." };
+  } catch {
+    return { success: false, message: "Não foi possível acessar sua conta agora. Tente novamente em alguns instantes." };
   }
-
-  await clearAdminLoginAttempts(parsed.data.email);
-  await registerAdminLogin(adminByDatabase.id);
-
-  const session = await createAdminSession({
-    email: parsed.data.email.trim().toLowerCase(),
-    adminAccessId: adminByDatabase.id,
-  });
-
-  const cookieStore = await cookies();
-  cookieStore.set(ADMIN_COOKIE, session.token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: session.maxAgeSeconds,
-  });
-
-  return { success: true, message: "Login efetuado" };
 }
 
 export async function adminLogoutAction() {
@@ -491,8 +512,9 @@ export async function adminLogoutAction() {
   cookieStore.delete(ADMIN_COOKIE);
 }
 
-export async function updateBookingStatusAction(payload: { bookingId: string; status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" }) {
-  await assertAdminSession();
+export async function updateBookingStatusAction(payload: { bookingId: string; status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "CONCLUIDO" | "AUSENTE" }) {
+  const principal = await requireStaff(["ADMIN", "BARBER"]);
+  await assertBookingScope(principal, payload.bookingId);
   await updateBookingStatus(payload);
   revalidatePath("/admin/agenda");
   revalidatePath("/admin/dashboard");
@@ -519,10 +541,11 @@ export async function updateAdminBookingAction(payload: {
   observations?: string;
   start: string;
 }): Promise<ActionState> {
-  await assertAdminSession();
+  const principal = await requireStaff(["ADMIN", "BARBER"]);
+  await assertBookingScope(principal, payload.bookingId);
 
   try {
-    await updateAdminBooking(payload);
+    await updateAdminBooking({ ...payload, barberId: scopeBarber(principal, payload.barberId)! });
     revalidatePath("/admin/agenda");
     revalidatePath("/admin/dashboard");
     revalidatePath("/cliente");
@@ -541,14 +564,15 @@ export async function createBlockedSlotAction(payload: {
   dateTimeEnd: string;
   reason: string;
 }) {
-  await assertAdminSession();
-  await createBlockedSlot(payload);
+  const principal = await requireStaff(["ADMIN", "BARBER"]);
+  await createBlockedSlot({ ...payload, barberId: scopeBarber(principal, payload.barberId) });
   revalidatePath("/admin/bloqueios");
   revalidatePath("/admin/agenda");
 }
 
 export async function deleteBlockedSlotAction(payload: { blockedSlotId: string }) {
-  await assertAdminSession();
+  const principal = await requireStaff(["ADMIN", "BARBER"]);
+  await assertBlockedSlotScope(principal, payload.blockedSlotId);
   await deleteBlockedSlot(payload.blockedSlotId);
   revalidatePath("/admin/bloqueios");
   revalidatePath("/admin/agenda");
@@ -573,6 +597,7 @@ export async function updateServiceAction(payload: {
   serviceId: string;
   name: string;
   priceCents: number;
+  durationMinutes: number;
 }) {
   await assertAdminSession();
   await updateService(payload);
@@ -585,6 +610,7 @@ export async function updateServiceAction(payload: {
 export async function createServiceAction(payload: {
   name: string;
   priceCents: number;
+  durationMinutes: number;
 }) {
   await assertAdminSession();
   await createService(payload);
@@ -601,18 +627,6 @@ export async function deleteServiceAction(payload: { serviceId: string }) {
   revalidatePath("/");
   revalidatePath("/agendar");
   updateTag("services");
-}
-
-export async function createGalleryImageAction(payload: {
-  imageUrl: string;
-  altText?: string;
-  mediaType?: "IMAGE" | "VIDEO";
-}) {
-  await assertAdminSession();
-  await createGalleryImage(payload);
-  revalidatePath("/admin/galeria");
-  revalidatePath("/");
-  updateTag("gallery-images");
 }
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
@@ -710,11 +724,29 @@ export async function deleteGalleryImageAction(payload: { galleryImageId: string
 }
 
 export async function isAdminAuthenticated() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
-  try {
-    return await isAdminSessionTokenValid(token);
-  } catch {
-    return false;
-  }
+  return (await getCurrentStaff())?.role === "ADMIN";
+}
+
+export async function getStaffAuthentication() {
+  return getCurrentStaff();
+}
+
+export async function createBarberAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  await assertAdminSession();
+  const name = String(formData.get("name") ?? "").trim();
+  if (name.length < 2) return { success: false, message: "Informe o nome do barbeiro" };
+  await prisma.barber.create({ data: { name, isActive: true } });
+  revalidatePath("/admin/barbeiros");
+  updateTag("barbers");
+  return { success: true, message: "Barbeiro criado" };
+}
+
+export async function updateBarberAction(input: { barberId: string; name: string; isActive: boolean }): Promise<ActionState> {
+  await assertAdminSession();
+  const name = input.name.trim();
+  if (!input.barberId || name.length < 2) return { success: false, message: "Dados invalidos" };
+  await prisma.barber.update({ where: { id: input.barberId }, data: { name, isActive: input.isActive } });
+  revalidatePath("/admin/barbeiros");
+  updateTag("barbers");
+  return { success: true, message: "Barbeiro atualizado" };
 }

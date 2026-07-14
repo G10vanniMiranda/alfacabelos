@@ -1,21 +1,13 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createAdminAccessSchema, updateAdminAccessSchema } from "@/lib/validators/schemas";
-import { countAdminAccesses, createAdminAccess, deleteAdminAccess, updateAdminAccess } from "@/lib/auth/admin-access-store";
-import { isAdminSessionTokenValid } from "@/lib/auth/admin-session-store";
+import { createAdminAccess, deleteAdminAccess, updateAdminAccess } from "@/lib/auth/admin-access-store";
+import { requireStaff } from "@/lib/auth/staff-auth";
 import { ActionState } from "@/types/scheduler";
 
-const ADMIN_COOKIE = "barber_admin";
-
 async function assertAdminSession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
-  const authorized = await isAdminSessionTokenValid(token);
-  if (!authorized) {
-    throw new Error("Não autorizado");
-  }
+  await requireStaff(["ADMIN"]);
 }
 
 export async function createAdminAccessAction(
@@ -28,6 +20,8 @@ export async function createAdminAccessAction(
     email: String(formData.get("email") ?? ""),
     password: String(formData.get("password") ?? ""),
     confirmPassword: String(formData.get("confirmPassword") ?? ""),
+    role: String(formData.get("role") ?? "ADMIN"),
+    barberId: String(formData.get("barberId") ?? "") || undefined,
   });
 
   if (!parsed.success) {
@@ -38,6 +32,8 @@ export async function createAdminAccessAction(
     await createAdminAccess({
       email: parsed.data.email,
       password: parsed.data.password,
+      role: parsed.data.role,
+      barberId: parsed.data.barberId,
     });
     revalidatePath("/admin/acessos");
     return { success: true, message: "Acesso admin criado com sucesso" };
@@ -57,14 +53,6 @@ export async function deleteAdminAccessAction(accessId: string): Promise<ActionS
   }
 
   try {
-    const total = await countAdminAccesses();
-    if (total <= 1) {
-      return {
-        success: false,
-        message: "Mantenha pelo menos um acesso admin cadastrado",
-      };
-    }
-
     const deleted = await deleteAdminAccess(accessId);
     if (!deleted) {
       return { success: false, message: "Acesso nao encontrado" };
@@ -85,6 +73,8 @@ export async function updateAdminAccessAction(input: {
   email: string;
   password?: string;
   confirmPassword?: string;
+  role?: "ADMIN" | "BARBER";
+  barberId?: string;
 }): Promise<ActionState> {
   await assertAdminSession();
 
@@ -93,6 +83,8 @@ export async function updateAdminAccessAction(input: {
     email: input.email,
     password: input.password ?? "",
     confirmPassword: input.confirmPassword ?? "",
+    role: input.role ?? "ADMIN",
+    barberId: input.barberId,
   });
 
   if (!parsed.success) {
@@ -104,6 +96,8 @@ export async function updateAdminAccessAction(input: {
       accessId: parsed.data.accessId,
       email: parsed.data.email,
       password: parsed.data.password.trim() || undefined,
+      role: parsed.data.role,
+      barberId: parsed.data.barberId,
     });
 
     if (!updated) {

@@ -23,6 +23,10 @@ import { registerRateLimitEvent, sha256 } from "./security";
 
 const HOME_REVALIDATE_SECONDS = 60 * 15;
 
+export function isBookingConflictError(error: unknown): boolean {
+  return error instanceof Error && /reservado|conflito|ocupado|dispon[ií]vel/i.test(error.message);
+}
+
 const getCachedServices = unstable_cache(async () => repository.getServices(), ["services"], {
   revalidate: HOME_REVALIDATE_SECONDS,
   tags: ["services"],
@@ -55,7 +59,7 @@ export async function createService(input: unknown) {
   return repository.createService({
     name: parsed.data.name,
     priceCents: parsed.data.priceCents,
-    durationMinutes: 45,
+    durationMinutes: parsed.data.durationMinutes,
   });
 }
 
@@ -68,6 +72,7 @@ export async function updateService(input: unknown) {
   const updated = await repository.updateService(parsed.data.serviceId, {
     name: parsed.data.name,
     priceCents: parsed.data.priceCents,
+    durationMinutes: parsed.data.durationMinutes,
   });
 
   if (!updated) {
@@ -409,10 +414,82 @@ function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "");
 }
 
-export async function listClientBookings(customerPhone: string) {
-  const normalized = normalizePhone(customerPhone);
-  const bookings = await repository.listBookings({});
-  return bookings.filter((booking) => normalizePhone(booking.customerPhone) === normalized);
+export async function listClientBookings(clientId: string) {
+  return repository.listBookings({ clientId });
+}
+
+export async function rescheduleClientBooking(input: {
+  bookingId: string;
+  clientId: string;
+  serviceId: string;
+  barberId: string;
+  start: string;
+}) {
+  const parsed = createBookingSchema.safeParse({
+    serviceId: input.serviceId,
+    barberId: input.barberId,
+    start: input.start,
+    customerName: "Cliente autenticado",
+    customerPhone: "(69) 99999-9999",
+  });
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados do reagendamento inválidos");
+  }
+
+  const booking = await repository.getBookingById(input.bookingId);
+  if (!booking || booking.clientId !== input.clientId) {
+    throw new Error("Agendamento não encontrado ou sem permissão para reagendar");
+  }
+  if (booking.status === "CANCELADO") {
+    throw new Error("Não é possível reagendar um atendimento cancelado");
+  }
+  if (new Date(booking.dateTimeStart).getTime() <= Date.now()) {
+    throw new Error("Não é possível reagendar um atendimento que já aconteceu");
+  }
+
+  const service = await repository.getServiceById(input.serviceId);
+  if (!service) {
+    throw new Error("Serviço não encontrado");
+  }
+  const computedEnd = addMinutesToIso(
+    input.start,
+    service.durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes,
+  );
+  const requestedDate = getLocalDateInput(input.start, BUSINESS_CONFIG.timezone);
+  const { start: dayStart, end: dayEnd } = getDayRange(requestedDate);
+  const [dayBookings, blockedSlots, availabilities] = await Promise.all([
+    repository.listBookingsInRange(dayStart, dayEnd, input.barberId),
+    repository.listBlockedSlots(requestedDate),
+    repository.listBarberAvailabilities(input.barberId),
+  ]);
+  const availableSlots = generateAvailableSlots({
+    date: requestedDate,
+    barberId: input.barberId,
+    serviceDurationMinutes: service.durationMinutes,
+    barberBookings: dayBookings.filter((item) => item.id !== booking.id),
+    blockedSlots,
+    operatingHours: availabilities
+      .map((item) => ({ dayOfWeek: item.dayOfWeek, open: item.openTime, close: item.closeTime }))
+      .filter((item) => !isClosedOperatingWindow(item)),
+  });
+  if (!availableSlots.some((slot) => slot.start === input.start)) {
+    throw new Error("O novo horário não está mais disponível");
+  }
+
+  const updated = await repository.updateBooking({
+    bookingId: booking.id,
+    barberId: input.barberId,
+    serviceId: input.serviceId,
+    customerName: booking.customerName,
+    customerPhone: booking.customerPhone,
+    observations: booking.observations,
+    dateTimeStart: input.start,
+    dateTimeEnd: computedEnd,
+  });
+  if (!updated) {
+    throw new Error("Não foi possível concluir o reagendamento");
+  }
+  return updated;
 }
 
 export async function cancelClientBooking(input: { bookingId: string; customerPhone: string }) {
@@ -423,6 +500,10 @@ export async function cancelClientBooking(input: { bookingId: string; customerPh
 
   if (normalizePhone(booking.customerPhone) !== normalizePhone(input.customerPhone)) {
     throw new Error("Você não tem permissão para cancelar este agendamento");
+  }
+
+  if (new Date(booking.dateTimeStart).getTime() <= Date.now()) {
+    throw new Error("Não é possível cancelar um atendimento que já aconteceu");
   }
 
   if (booking.status === "CANCELADO") {
@@ -440,6 +521,10 @@ export async function confirmClientBooking(input: { bookingId: string; customerP
 
   if (normalizePhone(booking.customerPhone) !== normalizePhone(input.customerPhone)) {
     throw new Error("Voce nao tem permissao para confirmar este agendamento");
+  }
+
+  if (new Date(booking.dateTimeStart).getTime() <= Date.now()) {
+    throw new Error("Não é possível confirmar um atendimento que já aconteceu");
   }
 
   if (booking.status === "CANCELADO") {

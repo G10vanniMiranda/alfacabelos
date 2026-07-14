@@ -19,4 +19,5 @@ export type ActionState = {
   success: boolean;
   message: string;
   bookingId?: string;
+  code?: "PASSWORD_SETUP_REQUIRED";
 };

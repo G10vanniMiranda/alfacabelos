@@ -3,79 +3,54 @@
 import Link from "next/link";
 import { useActionState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AuthFeedback } from "@/components/auth/auth-shell";
+import { AuthSubmitButton, PasswordField, PhoneField } from "@/components/auth/auth-fields";
 import { loginClientAction } from "@/lib/actions/client-auth-actions";
-import { useToast } from "@/components/ui/toast";
+import { getSafeInternalPath } from "@/lib/safe-redirect";
+import type { ActionState } from "@/types/scheduler";
 
-const initialState = { success: false, message: "" };
+const initialState: ActionState = { success: false, message: "" };
 
 export function ClientLoginForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { pushToast } = useToast();
-  const next = searchParams.get("next") || "/cliente";
-  const passwordReset = searchParams.get("senha");
+  const next = getSafeInternalPath(searchParams.get("next"));
+  const passwordReset = searchParams.get("senha") === "redefinida";
+  const sessionExpired = searchParams.get("reason") === "session-expired";
   const [state, formAction, isPending] = useActionState(loginClientAction, initialState);
+  const hasError = Boolean(state.message && !state.success);
 
   useEffect(() => {
-    if (passwordReset === "redefinida") {
-      pushToast("Senha redefinida com sucesso. Faca login para continuar.", "success");
-    }
-  }, [passwordReset, pushToast]);
-
-  useEffect(() => {
-    if (!state.message) {
-      return;
-    }
-
-    pushToast(state.message, state.success ? "success" : "error");
-    if (state.success) {
-      router.push(next);
-    }
-  }, [state, next, router, pushToast]);
+    if (state.success) router.replace(next);
+  }, [state.success, next, router]);
 
   return (
-    <section className="mx-auto mt-12 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
-      <h1 className="text-3xl font-bold text-zinc-100">Login do cliente</h1>
-      <p className="mt-2 text-sm text-zinc-400">Entre para agendar seu horário.</p>
-
-      <form action={formAction} className="mt-5 space-y-4">
+    <>
+      <form action={formAction} className="auth-form" aria-busy={isPending}>
         <input type="hidden" name="next" value={next} />
-        <div>
-          <label className="text-sm text-zinc-300">Telefone</label>
-          <input
-            name="phone"
-            placeholder="(11) 99999-9999"
-            className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-          />
-        </div>
-        <div>
-          <div className="flex items-center justify-between gap-3">
-            <label className="text-sm text-zinc-300">Senha</label>
-            <Link href="/esqueci-minha-senha" className="text-xs font-medium text-cyan-300 hover:text-cyan-200">
-              Esqueci minha senha
-            </Link>
+        {passwordReset && !state.message ? <AuthFeedback message="Senha redefinida com sucesso. Entre para continuar." success /> : null}
+        {sessionExpired && !state.message && !passwordReset ? <AuthFeedback message="Sua sessão expirou. Entre novamente para continuar." /> : null}
+        <AuthFeedback message={state.message} success={state.success} />
+
+        <PhoneField id="client-phone" disabled={isPending} error={hasError} />
+        <div className="auth-field">
+          <div className="auth-form-row">
+            <label htmlFor="client-password">Senha</label>
+            <Link href="/esqueci-minha-senha" className="auth-inline-link text-xs">Esqueci minha senha</Link>
           </div>
-          <input
-            type="password"
-            name="password"
-            className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-          />
+          <PasswordField id="client-password" label="" disabled={isPending} error={hasError} />
         </div>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="w-full rounded-lg bg-cyan-400 px-4 py-2 font-bold text-zinc-950"
-        >
-          {isPending ? "Entrando..." : "Entrar"}
-        </button>
+        <AuthSubmitButton pending={isPending} />
       </form>
 
-      <p className="mt-4 text-sm text-zinc-400">
-        Ainda não tem conta?{" "}
-        <Link href={`/cliente/cadastro?next=${encodeURIComponent(next)}`} className="text-cyan-300 hover:text-cyan-200">
-          Criar cadastro
-        </Link>
+      {state.code === "PASSWORD_SETUP_REQUIRED" ? (
+        <Link href="/esqueci-minha-senha" className="button-secondary mt-3 w-full">Criar minha primeira senha</Link>
+      ) : null}
+
+      <p className="auth-footer">
+        Ainda não tem uma conta?{" "}
+        <Link href={`/cliente/cadastro?next=${encodeURIComponent(next)}`}>Criar minha conta</Link>
       </p>
-    </section>
+    </>
   );
 }

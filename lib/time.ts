@@ -54,6 +54,7 @@ export function generateAvailableSlots(params: {
   for (const window of windows) {
     const startMinutes = toMinutes(window.open);
     const endMinutes = toMinutes(window.close);
+    const windowEnd = new Date(zonedDateTimeToUtcIso(date, `${window.close}:00`, BUSINESS_CONFIG.timezone));
 
     for (
       let currentMinutes = startMinutes;
@@ -68,6 +69,10 @@ export function generateAvailableSlots(params: {
 
       const end = new Date(start);
       end.setMinutes(end.getMinutes() + serviceDurationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes);
+
+      if (end > windowEnd) {
+        continue;
+      }
 
       if (start < now) {
         continue;

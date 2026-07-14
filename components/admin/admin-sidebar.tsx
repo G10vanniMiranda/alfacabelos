@@ -6,14 +6,15 @@ import { useState, useTransition } from "react";
 import { adminLogoutAction } from "@/lib/actions/booking-actions";
 
 const items = [
-  { href: "/admin/dashboard", label: "Dashboard" },
-  { href: "/admin/servicos", label: "Servicos" },
-  { href: "/admin/horarios", label: "Horarios" },
-  { href: "/admin/agenda", label: "Agenda" },
-  { href: "/admin/ganhos", label: "Ganhos" },
-  { href: "/admin/bloqueios", label: "Bloqueios" },
-  { href: "/admin/galeria", label: "Galeria" },
-  { href: "/admin/acessos", label: "Acessos" },
+  { href: "/admin/barbeiros", label: "Barbeiros", icon: "B" },
+  { href: "/admin/dashboard", label: "Visão geral", icon: "⌂" },
+  { href: "/admin/agenda", label: "Agenda", icon: "□" },
+  { href: "/admin/horarios", label: "Horários", icon: "◷" },
+  { href: "/admin/bloqueios", label: "Bloqueios", icon: "⊘" },
+  { href: "/admin/servicos", label: "Serviços", icon: "◇" },
+  { href: "/admin/ganhos", label: "Financeiro", icon: "$" },
+  { href: "/admin/galeria", label: "Galeria", icon: "▧" },
+  { href: "/admin/acessos", label: "Acessos", icon: "○" },
 ];
 
 export function AdminSidebar() {
@@ -30,10 +31,10 @@ export function AdminSidebar() {
 
   const nav = (
     <>
-      <div className="rounded-xl border border-zinc-700/80 bg-zinc-950/80 p-4">
-        <p className="text-xs uppercase tracking-[0.22em] text-cyan-300">ESPAÇO ALFA</p>
-        <h1 className="mt-2 text-xl font-semibold text-zinc-100">Painel Admin</h1>
-        <p className="mt-1 text-xs text-zinc-400">Gestão operacional</p>
+      <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-4">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-200">ESPAÇO ALFA</p>
+        <h1 className="mt-2 text-xl font-semibold text-zinc-100">Operação</h1>
+        <p className="mt-1 text-xs text-zinc-500">Gestão em tempo real</p>
       </div>
 
       <nav className="mt-4 space-y-2 text-sm">
@@ -44,13 +45,13 @@ export function AdminSidebar() {
               key={item.href}
               href={item.href}
               onClick={() => setIsMenuOpen(false)}
-              className={`block rounded-lg border px-3 py-2 transition ${
+              className={`flex min-h-11 items-center gap-3 rounded-xl border px-3 py-2 transition ${
                 active
-                  ? "border-cyan-400/70 bg-cyan-500/10 text-cyan-200"
-                  : "border-zinc-700 bg-zinc-950/70 text-zinc-200 hover:border-cyan-400/50 hover:text-cyan-200"
+                  ? "border-amber-200/40 bg-amber-200/10 text-amber-100"
+                  : "border-transparent text-zinc-300 hover:border-white/10 hover:bg-white/[0.04] hover:text-white"
               }`}
             >
-              {item.label}
+              <span aria-hidden="true" className="grid size-6 place-items-center text-zinc-500">{item.icon}</span>{item.label}
             </Link>
           );
         })}
@@ -60,7 +61,7 @@ export function AdminSidebar() {
         type="button"
         onClick={logout}
         disabled={isPending}
-        className="mt-4 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 disabled:opacity-60"
+        className="button-secondary mt-4 w-full disabled:opacity-60"
       >
         Sair
       </button>
@@ -69,17 +70,17 @@ export function AdminSidebar() {
 
   return (
     <>
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3 xl:hidden">
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-700/80 bg-zinc-950/80 p-3">
+      <div className="rounded-2xl border border-white/10 bg-zinc-900/80 p-2 xl:hidden">
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-zinc-950/80 p-3">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-cyan-300">ESPAÇO ALFA</p>
-            <p className="mt-1 text-sm font-semibold text-zinc-100">Painel Admin</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-amber-200">ESPAÇO ALFA</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-100">Painel de operação</p>
           </div>
           <button
             type="button"
             onClick={() => setIsMenuOpen(true)}
             aria-label="Abrir menu"
-            className="rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-zinc-100 transition hover:border-cyan-300"
+            className="grid size-11 place-items-center rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 transition hover:border-amber-200"
           >
             <span className="block h-0.5 w-5 bg-current" />
             <span className="mt-1.5 block h-0.5 w-5 bg-current" />
@@ -113,7 +114,7 @@ export function AdminSidebar() {
         </div>
       ) : null}
 
-      <aside className="hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4 xl:sticky xl:top-6 xl:block">
+      <aside className="premium-card hidden rounded-3xl p-4 xl:sticky xl:top-6 xl:block">
         {nav}
       </aside>
     </>

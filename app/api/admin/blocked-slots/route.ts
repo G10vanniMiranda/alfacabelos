@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createBlockedSlot, deleteBlockedSlot, listBlockedSlots } from "@/lib/booking-service";
-import { isAdminSessionTokenValid } from "@/lib/auth/admin-session-store";
+import { getAdminSessionPrincipal } from "@/lib/auth/admin-session-store";
+import { assertBlockedSlotScope, scopeBarber } from "@/lib/auth/staff-auth";
 import { isSameOriginRequest } from "@/lib/security";
 
-async function isAuthorized(request: NextRequest): Promise<boolean> {
+async function getPrincipal(request: NextRequest) {
   const token = request.cookies.get("barber_admin")?.value ?? "";
-  return isAdminSessionTokenValid(token);
+  return getAdminSessionPrincipal(token);
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await isAuthorized(request))) {
+  const principal = await getPrincipal(request);
+  if (!principal) {
     return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
   }
 
   const date = request.nextUrl.searchParams.get("date") ?? undefined;
-  const blocked = await listBlockedSlots(date);
+  const blocked = (await listBlockedSlots(date)).filter((slot) =>
+    principal.role === "ADMIN" || slot.barberId === principal.barberId,
+  );
   return NextResponse.json(blocked);
 }
 
@@ -23,13 +27,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Origem invalida" }, { status: 403 });
   }
 
-  if (!(await isAuthorized(request))) {
+  const principal = await getPrincipal(request);
+  if (!principal) {
     return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
   }
 
   try {
     const payload = await request.json();
-    const created = await createBlockedSlot(payload);
+    const created = await createBlockedSlot({ ...payload, barberId: scopeBarber(principal, payload.barberId) });
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error("POST /api/admin/blocked-slots failed", error);
@@ -42,7 +47,8 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: "Origem invalida" }, { status: 403 });
   }
 
-  if (!(await isAuthorized(request))) {
+  const principal = await getPrincipal(request);
+  if (!principal) {
     return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
   }
 
@@ -52,6 +58,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
+    await assertBlockedSlotScope(principal, blockedSlotId);
     await deleteBlockedSlot(blockedSlotId);
     return new NextResponse(null, { status: 204 });
   } catch (error) {

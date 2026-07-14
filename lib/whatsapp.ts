@@ -1,6 +1,8 @@
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { formatBRLFromCents } from "@/lib/utils";
 import { BookingWithRelations } from "@/types/domain";
+import { buildAppUrl } from "@/lib/app-url";
+import { dispatchWhatsAppNotification } from "@/lib/notifications/service";
 
 type SendWhatsAppMessageInput = {
   to: string;
@@ -15,6 +17,11 @@ const WHATSAPP_INSTANCE_ID = process.env.WHATSAPP_INSTANCE_ID;
 const WHATSAPP_ENABLED = process.env.WHATSAPP_ENABLED === "true";
 const BARBERSHOP_ADDRESS = process.env.BARBERSHOP_ADDRESS;
 const WHATSAPP_REQUEST_TIMEOUT_MS = 10_000;
+const WHATSAPP_MAX_ATTEMPTS = 3;
+
+export function isWhatsAppConfigured(): boolean {
+  return WHATSAPP_ENABLED && Boolean(resolveWhatsAppEndpoint()) && Boolean(WHATSAPP_API_TOKEN);
+}
 
 export function normalizeWhatsAppPhone(phone: string): string | null {
   let digits = phone.replace(/\D/g, "");
@@ -126,27 +133,39 @@ export async function sendWhatsAppMessage({ to, message, context = "whatsapp" }:
     return false;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), WHATSAPP_REQUEST_TIMEOUT_MS);
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${WHATSAPP_API_TOKEN}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(buildWhatsAppPayload(phone, message)),
-    signal: controller.signal,
-  }).finally(() => clearTimeout(timeout));
-
-  if (!response.ok) {
-    const details = await response.text().catch(() => "");
-    const suffix = details ? `: ${details.slice(0, 240)}` : "";
-    throw new Error(`Falha ao enviar WhatsApp (${response.status})${suffix}`);
+  for (let attempt = 1; attempt <= WHATSAPP_MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), WHATSAPP_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${WHATSAPP_API_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(buildWhatsAppPayload(phone, message)),
+        signal: controller.signal,
+      });
+      if (response.ok) {
+        console.info("[whatsapp]", JSON.stringify({ event: "sent", context, attempt }));
+        return true;
+      }
+      const retryable = response.status === 429 || response.status >= 500;
+      console.warn("[whatsapp]", JSON.stringify({ event: "provider_error", context, attempt, status: response.status, retryable }));
+      if (!retryable || attempt === WHATSAPP_MAX_ATTEMPTS) {
+        const providerError = new Error(`Falha ao enviar WhatsApp (${response.status})`) as Error & { retryable?: boolean };
+        providerError.retryable = retryable;
+        throw providerError;
+      }
+    } catch (error) {
+      if ((error as { retryable?: boolean })?.retryable === false || attempt === WHATSAPP_MAX_ATTEMPTS) throw error;
+      console.warn("[whatsapp]", JSON.stringify({ event: "network_retry", context, attempt }));
+    } finally {
+      clearTimeout(timeout);
+    }
+    await new Promise((resolve) => setTimeout(resolve, attempt * 500));
   }
-
-  console.info(`[whatsapp] notificacao enviada (${context})`);
-  return true;
+  return false;
 }
 
 export function buildOwnerBookingNotification(booking: BookingWithRelations, observations?: string): string {
@@ -159,6 +178,7 @@ export function buildOwnerBookingNotification(booking: BookingWithRelations, obs
     `Barbeiro: ${booking.barber?.name ?? "Não informado"}`,
     `Data: ${formatBookingDate(booking.dateTimeStart)}`,
     `Horário: ${formatBookingTimeOnly(booking.dateTimeStart)}`,
+    `Identificador: ${booking.id}`,
     "",
     `Observações: ${observations?.trim() || "Não informadas"}`,
   ].join("\n");
@@ -175,6 +195,7 @@ export function buildClientBookingConfirmation(booking: BookingWithRelations): s
     "Seu agendamento na Alfa Cabelos foi confirmado.",
     "",
     `Serviço: ${booking.service.name}`,
+    `Profissional: ${booking.barber.name}`,
     `Data: ${formatBookingDate(booking.dateTimeStart)}`,
     `Horário: ${formatBookingTimeOnly(booking.dateTimeStart)}`,
   ];
@@ -192,25 +213,12 @@ export function buildClientBookingConfirmation(booking: BookingWithRelations): s
   return lines.join("\n");
 }
 
-function getAppBaseUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
-  if (configured) {
-    return configured.replace(/\/$/, "");
-  }
-
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-
-  return "http://localhost:3000";
-}
-
 export function buildBookingConfirmationLink(booking: BookingWithRelations): string | null {
   if (!booking.confirmationToken) {
     return null;
   }
 
-  return `${getAppBaseUrl()}/confirmar-agendamento?token=${encodeURIComponent(booking.confirmationToken)}`;
+  return buildAppUrl(`/confirmar-agendamento?token=${encodeURIComponent(booking.confirmationToken)}`);
 }
 
 export function buildClientPreBookingConfirmation(booking: BookingWithRelations): string {
@@ -248,7 +256,10 @@ export async function notifyOwnerAboutClientBooking(booking: BookingWithRelation
     return;
   }
 
-  await sendWhatsAppMessage({
+  await dispatchWhatsAppNotification({
+    event: "BOOKING_CREATED_BY_CLIENT",
+    bookingId: booking.id,
+    idempotencyKey: `booking:${booking.id}:owner-created`,
     to: WHATSAPP_OWNER_PHONE,
     message: buildOwnerBookingNotification(booking, observations),
     context: `novo-agendamento:${booking.id}`,
@@ -256,10 +267,31 @@ export async function notifyOwnerAboutClientBooking(booking: BookingWithRelation
 }
 
 export async function notifyClientAboutAdminBooking(booking: BookingWithRelations) {
-  await sendWhatsAppMessage({
+  await dispatchWhatsAppNotification({
+    event: "BOOKING_CREATED_BY_STAFF",
+    bookingId: booking.id,
+    idempotencyKey: `booking:${booking.id}:client-created`,
     to: booking.customerPhone,
     message: buildClientBookingConfirmation(booking),
     context: `confirmacao-cliente:${booking.id}`,
+  });
+}
+
+export async function notifyOwnerAboutBookingEvent(
+  booking: BookingWithRelations,
+  event: "BOOKING_RESCHEDULED" | "BOOKING_CANCELLED",
+) {
+  if (!WHATSAPP_OWNER_PHONE) return { status: "not_configured" as const };
+  const label = event === "BOOKING_RESCHEDULED" ? "Agendamento reagendado" : "Agendamento cancelado";
+  return dispatchWhatsAppNotification({
+    event,
+    bookingId: booking.id,
+    idempotencyKey: event === "BOOKING_RESCHEDULED"
+      ? `booking:${booking.id}:rescheduled:${booking.dateTimeStart}`
+      : `booking:${booking.id}:cancelled`,
+    to: WHATSAPP_OWNER_PHONE,
+    message: `${label}\n\n${buildBookingWhatsAppMessage(booking)}`,
+    context: `${event.toLowerCase()}:${booking.id}`,
   });
 }
 

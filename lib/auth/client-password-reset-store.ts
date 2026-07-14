@@ -3,13 +3,14 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hashClientPassword, normalizeClientPhone } from "@/lib/auth/client-store";
 import { registerRateLimitEvent, sha256 } from "@/lib/security";
+import { buildAppUrl } from "@/lib/app-url";
 
 const RESET_TOKEN_TTL_MINUTES = 30;
 const RESET_RATE_LIMIT_WINDOW_MINUTES = 60;
 const RESET_RATE_LIMIT_MAX_ATTEMPTS = 5;
 
 export const PASSWORD_RESET_GENERIC_MESSAGE =
-  "Se existir uma conta com os dados informados, enviaremos as instrucoes de recuperacao.";
+  "Se existir uma conta vinculada aos dados informados, enviaremos as instruções de recuperação.";
 
 export type PasswordResetTokenStatus = "valid" | "invalid" | "expired" | "used";
 
@@ -43,21 +44,8 @@ function normalizeIdentifier(identifier: string): { type: "phone" | "invalid"; v
   return { type: "invalid", value: trimmed.toLowerCase().slice(0, 160) };
 }
 
-function getAppBaseUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
-  if (configured) {
-    return configured.replace(/\/$/, "");
-  }
-
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-
-  return "http://localhost:3000";
-}
-
 export function buildPasswordResetLink(rawToken: string): string {
-  return `${getAppBaseUrl()}/redefinir-senha?token=${encodeURIComponent(rawToken)}`;
+  return buildAppUrl(`/redefinir-senha?token=${encodeURIComponent(rawToken)}`) ?? `/redefinir-senha?token=${encodeURIComponent(rawToken)}`;
 }
 
 export function buildPasswordResetWhatsAppMessage(clientName: string, resetLink: string): string {
@@ -237,6 +225,10 @@ export async function resetClientPasswordWithToken(rawToken: string, password: s
           hasPassword: true,
           status: "ACTIVE",
         },
+      });
+
+      await tx.clientSession.deleteMany({
+        where: { clientId: token.clientId },
       });
 
       await tx.passwordResetToken.update({

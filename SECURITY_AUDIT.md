@@ -12,6 +12,7 @@ O projeto ja tinha boas bases: cookies `httpOnly`, sessoes admin armazenadas com
 | --- | --- | --- | --- | --- |
 | Alta | `Booking.confirmationToken`, `lib/booking-service.ts`, `lib/repositories/prisma.ts` | Token de confirmacao de agendamento era salvo em texto puro. | Vazamento de banco permitiria confirmar agendamentos pendentes com tokens validos. | Adicionado `confirmationTokenHash`; novos tokens sao enviados brutos apenas no WhatsApp e salvos como SHA-256. Links antigos continuam aceitos durante transicao. |
 | Alta | `components/actions` e `app/api/booking/route.ts` | Ausencia de rate limit no login cliente, recuperacao e confirmacao/agendamento publico. | Brute force, spam de WhatsApp e abuso de criacao/confirmacao. | Criado `SecurityRateLimitEvent` e helper central de rate limit para login cliente, recuperacao, confirmacao e criacao publica de agendamento. |
+| Critica | Supabase RLS | Dez politicas concediam `ALL` ao papel `public` com `USING (true)` e `WITH CHECK (true)`. | Leitura e mutacao anonima de clientes, sessoes, acessos administrativos e dados operacionais via PostgREST. | Todas as politicas publicas foram removidas, RLS foi habilitado nas 14 tabelas e privilegios de `anon`/`authenticated` foram revogados. |
 | Media | `app/api/admin/bookings/route.ts`, `app/api/admin/blocked-slots/route.ts` | Mutacoes admin em route handlers autenticados por cookie nao verificavam origem. | Reduzia defesa contra CSRF em chamadas JSON autenticadas. | Adicionada validacao de mesma origem para `PATCH`, `POST` e `DELETE` admin. |
 | Media | `next.config.ts` | Headers de seguranca estavam bons, mas incompletos. | Menor protecao contra downgrade HTTPS, plugins/objetos e XSS residual. | Adicionados HSTS, `object-src 'none'` e `upgrade-insecure-requests` em producao. |
 | Media | `package-lock.json` | `npm audit` apontou `postcss < 8.5.10` transitivo em `next`. | Vulnerabilidade moderada de XSS no stringify do PostCSS. | Adicionado `overrides.postcss` para `^8.5.10`; lockfile atualizado; auditoria passou com 0 vulnerabilidades. |
@@ -37,7 +38,7 @@ O projeto ja tinha boas bases: cookies `httpOnly`, sessoes admin armazenadas com
 - APIs e server actions:
   - Inputs continuam validados com Zod.
   - APIs admin mutaveis validam origem.
-  - API publica de agendamento tem rate limit por IP + telefone.
+  - API de agendamento exige sessao de cliente e tem rate limit por IP + identificador do cliente.
   - Mensagens sensiveis seguem genericas quando necessario.
 
 - Web:
@@ -78,10 +79,11 @@ O projeto ja tinha boas bases: cookies `httpOnly`, sessoes admin armazenadas com
 - [x] Rotas admin de painel exigem sessao.
 - [x] APIs admin exigem sessao.
 - [x] Mutacoes admin em APIs validam origem.
+- [x] RLS ativo nas 14 tabelas, sem politicas publicas permissivas.
 - [x] Dados sensiveis de admin e senhas nao sao enviados ao frontend.
 - [x] Headers de seguranca configurados.
 - [x] Auditoria de dependencias sem vulnerabilidades apos override.
-- [ ] Aplicar migration no banco do ambiente com `npm run prisma:migrate:deploy`.
+- [x] Aplicar migrations no banco do ambiente com `npm run prisma:migrate:deploy`.
 - [ ] Validar envio real de WhatsApp no ambiente configurado.
 - [ ] Revisar politicas RLS se o projeto passar a acessar Supabase diretamente pelo frontend.
 
@@ -113,6 +115,6 @@ O projeto ja tinha boas bases: cookies `httpOnly`, sessoes admin armazenadas com
 
 - Migrar tokens legados de confirmacao: manter `confirmationToken` apenas pelo periodo de expiracao maximo dos links antigos e depois remover a coluna em uma migration futura.
 - Criar testes automatizados de integracao para auth, tokens e IDOR.
-- Se usar Supabase diretamente no cliente no futuro, habilitar RLS por tabela antes de expor chaves anonimas.
+- Se o frontend passar a acessar Supabase diretamente no futuro, criar politicas RLS especificas por operacao sem reabrir acesso generico ao papel `public`.
 - Considerar um provedor de rate limit externo para producao serverless com alto trafego.
 - Avaliar Argon2id ou bcrypt com custo calibrado em uma janela futura; `scrypt` atual ja evita texto puro e e aceitavel.

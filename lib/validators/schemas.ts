@@ -3,9 +3,15 @@ import { z } from "zod";
 export const phoneSchema = z
   .string()
   .trim()
-  .min(10, "Telefone e obrigatorio")
-  .refine((value) => /^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(value), {
-    message: "Telefone invalido. Use formato (11) 99999-9999",
+  .min(1, "Telefone é obrigatório")
+  .refine((value) => {
+    const digits = value.replace(/\D/g, "");
+    const localDigits = digits.startsWith("55") && (digits.length === 12 || digits.length === 13)
+      ? digits.slice(2)
+      : digits;
+    return localDigits.length === 10 || localDigits.length === 11;
+  }, {
+    message: "Telefone inválido. Informe DDD e número",
   });
 
 const passwordSchema = z
@@ -81,6 +87,8 @@ export const createAdminAccessSchema = z
     email: z.string().trim().email("Email inválido"),
     password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
     confirmPassword: z.string().min(8, "Confirme a senha"),
+    role: z.enum(["ADMIN", "BARBER"]).default("ADMIN"),
+    barberId: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "As senhas não conferem",
@@ -89,7 +97,7 @@ export const createAdminAccessSchema = z
 
 export const updateBookingStatusSchema = z.object({
   bookingId: z.string().min(1),
-  status: z.enum(["PENDENTE", "CONFIRMADO", "CANCELADO"]),
+  status: z.enum(["PENDENTE", "CONFIRMADO", "CANCELADO", "CONCLUIDO", "AUSENTE"]),
 });
 
 export const updateBookingPaymentStatusSchema = z.object({
@@ -178,6 +186,8 @@ export const updateAdminAccessSchema = z
     email: z.string().trim().email("Email invalido"),
     password: z.string(),
     confirmPassword: z.string(),
+    role: z.enum(["ADMIN", "BARBER"]).default("ADMIN"),
+    barberId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     const password = data.password.trim();
@@ -257,12 +267,14 @@ export const replaceBarberDayAvailabilitySchema = z
 export const createServiceSchema = z.object({
   name: z.string().trim().min(2, "Nome do serviço é obrigatório"),
   priceCents: z.number().int().positive("Preço deve ser maior que zero"),
+  durationMinutes: z.number().int().min(15, "Duração mínima de 15 minutos").max(240, "Duração máxima de 240 minutos"),
 });
 
 export const updateServiceSchema = z.object({
   serviceId: z.string().min(1, "Serviço inválido"),
   name: z.string().trim().min(2, "Nome do serviço é obrigatório"),
   priceCents: z.number().int().positive("Preço deve ser maior que zero"),
+  durationMinutes: z.number().int().min(15, "Duração mínima de 15 minutos").max(240, "Duração máxima de 240 minutos"),
 });
 
 export const createGalleryImageSchema = z.object({

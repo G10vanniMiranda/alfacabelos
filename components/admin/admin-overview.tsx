@@ -74,7 +74,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
       tone: "text-emerald-200",
     },
     {
-      label: "Taxa de confirmacao",
+      label: "Taxa de confirmação",
       value: `${confirmationRate}%`,
       helper: "sobre os agendamentos do dia",
       tone: "text-cyan-100",
@@ -82,34 +82,34 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
     {
       label: "Bloqueios ativos",
       value: String(activeBlocked.length),
-      helper: `${services.length} servicos e ${barbers.length} barbeiro(s)`,
+      helper: `${services.length} serviços e ${barbers.length} profissional(is)`,
       tone: "text-amber-200",
     },
   ];
 
   return (
     <section className="min-w-0 space-y-6">
-      <header className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-6">
+      <header className="premium-card rounded-3xl p-5 sm:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">Visao geral</p>
-            <h2 className="mt-2 text-2xl font-bold text-zinc-100 sm:text-3xl">Dashboard operacional</h2>
+            <p className="eyebrow">Visão geral</p>
+            <h2 className="mt-3 text-3xl font-semibold text-zinc-100 sm:text-4xl">Como está o dia?</h2>
             <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Acompanhe o dia, confirme pendencias e entre rapido nas areas principais do painel.
+              Acompanhe atendimentos, pendências e o resultado da operação com dados reais.
             </p>
           </div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
-            <p className="text-xs text-zinc-500">Proximo atendimento</p>
+            <p className="text-xs text-zinc-500">Próximo atendimento</p>
             {nextBooking ? (
               <>
                 <p className="mt-1 text-sm font-semibold text-zinc-100">{nextBooking.customerName}</p>
                 <p className="text-xs text-cyan-100">
-                  {getTimeLabelInTimeZone(nextBooking.dateTimeStart, BUSINESS_CONFIG.timezone)} -{" "}
+                  {getTimeLabelInTimeZone(nextBooking.dateTimeStart, BUSINESS_CONFIG.timezone)} •{" "}
                   {nextBooking.service.name}
                 </p>
               </>
             ) : (
-              <p className="mt-1 text-sm font-semibold text-zinc-400">Sem proximos horarios</p>
+              <p className="mt-1 text-sm font-semibold text-zinc-400">Sem próximos horários</p>
             )}
           </div>
         </div>
@@ -117,7 +117,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
-          <article key={metric.label} className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+          <article key={metric.label} className="premium-card rounded-2xl p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{metric.label}</p>
             <p className={`mt-3 text-3xl font-black ${metric.tone}`}>{metric.value}</p>
             <p className="mt-1 text-sm text-zinc-400">{metric.helper}</p>
@@ -126,13 +126,13 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.45fr_0.9fr]">
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+        <section className="premium-card rounded-2xl p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-zinc-100">Proximos atendimentos</h3>
-              <p className="mt-1 text-sm text-zinc-500">Agenda ativa ordenada por horario.</p>
+              <h3 className="text-lg font-semibold text-zinc-100">Próximos atendimentos</h3>
+              <p className="mt-1 text-sm text-zinc-500">Agenda ativa ordenada por horário.</p>
             </div>
-            <Link href="/admin/agenda" className="text-sm font-semibold text-cyan-300 hover:text-cyan-200">
+            <Link href="/admin/agenda" className="text-sm font-semibold text-amber-200 hover:text-amber-100">
               Abrir agenda
             </Link>
           </div>
@@ -145,7 +145,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
               >
                 <div>
                   <p className="text-xs uppercase tracking-wide text-zinc-500">{formatDay(booking.dateTimeStart)}</p>
-                  <p className="mt-1 text-lg font-bold text-cyan-100">
+                  <p className="mt-1 text-lg font-bold text-amber-100">
                     {getTimeLabelInTimeZone(booking.dateTimeStart, BUSINESS_CONFIG.timezone)}
                   </p>
                 </div>
@@ -168,21 +168,21 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
         </section>
 
         <aside className="space-y-4">
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+          <section className="premium-card rounded-2xl p-5">
             <h3 className="text-lg font-semibold text-zinc-100">Atalhos</h3>
             <div className="mt-4 grid gap-2">
               {[
                 ["Agenda", "/admin/agenda"],
-                ["Horarios", "/admin/horarios"],
-                ["Servicos", "/admin/servicos"],
-                ["Ganhos", "/admin/ganhos"],
+                ["Horários", "/admin/horarios"],
+                ["Serviços", "/admin/servicos"],
+                ["Financeiro", "/admin/ganhos"],
                 ["Bloqueios", "/admin/bloqueios"],
                 ["Galeria", "/admin/galeria"],
               ].map(([label, href]) => (
                 <Link
                   key={href}
                   href={href}
-                  className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-200"
+                  className="flex min-h-11 items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-200 transition hover:border-amber-200/50 hover:text-amber-100"
                 >
                   <span>{label}</span>
                   <span className="text-zinc-500">{">"}</span>
@@ -191,16 +191,16 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
             </div>
           </section>
 
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <h3 className="text-lg font-semibold text-zinc-100">Saude do dia</h3>
+          <section className="premium-card rounded-2xl p-5">
+            <h3 className="text-lg font-semibold text-zinc-100">Saúde do dia</h3>
             <div className="mt-4 space-y-4">
               <div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-zinc-400">Confirmacao</span>
+                  <span className="text-zinc-400">Confirmação</span>
                   <span className="font-semibold text-zinc-100">{confirmationRate}%</span>
                 </div>
                 <div className="mt-2 h-2 rounded-full bg-zinc-800">
-                  <div className="h-2 rounded-full bg-cyan-400" style={{ width: `${confirmationRate}%` }} />
+                  <div className="h-2 rounded-full bg-amber-200" style={{ width: `${confirmationRate}%` }} />
                 </div>
               </div>
               <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -218,11 +218,11 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
         </aside>
       </div>
 
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+      <section className="premium-card rounded-2xl p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-zinc-100">Atividade recente</h3>
-            <p className="mt-1 text-sm text-zinc-500">Ultimos agendamentos criados no sistema.</p>
+            <p className="mt-1 text-sm text-zinc-500">Últimos agendamentos criados no sistema.</p>
           </div>
           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
             {bookings.length} registros

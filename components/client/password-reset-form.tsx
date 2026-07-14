@@ -3,86 +3,46 @@
 import Link from "next/link";
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { AuthFeedback } from "@/components/auth/auth-shell";
+import { AuthSubmitButton, PasswordField } from "@/components/auth/auth-fields";
 import { resetClientPasswordAction } from "@/lib/actions/client-auth-actions";
-import { useToast } from "@/components/ui/toast";
 
 const initialState = { success: false, message: "" };
 
 export function PasswordResetForm({ token }: { token: string }) {
   const router = useRouter();
-  const { pushToast } = useToast();
   const [state, formAction, isPending] = useActionState(resetClientPasswordAction, initialState);
+  const hasError = Boolean(state.message && !state.success);
 
   useEffect(() => {
-    if (!state.message) {
-      return;
-    }
-
-    pushToast(state.message, state.success ? "success" : "error");
-    if (state.success) {
-      router.push("/cliente/login?senha=redefinida");
-    }
-  }, [state, router, pushToast]);
+    if (!state.success) return;
+    const timer = window.setTimeout(() => router.replace("/cliente/login?senha=redefinida"), 650);
+    return () => window.clearTimeout(timer);
+  }, [state.success, router]);
 
   return (
-    <section className="mx-auto mt-12 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
-      <h1 className="text-3xl font-bold text-zinc-100">Criar nova senha</h1>
-      <p className="mt-2 text-sm text-zinc-400">Digite e confirme sua nova senha de acesso.</p>
-
-      <form action={formAction} className="mt-5 space-y-4">
-        <input type="hidden" name="token" value={token} />
-        <div>
-          <label className="text-sm text-zinc-300">Nova senha</label>
-          <input
-            type="password"
-            name="password"
-            autoComplete="new-password"
-            minLength={8}
-            required
-            className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-          />
-        </div>
-        <div>
-          <label className="text-sm text-zinc-300">Confirmar nova senha</label>
-          <input
-            type="password"
-            name="confirmPassword"
-            autoComplete="new-password"
-            minLength={8}
-            required
-            className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="w-full rounded-lg bg-cyan-400 px-4 py-2 font-bold text-zinc-950"
-        >
-          {isPending ? "Salvando..." : "Redefinir senha"}
-        </button>
-      </form>
-    </section>
+    <form action={formAction} className="auth-form" aria-busy={isPending}>
+      <input type="hidden" name="token" value={token} />
+      <AuthFeedback message={state.message} success={state.success} />
+      <PasswordField id="new-password" label="Nova senha" autoComplete="new-password" disabled={isPending} error={hasError} hint="Use pelo menos 8 caracteres." />
+      <PasswordField id="new-password-confirm" name="confirmPassword" label="Confirme a nova senha" autoComplete="new-password" disabled={isPending} error={hasError} />
+      <AuthSubmitButton pending={isPending} idleLabel="Redefinir senha" pendingLabel="Salvando..." />
+    </form>
   );
 }
 
 export function InvalidPasswordResetToken({ status = "invalid" }: { status?: "valid" | "invalid" | "expired" | "used" }) {
-  const message =
-    status === "expired"
-      ? "Este link expirou. Solicite uma nova recuperacao."
-      : status === "used"
-        ? "Este link ja foi utilizado. Solicite uma nova recuperacao se ainda precisar alterar a senha."
-        : "Este link de recuperacao e invalido.";
+  const message = status === "expired"
+    ? "Este link expirou. Solicite novas instruções de recuperação."
+    : status === "used"
+      ? "Este link já foi utilizado. Solicite outro caso ainda precise alterar sua senha."
+      : "Não foi possível validar este link de recuperação.";
 
   return (
-    <section className="mx-auto mt-12 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
-      <h1 className="text-3xl font-bold text-zinc-100">Link indisponivel</h1>
-      <p className="mt-2 text-sm text-zinc-400">{message}</p>
-      <Link
-        href="/esqueci-minha-senha"
-        className="mt-5 inline-flex w-full justify-center rounded-lg bg-cyan-400 px-4 py-2 font-bold text-zinc-950"
-      >
-        Solicitar novo link
-      </Link>
-    </section>
+    <>
+      <AuthFeedback message={message} />
+      <Link href="/esqueci-minha-senha" className="button-primary mt-5 w-full">Solicitar novo link</Link>
+      <p className="auth-footer"><Link href="/cliente/login">Voltar para entrar</Link></p>
+    </>
   );
 }

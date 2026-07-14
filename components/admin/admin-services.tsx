@@ -26,9 +26,9 @@ function parsePriceToCents(value: string): number {
 export function AdminServices({ services }: AdminServicesProps) {
   const [isPending, startTransition] = useTransition();
   const { pushToast } = useToast();
-  const [newService, setNewService] = useState({ name: "", price: "" });
+  const [newService, setNewService] = useState({ name: "", price: "", durationMinutes: "45" });
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", price: "" });
+  const [editForm, setEditForm] = useState({ name: "", price: "", durationMinutes: "45" });
 
   const editingService = useMemo(
     () => services.find((service) => service.id === editingServiceId),
@@ -48,18 +48,20 @@ export function AdminServices({ services }: AdminServicesProps) {
     setEditForm({
       name: service.name,
       price: formatPriceInput(service.priceCents),
+      durationMinutes: String(service.durationMinutes),
     });
   }
 
   function closeEditModal() {
     setEditingServiceId(null);
-    setEditForm({ name: "", price: "" });
+    setEditForm({ name: "", price: "", durationMinutes: "45" });
   }
 
   function submitNewService() {
     const priceCents = parsePriceToCents(newService.price);
-    if (!newService.name.trim() || !Number.isFinite(priceCents)) {
-      pushToast("Preencha nome e preco valido", "error");
+    const durationMinutes = Number(newService.durationMinutes);
+    if (!newService.name.trim() || !Number.isFinite(priceCents) || !Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 240) {
+      pushToast("Preencha nome, preço e duração entre 15 e 240 minutos", "error");
       return;
     }
 
@@ -68,8 +70,9 @@ export function AdminServices({ services }: AdminServicesProps) {
         await createServiceAction({
           name: newService.name.trim(),
           priceCents,
+          durationMinutes,
         });
-        setNewService({ name: "", price: "" });
+        setNewService({ name: "", price: "", durationMinutes: "45" });
         pushToast("Servico criado", "success");
         window.location.reload();
       } catch (error) {
@@ -84,8 +87,9 @@ export function AdminServices({ services }: AdminServicesProps) {
     }
 
     const priceCents = parsePriceToCents(editForm.price);
-    if (!editForm.name.trim() || !Number.isFinite(priceCents)) {
-      pushToast("Preencha nome e preco valido", "error");
+    const durationMinutes = Number(editForm.durationMinutes);
+    if (!editForm.name.trim() || !Number.isFinite(priceCents) || !Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 240) {
+      pushToast("Preencha nome, preço e duração entre 15 e 240 minutos", "error");
       return;
     }
 
@@ -95,6 +99,7 @@ export function AdminServices({ services }: AdminServicesProps) {
           serviceId: editingServiceId,
           name: editForm.name.trim(),
           priceCents,
+          durationMinutes,
         });
         pushToast("Servico atualizado", "success");
         closeEditModal();
@@ -156,9 +161,11 @@ export function AdminServices({ services }: AdminServicesProps) {
           <p className="mt-1 text-sm text-zinc-400">baseado nos servicos ativos</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Duracao padrao</p>
-          <p className="mt-3 text-3xl font-black text-emerald-200">45 min</p>
-          <p className="mt-1 text-sm text-zinc-400">aplicada em novos servicos</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Duração média</p>
+          <p className="mt-3 text-3xl font-black text-emerald-200">
+            {services.length ? Math.round(services.reduce((sum, service) => sum + service.durationMinutes, 0) / services.length) : 0} min
+          </p>
+          <p className="mt-1 text-sm text-zinc-400">calculada sobre os serviços ativos</p>
         </article>
       </div>
 
@@ -186,6 +193,18 @@ export function AdminServices({ services }: AdminServicesProps) {
                 onChange={(event) => setNewService((prev) => ({ ...prev, price: event.target.value }))}
                 placeholder="0,00"
                 className="mt-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-cyan-300"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-zinc-300">Duração (minutos)</span>
+              <input
+                type="number"
+                min={15}
+                max={240}
+                step={5}
+                value={newService.durationMinutes}
+                onChange={(event) => setNewService((prev) => ({ ...prev, durationMinutes: event.target.value }))}
+                className="mt-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-amber-200"
               />
             </label>
             <button
@@ -302,9 +321,18 @@ export function AdminServices({ services }: AdminServicesProps) {
                   className="mt-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-cyan-300"
                 />
               </label>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 text-sm text-zinc-400">
-                A duracao atual e de {editingService.durationMinutes} minutos. Novos ajustes de duracao precisam ser feitos na regra de servicos.
-              </div>
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-300">Duração (minutos)</span>
+                <input
+                  type="number"
+                  min={15}
+                  max={240}
+                  step={5}
+                  value={editForm.durationMinutes}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, durationMinutes: event.target.value }))}
+                  className="mt-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-amber-200"
+                />
+              </label>
             </div>
 
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
