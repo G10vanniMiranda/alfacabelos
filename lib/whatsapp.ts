@@ -277,6 +277,28 @@ export async function notifyClientAboutAdminBooking(booking: BookingWithRelation
   });
 }
 
+export async function notifyClientAboutBookingCancellation(booking: BookingWithRelations) {
+  return dispatchWhatsAppNotification({
+    event: "BOOKING_CANCELLED",
+    bookingId: booking.id,
+    idempotencyKey: `booking:${booking.id}:client-cancelled`,
+    to: booking.customerPhone,
+    message: `Agendamento cancelado\n\n${buildBookingWhatsAppMessage(booking)}`,
+    context: `cancelamento-cliente:${booking.id}`,
+  });
+}
+
+export async function notifyClientAboutBookingRescheduled(booking: BookingWithRelations) {
+  return dispatchWhatsAppNotification({
+    event: "BOOKING_RESCHEDULED",
+    bookingId: booking.id,
+    idempotencyKey: `booking:${booking.id}:client-rescheduled:${booking.dateTimeStart}`,
+    to: booking.customerPhone,
+    message: `Agendamento reagendado\n\n${buildBookingWhatsAppMessage(booking)}`,
+    context: `reagendamento-cliente:${booking.id}`,
+  });
+}
+
 export async function notifyOwnerAboutBookingEvent(
   booking: BookingWithRelations,
   event: "BOOKING_RESCHEDULED" | "BOOKING_CANCELLED",

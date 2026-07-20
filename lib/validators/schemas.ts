@@ -126,9 +126,21 @@ export const createAdminBookingSchema = z
     starts: z.array(z.string().datetime("Data/hora invalida")).min(1).max(59).optional(),
     recurrence: z.enum(["NONE", "DAILY", "WEEKLY", "MONTHLY"]),
     repeatUntil: z.string().optional(),
+    interval: z.number().int().min(1).max(52).optional(),
+    weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+    idempotencyKey: z.string().trim().min(16).max(128).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.recurrence === "NONE") {
+      return;
+    }
+
+    if (!data.idempotencyKey) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Chave de idempotencia obrigatoria para recorrencia",
+        path: ["idempotencyKey"],
+      });
       return;
     }
 

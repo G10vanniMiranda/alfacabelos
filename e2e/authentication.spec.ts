@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { prisma } from "@/lib/prisma";
 import { createAdminAccess } from "@/lib/auth/admin-access-store";
 import { createClient } from "@/lib/auth/client-store";
+import { cancelBookingSeries, updateBookingSeriesOccurrences } from "@/lib/booking-series-service";
 
 test.describe.configure({ mode: "serial" });
 
@@ -20,6 +21,8 @@ let pendingClientId = "";
 let adminAccessId = "";
 let barberAccessId = "";
 let barberId = "";
+let serviceId = "";
+const recurrenceSeriesIds: string[] = [];
 
 async function loginClient(page: Page, next = "/cliente") {
   await page.goto(`/cliente/login?next=${encodeURIComponent(next)}`);
@@ -46,11 +49,17 @@ test.beforeAll(async () => {
   adminAccessId = admin.id;
   const barber = await prisma.barber.create({ data: { name: `Profissional QA ${runId}`, isActive: true } });
   barberId = barber.id;
+  const service = await prisma.service.create({ data: { name: `Servico recorrente QA ${runId}`, durationMinutes: 30, priceCents: 3500 } });
+  serviceId = service.id;
   const barberAccess = await createAdminAccess({ email: barberEmail, password, role: "BARBER", barberId });
   barberAccessId = barberAccess.id;
 });
 
 test.afterAll(async () => {
+  if (recurrenceSeriesIds.length) {
+    await prisma.booking.deleteMany({ where: { seriesId: { in: recurrenceSeriesIds } } });
+    await prisma.bookingSeries.deleteMany({ where: { id: { in: recurrenceSeriesIds } } });
+  }
   const accessIds = [adminAccessId, barberAccessId].filter(Boolean);
   if (accessIds.length) {
     await prisma.adminSession.deleteMany({ where: { adminAccessId: { in: accessIds } } });
@@ -59,6 +68,54 @@ test.afterAll(async () => {
   const clientIds = [clientId, pendingClientId].filter(Boolean);
   if (clientIds.length) await prisma.client.deleteMany({ where: { id: { in: clientIds } } });
   if (barberId) await prisma.barber.deleteMany({ where: { id: barberId } });
+  if (serviceId) await prisma.service.deleteMany({ where: { id: serviceId } });
+});
+
+test("API autenticada materializa atomicamente todas as quartas-feiras da serie", async ({ page }) => {
+  await loginClient(page);
+  const startDate = new Date();
+  startDate.setUTCDate(startDate.getUTCDate() + ((3 - startDate.getUTCDay() + 7) % 7 || 7));
+  const startsOn = startDate.toISOString().slice(0, 10);
+  const endDate = new Date(`${startsOn}T12:00:00Z`);
+  endDate.setUTCMonth(endDate.getUTCMonth() + 1);
+  const repeatUntil = endDate.toISOString().slice(0, 10);
+  const start = `${startsOn}T13:00:00.000Z`;
+  const idempotencyKey = `e2e-${runId}-${test.info().project.name}`;
+  const response = await page.evaluate(async (body) => {
+    const result = await fetch("/api/booking", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return { status: result.status, body: await result.json() };
+  }, { serviceId, barberId, start, recurrence: "WEEKLY", repeatUntil, weekdays: [3], interval: 1, idempotencyKey });
+  expect(response.status).toBe(201);
+  expect(response.body.occurrenceCount).toBeGreaterThanOrEqual(4);
+  recurrenceSeriesIds.push(response.body.seriesId);
+  const persisted = await prisma.booking.findMany({ where: { seriesId: response.body.seriesId }, orderBy: { dateTimeStart: "asc" } });
+  expect(persisted).toHaveLength(response.body.occurrenceCount);
+  expect(new Set(persisted.map((item) => item.occurrenceLocalDate?.toISOString().slice(0, 10))).size).toBe(persisted.length);
+
+  const duplicate = await page.evaluate(async (body) => {
+    const result = await fetch("/api/booking", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return { status: result.status, body: await result.json() };
+  }, { serviceId, barberId, start, recurrence: "WEEKLY", repeatUntil, weekdays: [3], interval: 1, idempotencyKey });
+  expect(duplicate.status).toBe(200);
+  expect(duplicate.body.seriesId).toBe(response.body.seriesId);
+
+  const conflictingKey = `${idempotencyKey}-conflict`;
+  const conflict = await page.evaluate(async (body) => {
+    const result = await fetch("/api/booking", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return { status: result.status, body: await result.json() };
+  }, { serviceId, barberId, start, recurrence: "WEEKLY", repeatUntil, weekdays: [3], interval: 1, idempotencyKey: conflictingKey });
+  expect(conflict.status).toBe(409);
+  expect(await prisma.bookingSeries.count({ where: { idempotencyKey: conflictingKey } })).toBe(0);
+
+  await updateBookingSeriesOccurrences({
+    bookingId: persisted[0]!.id, scope: "ALL", serviceId, barberId,
+    customerName: `Cliente recorrente ${runId}`, customerPhone: clientPhone, start,
+  });
+  const renamed = await prisma.booking.findMany({ where: { seriesId: response.body.seriesId }, orderBy: { dateTimeStart: "asc" } });
+  expect(renamed.every((item) => item.customerName === `Cliente recorrente ${runId}`)).toBe(true);
+  const cancellation = await cancelBookingSeries({ bookingId: renamed[1]!.id, scope: "FUTURE", clientId });
+  expect(cancellation.count).toBe(renamed.length - 1);
+  expect((await prisma.booking.count({ where: { seriesId: response.body.seriesId, status: "CANCELADO" } }))).toBe(renamed.length - 1);
 });
 
 test("login do cliente mascara telefone, exibe senha e acessa a area correta", async ({ page }) => {

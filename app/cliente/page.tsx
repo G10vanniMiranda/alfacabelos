@@ -38,7 +38,7 @@ function BookingCard({ booking, featured = false, canManage = true }: { booking:
         {featured ? <span className="w-fit rounded-full border border-amber-200/25 bg-amber-200/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-amber-100">Próximo</span> : null}
       </div>
       <div className="mt-5 border-t border-white/[0.08] pt-4">
-        <ClientBookingActions bookingId={booking.id} status={booking.status} rebookHref={rebookHref(booking)} whatsappHref={buildBookingWhatsAppUrl(booking)} canManage={canManage} />
+        <ClientBookingActions bookingId={booking.id} status={booking.status} rebookHref={rebookHref(booking)} whatsappHref={buildBookingWhatsAppUrl(booking)} canManage={canManage} isRecurring={Boolean(booking.seriesId)} />
       </div>
     </article>
   );

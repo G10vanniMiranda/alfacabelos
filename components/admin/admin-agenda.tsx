@@ -40,18 +40,19 @@ type CreateBookingDraft = {
   time: string;
   recurrence: RecurrenceOption;
   repeatUntil: string;
+  idempotencyKey: string;
 };
 
 type EditBookingDraft = {
   bookingId: string;
+  seriesId?: string;
   serviceId: string;
   barberId: string;
   customerName: string;
   customerPhone: string;
   date: string;
   time: string;
-  recurrence: RecurrenceOption;
-  repeatUntil: string;
+  scope: "SINGLE" | "FUTURE" | "ALL";
 };
 
 type RecurrenceDraft = {
@@ -215,6 +216,7 @@ function getDefaultDraft(barbers: Barber[], services: Service[], selectedDate: s
     time: "09:00",
     recurrence: "NONE",
     repeatUntil: selectedDate,
+    idempotencyKey: "",
   } satisfies CreateBookingDraft;
 }
 
@@ -295,14 +297,6 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
     return createOccurrenceStarts.slice(0, 3).map((start) => formatDateTimeLabel(start));
   }, [createOccurrenceStarts]);
   const recurrenceHasLimitError = createDraft.recurrence !== "NONE" && createOccurrenceStarts.length >= 60;
-  const editOccurrenceStarts = useMemo(() => {
-    return editingBooking ? buildOccurrenceStarts(editingBooking) : [];
-  }, [editingBooking]);
-  const editOccurrencePreview = useMemo(() => {
-    return editOccurrenceStarts.slice(0, 3).map((start) => formatDateTimeLabel(start));
-  }, [editOccurrenceStarts]);
-  const editRecurrenceHasLimitError =
-    editingBooking?.recurrence !== "NONE" && editOccurrenceStarts.length >= 60;
 
   const getNotificationAudioContext = useCallback(() => {
     const AudioContextClass = window.AudioContext || (window as typeof window & {
@@ -489,14 +483,14 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
 
     setEditingBooking({
       bookingId: booking.id,
+      seriesId: booking.seriesId,
       serviceId: booking.serviceId,
       barberId: booking.barberId,
       customerName: booking.customerName,
       customerPhone: booking.customerPhone,
       date,
       time,
-      recurrence: "NONE",
-      repeatUntil: date,
+      scope: "SINGLE",
     });
     setOpenActionsBookingId(null);
     setActionsMenuPosition(null);
@@ -537,10 +531,10 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
     setOpenActionsBookingId(bookingId);
   }
 
-  function changeStatus(bookingId: string, status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "CONCLUIDO" | "AUSENTE") {
+  function changeStatus(bookingId: string, status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "CONCLUIDO" | "AUSENTE", scope: "SINGLE" | "FUTURE" | "ALL" = "SINGLE") {
     startStatusTransition(async () => {
       try {
-        await updateBookingStatusAction({ bookingId, status });
+        await updateBookingStatusAction({ bookingId, status, scope });
         pushToast("Status atualizado", "success");
         setOpenActionsBookingId(null);
         setActionsMenuPosition(null);
@@ -587,6 +581,13 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       return;
     }
 
+    const idempotencyKey = createDraft.recurrence === "NONE"
+      ? undefined
+      : (createDraft.idempotencyKey || crypto.randomUUID());
+    if (idempotencyKey && !createDraft.idempotencyKey) {
+      setCreateDraft((prev) => ({ ...prev, idempotencyKey }));
+    }
+
     startCreateTransition(async () => {
       const result = await createAdminBookingsAction({
         serviceId: createDraft.serviceId,
@@ -598,6 +599,11 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         starts,
         recurrence: createDraft.recurrence,
         repeatUntil: createDraft.recurrence === "NONE" ? undefined : createDraft.repeatUntil,
+        interval: 1,
+        weekdays: createDraft.recurrence === "WEEKLY"
+          ? [new Date(`${createDraft.date}T12:00:00Z`).getUTCDay()]
+          : undefined,
+        idempotencyKey,
       });
 
       pushToast(result.message, result.success ? "success" : "error");
@@ -616,21 +622,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       return;
     }
 
-    const starts = buildOccurrenceStarts(editingBooking);
-    if (starts.length === 0) {
-      pushToast("Data/hora invalida", "error");
-      return;
-    }
-
-    if (editingBooking.recurrence !== "NONE" && editingBooking.repeatUntil < editingBooking.date) {
-      pushToast("A data final da repeticao precisa ser igual ou posterior ao inicio", "error");
-      return;
-    }
-
-    if (editingBooking.recurrence !== "NONE" && starts.length >= 60) {
-      pushToast("Reduza o periodo da repeticao para menos de 60 ocorrencias", "error");
-      return;
-    }
+    const start = zonedDateTimeToUtcIso(editingBooking.date, `${editingBooking.time}:00`, BUSINESS_CONFIG.timezone);
 
     startCreateTransition(async () => {
       const result = await updateAdminBookingAction({
@@ -639,32 +631,13 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         barberId: editingBooking.barberId,
         customerName: editingBooking.customerName,
         customerPhone: editingBooking.customerPhone,
-        start: starts[0],
+        start,
+        scope: editingBooking.scope,
       });
 
       pushToast(result.message, result.success ? "success" : "error");
       if (!result.success) {
         return;
-      }
-
-      const extraStarts = starts.slice(1);
-      if (editingBooking.recurrence !== "NONE" && extraStarts.length > 0) {
-        const recurrenceResult = await createAdminBookingsAction({
-          serviceId: editingBooking.serviceId,
-          barberId: editingBooking.barberId,
-          customerName: editingBooking.customerName,
-          customerPhone: editingBooking.customerPhone,
-          start: extraStarts[0],
-          starts: extraStarts,
-          recurrence: editingBooking.recurrence,
-          repeatUntil: editingBooking.repeatUntil,
-        });
-
-        pushToast(recurrenceResult.message, recurrenceResult.success ? "success" : "error");
-        if (!recurrenceResult.success) {
-          await syncBookings({ showErrorToast: true });
-          return;
-        }
       }
 
       closeEditModal();
@@ -981,6 +954,8 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             <span className="w-6 text-xs font-semibold text-red-200">X</span>
             <span>Cancelar agendamento</span>
           </button>
+          {openActionsBooking.seriesId ? <button type="button" role="menuitem" disabled={isBusy || openActionsBooking.status === "CANCELADO"} onClick={() => changeStatus(openActionsBooking.id, "CANCELADO", "FUTURE")} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-red-200 transition hover:bg-red-500/10 disabled:opacity-40"><span className="w-6 text-xs font-semibold text-red-200">X+</span><span>Cancelar esta e futuras</span></button> : null}
+          {openActionsBooking.seriesId ? <button type="button" role="menuitem" disabled={isBusy || openActionsBooking.status === "CANCELADO"} onClick={() => changeStatus(openActionsBooking.id, "CANCELADO", "ALL")} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-red-200 transition hover:bg-red-500/10 disabled:opacity-40"><span className="w-6 text-xs font-semibold text-red-200">ALL</span><span>Cancelar toda a serie</span></button> : null}
         </div>
       ) : null}
 
@@ -1120,8 +1095,8 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                   >
                     <option value="NONE">Nao repetir</option>
                     <option value="DAILY">Diariamente</option>
-                    <option value="WEEKLY">Semanalmente</option>
-                    <option value="MONTHLY">Mensalmente</option>
+                    <option value="WEEKLY">Toda semana no mesmo dia</option>
+                    <option value="MONTHLY">Uma vez por mes no mesmo dia</option>
                   </select>
                 </label>
 
@@ -1278,20 +1253,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                 <input
                   type="date"
                   value={editingBooking.date}
-                  onChange={(event) =>
-                    setEditingBooking((prev) =>
-                      prev
-                        ? {
-                          ...prev,
-                          date: event.target.value,
-                          repeatUntil:
-                            prev.recurrence === "NONE"
-                              ? event.target.value
-                              : getDefaultRepeatUntil(event.target.value, prev.recurrence),
-                        }
-                        : prev,
-                    )
-                  }
+                  onChange={(event) => setEditingBooking((prev) => prev ? { ...prev, date: event.target.value } : prev)}
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
                 />
               </label>
@@ -1312,9 +1274,9 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h4 className="text-sm font-semibold text-zinc-100">Frequencia</h4>
+                  <h4 className="text-sm font-semibold text-zinc-100">Alcance da edicao</h4>
                   <p className="mt-1 text-xs text-zinc-500">
-                    A edicao altera o agendamento atual. Ao repetir, novas ocorrencias sao criadas depois dele.
+                    Em uma serie, escolha se a mudanca vale apenas para esta ocorrencia, para as futuras ou para toda a serie.
                   </p>
                 </div>
                 <span className="w-fit rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-300">
@@ -1322,74 +1284,36 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                 </span>
               </div>
 
-              <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr]">
+              <div className="mt-4 grid gap-4">
                 <label className="space-y-2">
-                  <span className="text-sm text-zinc-300">Repetir</span>
+                  <span className="text-sm text-zinc-300">Aplicar em</span>
                   <select
-                    value={editingBooking.recurrence}
+                    value={editingBooking.scope}
                     onChange={(event) => {
-                      const recurrence = event.target.value as RecurrenceOption;
                       setEditingBooking((prev) =>
-                        prev
-                          ? {
-                            ...prev,
-                            recurrence,
-                            repeatUntil: getDefaultRepeatUntil(prev.date, recurrence),
-                          }
-                          : prev,
+                        prev ? { ...prev, scope: event.target.value as "SINGLE" | "FUTURE" | "ALL" } : prev,
                       );
                     }}
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
                   >
-                    <option value="NONE">Nao repetir</option>
-                    <option value="DAILY">Diariamente</option>
-                    <option value="WEEKLY">Semanalmente</option>
-                    <option value="MONTHLY">Mensalmente</option>
+                    <option value="SINGLE">Somente esta ocorrencia</option>
+                    {editingBooking.seriesId ? <option value="FUTURE">Esta e as futuras</option> : null}
+                    {editingBooking.seriesId ? <option value="ALL">Toda a serie</option> : null}
                   </select>
                 </label>
 
-                <label className="space-y-2">
-                  <span className="text-sm text-zinc-300">Repetir ate</span>
-                  <input
-                    type="date"
-                    value={editingBooking.repeatUntil}
-                    min={editingBooking.date}
-                    disabled={editingBooking.recurrence === "NONE"}
-                    onChange={(event) =>
-                      setEditingBooking((prev) => (prev ? { ...prev, repeatUntil: event.target.value } : prev))
-                    }
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 disabled:opacity-50"
-                  />
-                </label>
               </div>
 
               <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-3">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm font-semibold text-zinc-100">
-                    {getRecurrenceLabel(editingBooking.recurrence, editingBooking.date)}
+                    {editingBooking.scope === "SINGLE" ? "Somente esta ocorrencia" : editingBooking.scope === "FUTURE" ? "Esta e as futuras" : "Toda a serie"}
                   </p>
-                  <span
-                    className={`w-fit rounded-full border px-2 py-1 text-xs font-semibold ${
-                      editRecurrenceHasLimitError
-                        ? "border-red-400/50 bg-red-500/15 text-red-100"
-                        : "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
-                    }`}
-                  >
-                    {editingBooking.recurrence === "NONE"
-                      ? "1 atualizacao"
-                      : `${Math.max(0, editOccurrenceStarts.length - 1)} nova${
-                        editOccurrenceStarts.length - 1 === 1 ? "" : "s"
-                      }`}
+                  <span className="w-fit rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-xs font-semibold text-cyan-100">
+                    {editingBooking.scope === "SINGLE" ? "1 atualizacao" : "Atualizacao em serie"}
                   </span>
                 </div>
-                {editOccurrencePreview.length > 0 ? (
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Previa: {editOccurrencePreview.map((item) => `${item.date} ${item.time}`).join(", ")}
-                    {editOccurrenceStarts.length > editOccurrencePreview.length ? "..." : ""}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-xs text-red-200">Revise a data final da repeticao.</p>
-                )}
+                <p className="mt-2 text-xs text-zinc-500">Todos os horarios afetados serao revalidados atomicamente contra expediente, bloqueios e conflitos.</p>
               </div>
             </div>
 
@@ -1405,14 +1329,10 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               <button
                 type="button"
                 onClick={handleEditBooking}
-                disabled={isPendingCreate || editOccurrenceStarts.length === 0 || editRecurrenceHasLimitError}
+                disabled={isPendingCreate || !editingBooking.date || !editingBooking.time}
                 className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-cyan-300 disabled:opacity-60"
               >
-                {isPendingCreate
-                  ? "Salvando..."
-                  : editingBooking.recurrence === "NONE"
-                    ? "Salvar alteracoes"
-                    : `Salvar e criar ${Math.max(0, editOccurrenceStarts.length - 1)} repeticoes`}
+                {isPendingCreate ? "Salvando..." : "Salvar alteracoes"}
               </button>
             </div>
           </div>

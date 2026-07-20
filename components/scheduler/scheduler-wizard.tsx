@@ -340,10 +340,19 @@ export function SchedulerWizard({
       starts,
       recurrence,
       repeatUntil: recurrence === "NONE" ? undefined : draft.repeatUntil,
+      interval: 1,
+      weekdays: recurrence === "WEEKLY" && draft.date
+        ? [new Date(`${draft.date}T12:00:00Z`).getUTCDay()]
+        : undefined,
+      idempotencyKey: recurrence === "NONE" ? undefined : (draft.recurrenceKey ?? crypto.randomUUID()),
       customerName: draft.customerName,
       customerPhone: draft.customerPhone,
       rescheduleBookingId: initialSelection?.rescheduleBookingId,
     };
+
+    if (recurrence !== "NONE" && !draft.recurrenceKey) {
+      setDraft((prev) => ({ ...prev, recurrenceKey: payload.idempotencyKey }));
+    }
 
     startTransition(async () => {
       if (!draft.date) {
@@ -355,26 +364,6 @@ export function SchedulerWizard({
       if (starts.length === 0 || recurrenceHasLimitError) {
         pushToast("Revise a frequencia do agendamento", "error");
         setStep(3);
-        return;
-      }
-
-      try {
-        for (const start of starts) {
-          const date = getLocalDateInput(start, BUSINESS_CONFIG.timezone);
-          const freshSlots = await fetchAvailableSlots(date, serviceId, barberId);
-          const stillAvailable = freshSlots.some((slot) => slot.start === start);
-          if (!stillAvailable) {
-            if (date === draft.date) {
-              setSlots(freshSlots);
-            }
-            setDraft((prev) => ({ ...prev, time: date === draft.date ? undefined : prev.time }));
-            setStep(3);
-            pushToast("Uma das repeticoes ja esta ocupada. Ajuste a frequencia ou escolha outro horario.", "error");
-            return;
-          }
-        }
-      } catch (error) {
-        pushToast(error instanceof Error ? error.message : "Erro ao validar horario", "error");
         return;
       }
 
@@ -561,8 +550,8 @@ export function SchedulerWizard({
                   >
                     <option value="NONE">Nao repetir</option>
                     <option value="DAILY">Todos os dias</option>
-                    <option value="WEEKLY">Toda semana</option>
-                    <option value="MONTHLY">Todo mes</option>
+                    <option value="WEEKLY">Toda semana no mesmo dia</option>
+                    <option value="MONTHLY">Uma vez por mes no mesmo dia</option>
                   </select>
                 </label>
 

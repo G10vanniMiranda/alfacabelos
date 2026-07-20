@@ -8,9 +8,7 @@ import { randomUUID } from "node:crypto";
 import {
   createGalleryImage,
   createService,
-  createBarberBooking,
   createBlockedSlot,
-  createBooking,
   deleteGalleryImage,
   deleteService,
   deleteBlockedSlot,
@@ -18,7 +16,6 @@ import {
   rescheduleClientBooking,
   getBookingById,
   confirmBookingByToken,
-  updateAdminBooking,
   updateBookingPaymentStatus,
   updateService,
   updateBookingStatus,
@@ -28,9 +25,11 @@ import { ActionState } from "@/types/scheduler";
 import { authenticateAdminAccess, registerAdminLogin } from "@/lib/auth/admin-access-store";
 import { createAdminSession, revokeAdminSession } from "@/lib/auth/admin-session-store";
 import { assertBlockedSlotScope, assertBookingScope, getCurrentStaff, requireStaff, scopeBarber } from "@/lib/auth/staff-auth";
-import { notifyClientAboutAdminBooking, notifyOwnerAboutBookingEvent, notifyOwnerAboutClientBooking } from "@/lib/whatsapp";
+import { notifyClientAboutAdminBooking, notifyClientAboutBookingCancellation, notifyClientAboutBookingRescheduled, notifyOwnerAboutBookingEvent, notifyOwnerAboutClientBooking } from "@/lib/whatsapp";
 import { findClientBySessionToken } from "@/lib/auth/client-store";
 import { prisma } from "@/lib/prisma";
+import { cancelBookingSeries, createBookingSeriesAtomic, updateBookingSeriesOccurrences } from "@/lib/booking-series-service";
+import { repository } from "@/lib/repositories";
 import { clearRateLimitEvents, registerRateLimitEvent } from "@/lib/security";
 
 const ADMIN_COOKIE = "barber_admin";
@@ -203,6 +202,9 @@ export async function createClientBookingsAction(payload: {
   starts?: string[];
   recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
   repeatUntil?: string;
+  interval?: number;
+  weekdays?: number[];
+  idempotencyKey?: string;
   rescheduleBookingId?: string;
 }): Promise<ActionState> {
   const client = await getAuthenticatedClient();
@@ -234,7 +236,6 @@ export async function createClientBookingsAction(payload: {
     };
   }
 
-  const createdBookingIds: string[] = [];
   try {
     const starts = parsed.data.starts?.length ? parsed.data.starts : [parsed.data.start];
     logBookingDiagnostic("client_booking_create_started", {
@@ -271,29 +272,23 @@ export async function createClientBookingsAction(payload: {
       return { success: true, message: "Agendamento reagendado com sucesso.", bookingId: updated.id };
     }
 
-    let firstBookingId: string | undefined;
-    for (const start of starts) {
-      const booking = await createBooking({
-        serviceId: parsed.data.serviceId,
-        barberId: parsed.data.barberId,
-        start,
-        customerName: client.name,
-        customerPhone: client.phone,
-        observations: parsed.data.observations,
-      }, { clientId: client.id });
-
-      if (!firstBookingId) {
-        firstBookingId = booking.id;
-      }
-      createdBookingIds.push(booking.id);
-
-      logBookingDiagnostic("client_booking_created", {
-        bookingId: booking.id,
-        clientId: client.id,
-        serviceId: parsed.data.serviceId,
-      });
-
-    }
+    const creation = await createBookingSeriesAtomic({
+      serviceId: parsed.data.serviceId,
+      barberId: parsed.data.barberId,
+      clientId: client.id,
+      customerName: client.name,
+      customerPhone: client.phone,
+      observations: parsed.data.observations,
+      start: parsed.data.start,
+      recurrence: parsed.data.recurrence,
+      repeatUntil: parsed.data.repeatUntil,
+      interval: parsed.data.interval,
+      weekdays: parsed.data.weekdays,
+      idempotencyKey: parsed.data.idempotencyKey,
+      createdBy: "CLIENT",
+    });
+    const createdBookingIds = creation.bookingIds;
+    const firstBookingId = createdBookingIds[0];
 
     await Promise.all(createdBookingIds.map((bookingId) => notifyOwnerSafely(bookingId)));
 
@@ -305,19 +300,12 @@ export async function createClientBookingsAction(payload: {
     return {
       success: true,
       message:
-        starts.length === 1
+        createdBookingIds.length === 1
           ? "Agendamento criado com sucesso."
-          : `${starts.length} agendamentos criados com sucesso.`,
+          : `${createdBookingIds.length} agendamentos criados com sucesso.`,
       bookingId: firstBookingId,
     };
   } catch (error) {
-    if (createdBookingIds.length > 0) {
-      await prisma.booking.deleteMany({
-        where: { id: { in: createdBookingIds }, clientId: client.id },
-      }).catch((rollbackError) => {
-        console.error("[booking-flow] falha no rollback de serie do cliente", rollbackError);
-      });
-    }
     logBookingDiagnostic("client_booking_create_failed", {
       clientId: client.id,
       serviceId: parsed.data.serviceId,
@@ -330,24 +318,6 @@ export async function createClientBookingsAction(payload: {
   }
 }
 
-function addRecurrenceStep(date: Date, recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY") {
-  const next = new Date(date);
-  if (recurrence === "DAILY") {
-    next.setDate(next.getDate() + 1);
-    return next;
-  }
-  if (recurrence === "WEEKLY") {
-    next.setDate(next.getDate() + 7);
-    return next;
-  }
-  if (recurrence === "MONTHLY") {
-    next.setMonth(next.getMonth() + 1);
-    return next;
-  }
-  next.setDate(next.getDate() + 1000);
-  return next;
-}
-
 export async function createAdminBookingsAction(payload: {
   serviceId: string;
   barberId: string;
@@ -358,6 +328,9 @@ export async function createAdminBookingsAction(payload: {
   starts?: string[];
   recurrence: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
   repeatUntil?: string;
+  interval?: number;
+  weekdays?: number[];
+  idempotencyKey?: string;
 }): Promise<ActionState> {
   const principal = await requireStaff(["ADMIN", "BARBER"]);
 
@@ -369,33 +342,8 @@ export async function createAdminBookingsAction(payload: {
     };
   }
 
-  const createdBookingIds: string[] = [];
-  const confirmationTokens = new Map<string, string | undefined>();
   try {
-    let starts = parsed.data.starts?.length ? parsed.data.starts : [];
-
-    if (starts.length === 0) {
-      const fallbackStarts: string[] = [];
-      const firstStart = new Date(parsed.data.start);
-      const repeatUntil = parsed.data.repeatUntil ? new Date(`${parsed.data.repeatUntil}T23:59:59`) : null;
-      let cursor = new Date(firstStart);
-
-      while (fallbackStarts.length < 60) {
-        if (repeatUntil && cursor > repeatUntil) {
-          break;
-        }
-
-        fallbackStarts.push(cursor.toISOString());
-
-        if (parsed.data.recurrence === "NONE") {
-          break;
-        }
-
-        cursor = addRecurrenceStep(cursor, parsed.data.recurrence);
-      }
-
-      starts = fallbackStarts;
-    }
+    const starts = parsed.data.starts?.length ? parsed.data.starts : [parsed.data.start];
 
     if (parsed.data.recurrence !== "NONE" && starts.length >= 60) {
       return {
@@ -404,28 +352,31 @@ export async function createAdminBookingsAction(payload: {
       };
     }
 
-    let firstBookingId: string | undefined;
-
-    for (const start of starts) {
-      const booking = await createBarberBooking({
-        serviceId: parsed.data.serviceId,
-        barberId: scopeBarber(principal, parsed.data.barberId)!,
-        start,
-        customerName: parsed.data.customerName,
-        customerPhone: parsed.data.customerPhone,
-        observations: parsed.data.observations,
-      });
-
-      if (!firstBookingId) {
-        firstBookingId = booking.id;
-      }
-      createdBookingIds.push(booking.id);
-      confirmationTokens.set(booking.id, booking.confirmationToken);
-
-    }
+    const pendingClient = await repository.upsertPendingClient({
+      name: parsed.data.customerName,
+      phone: parsed.data.customerPhone,
+    });
+    const creation = await createBookingSeriesAtomic({
+      serviceId: parsed.data.serviceId,
+      barberId: scopeBarber(principal, parsed.data.barberId)!,
+      clientId: pendingClient.id,
+      customerName: parsed.data.customerName,
+      customerPhone: parsed.data.customerPhone,
+      observations: parsed.data.observations,
+      start: parsed.data.start,
+      recurrence: parsed.data.recurrence,
+      repeatUntil: parsed.data.repeatUntil,
+      interval: parsed.data.interval,
+      weekdays: parsed.data.weekdays,
+      idempotencyKey: parsed.data.idempotencyKey,
+      createdBy: "BARBER",
+      requireConfirmation: true,
+    });
+    const createdBookingIds = creation.bookingIds;
+    const firstBookingId = createdBookingIds[0];
 
     await Promise.all(createdBookingIds.map((bookingId) =>
-      notifyClientSafely(bookingId, confirmationTokens.get(bookingId)),
+      notifyClientSafely(bookingId, creation.rawConfirmationTokens.get(bookingId)),
     ));
 
     revalidatePath("/admin/agenda");
@@ -434,19 +385,12 @@ export async function createAdminBookingsAction(payload: {
     return {
       success: true,
       message:
-        starts.length === 1
+        createdBookingIds.length === 1
           ? "Agendamento criado com sucesso."
-          : `${starts.length} agendamentos criados com sucesso.`,
+          : `${createdBookingIds.length} agendamentos criados com sucesso.`,
       bookingId: firstBookingId,
     };
   } catch (error) {
-    if (createdBookingIds.length > 0) {
-      await prisma.booking.deleteMany({
-        where: { id: { in: createdBookingIds } },
-      }).catch((rollbackError) => {
-        console.error("[booking-flow] falha no rollback de serie administrativa", rollbackError);
-      });
-    }
     return {
       success: false,
       message: error instanceof Error ? error.message : "Falha ao criar agendamento",
@@ -512,10 +456,22 @@ export async function adminLogoutAction() {
   cookieStore.delete(ADMIN_COOKIE);
 }
 
-export async function updateBookingStatusAction(payload: { bookingId: string; status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "CONCLUIDO" | "AUSENTE" }) {
+export async function updateBookingStatusAction(payload: { bookingId: string; status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "CONCLUIDO" | "AUSENTE"; scope?: "SINGLE" | "FUTURE" | "ALL" }) {
   const principal = await requireStaff(["ADMIN", "BARBER"]);
   await assertBookingScope(principal, payload.bookingId);
-  await updateBookingStatus(payload);
+  let affectedIds = [payload.bookingId];
+  if (payload.status === "CANCELADO" && payload.scope && payload.scope !== "SINGLE") {
+    const result = await cancelBookingSeries({ bookingId: payload.bookingId, scope: payload.scope });
+    affectedIds = result.bookingIds;
+  } else {
+    await updateBookingStatus({ bookingId: payload.bookingId, status: payload.status });
+  }
+  if (payload.status === "CANCELADO") {
+    await Promise.all(affectedIds.map(async (bookingId) => {
+      const booking = await getBookingById(bookingId);
+      if (booking) await notifyClientAboutBookingCancellation(booking).catch(() => undefined);
+    }));
+  }
   revalidatePath("/admin/agenda");
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/ganhos");
@@ -540,12 +496,21 @@ export async function updateAdminBookingAction(payload: {
   customerPhone: string;
   observations?: string;
   start: string;
+  scope?: "SINGLE" | "FUTURE" | "ALL";
 }): Promise<ActionState> {
   const principal = await requireStaff(["ADMIN", "BARBER"]);
   await assertBookingScope(principal, payload.bookingId);
 
   try {
-    await updateAdminBooking({ ...payload, barberId: scopeBarber(principal, payload.barberId)! });
+    const result = await updateBookingSeriesOccurrences({
+      ...payload,
+      scope: payload.scope ?? "SINGLE",
+      barberId: scopeBarber(principal, payload.barberId)!,
+    });
+    await Promise.all(result.bookingIds.map(async (bookingId) => {
+      const booking = await getBookingById(bookingId);
+      if (booking) await notifyClientAboutBookingRescheduled(booking).catch(() => undefined);
+    }));
     revalidatePath("/admin/agenda");
     revalidatePath("/admin/dashboard");
     revalidatePath("/cliente");

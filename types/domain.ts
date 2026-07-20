@@ -4,6 +4,9 @@ export type BookingPaymentStatus = "PENDENTE" | "CONFIRMADO";
 export type ClientStatus = "PENDING" | "ACTIVE";
 export type ClientCreatedBy = "BARBER" | "CLIENT";
 export type BookingCreatedBy = "BARBER" | "CLIENT";
+export type RecurrenceFrequency = "DAILY" | "WEEKLY" | "MONTHLY";
+export type BookingSeriesStatus = "ACTIVE" | "CANCELLED";
+export type SeriesMutationScope = "SINGLE" | "FUTURE" | "ALL";
 
 export type Barber = {
   id: string;
@@ -39,6 +42,32 @@ export type Booking = {
   confirmationTokenUsedAt?: string;
   createdBy: BookingCreatedBy;
   createdAt: string;
+  seriesId?: string;
+  occurrenceIndex?: number;
+  occurrenceLocalDate?: string;
+};
+
+export type BookingSeries = {
+  id: string;
+  barberId: string;
+  serviceId: string;
+  clientId?: string;
+  customerName: string;
+  customerPhone: string;
+  observations?: string;
+  frequency: RecurrenceFrequency;
+  interval: number;
+  weekdays: number[];
+  localTime: string;
+  timezone: string;
+  startsOn: string;
+  endsOn: string;
+  status: BookingSeriesStatus;
+  idempotencyKey: string;
+  requestHash: string;
+  createdBy: BookingCreatedBy;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type BlockedSlot = {

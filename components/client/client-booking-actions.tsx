@@ -12,17 +12,19 @@ type ClientBookingActionsProps = {
   rebookHref: string;
   whatsappHref: string;
   canManage?: boolean;
+  isRecurring?: boolean;
 };
 
-export function ClientBookingActions({ bookingId, status, rebookHref, whatsappHref, canManage = true }: ClientBookingActionsProps) {
+export function ClientBookingActions({ bookingId, status, rebookHref, whatsappHref, canManage = true, isRecurring = false }: ClientBookingActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showCancel, setShowCancel] = useState(false);
   const [message, setMessage] = useState("");
 
-  function runAction(action: (formData: FormData) => Promise<void>, successMessage: string) {
+  function runAction(action: (formData: FormData) => Promise<void>, successMessage: string, scope = "SINGLE") {
     const formData = new FormData();
     formData.set("bookingId", bookingId);
+    formData.set("scope", scope);
     startTransition(async () => {
       try {
         await action(formData);
@@ -71,9 +73,11 @@ export function ClientBookingActions({ bookingId, status, rebookHref, whatsappHr
             <p className="mt-3 text-sm leading-6 text-stone-400">O horário voltará a ficar disponível. Se quiser apenas trocar a data, fale com a equipe para reagendar.</p>
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" disabled={isPending} onClick={() => setShowCancel(false)} className="button-secondary">Manter horário</button>
-              <button type="button" disabled={isPending} onClick={() => runAction(cancelMyBookingAction, "Agendamento cancelado.")} className="button-secondary border-red-400/40 text-red-100 hover:bg-red-500/10">
-                {isPending ? "Cancelando…" : "Sim, cancelar"}
+              <button type="button" disabled={isPending} onClick={() => runAction(cancelMyBookingAction, "Agendamento cancelado.", "SINGLE")} className="button-secondary border-red-400/40 text-red-100 hover:bg-red-500/10">
+                {isPending ? "Cancelando…" : "Somente este"}
               </button>
+              {isRecurring ? <button type="button" disabled={isPending} onClick={() => runAction(cancelMyBookingAction, "Esta e as próximas ocorrências foram canceladas.", "FUTURE")} className="button-secondary border-red-400/40 text-red-100 hover:bg-red-500/10">Esta e futuras</button> : null}
+              {isRecurring ? <button type="button" disabled={isPending} onClick={() => runAction(cancelMyBookingAction, "Série cancelada.", "ALL")} className="button-secondary border-red-400/40 text-red-100 hover:bg-red-500/10">Toda a série</button> : null}
             </div>
           </div>
         </div>

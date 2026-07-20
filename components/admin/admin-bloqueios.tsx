@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { createBlockedSlotAction, deleteBlockedSlotAction } from "@/lib/actions/booking-actions";
 import { useToast } from "@/components/ui/toast";
 import { BUSINESS_CONFIG } from "@/lib/config";
-import { getLocalDateInput, getTimeLabelInTimeZone } from "@/lib/utils";
+import { getLocalDateInput, getTimeLabelInTimeZone, zonedDateTimeToUtcIso } from "@/lib/utils";
 import { Barber, BlockedSlot } from "@/types/domain";
 
 type AdminBloqueiosProps = {
@@ -86,10 +86,12 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
 
     startTransition(async () => {
       try {
+        const [startDate, startTime] = blockForm.dateTimeStart.split("T");
+        const [endDate, endTime] = blockForm.dateTimeEnd.split("T");
         await createBlockedSlotAction({
           barberId: blockForm.barberId || undefined,
-          dateTimeStart: new Date(blockForm.dateTimeStart).toISOString(),
-          dateTimeEnd: new Date(blockForm.dateTimeEnd).toISOString(),
+          dateTimeStart: zonedDateTimeToUtcIso(startDate, `${startTime}:00`, BUSINESS_CONFIG.timezone),
+          dateTimeEnd: zonedDateTimeToUtcIso(endDate, `${endTime}:00`, BUSINESS_CONFIG.timezone),
           reason: blockForm.reason.trim(),
         });
         setBlockForm({ barberId: "", dateTimeStart: "", dateTimeEnd: "", reason: "" });

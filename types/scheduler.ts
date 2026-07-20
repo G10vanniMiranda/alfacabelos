@@ -5,6 +5,7 @@ export type SchedulerDraft = {
   time?: string;
   recurrence?: "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
   repeatUntil?: string;
+  recurrenceKey?: string;
   customerName?: string;
   customerPhone?: string;
 };

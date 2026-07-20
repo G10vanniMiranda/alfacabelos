@@ -24,8 +24,9 @@ import {
   registerPasswordResetAttempt,
   resetClientPasswordWithToken,
 } from "@/lib/auth/client-password-reset-store";
-import { cancelClientBooking, confirmClientBooking, getBookingById } from "@/lib/booking-service";
+import { confirmClientBooking, getBookingById } from "@/lib/booking-service";
 import { notifyOwnerAboutBookingEvent } from "@/lib/whatsapp";
+import { cancelBookingSeries } from "@/lib/booking-series-service";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { clearRateLimitEvents, registerRateLimitEvent } from "@/lib/security";
 import { ActionState } from "@/types/scheduler";
@@ -250,6 +251,8 @@ export async function updateMyProfileAction(formData: FormData) {
 
 export async function cancelMyBookingAction(formData: FormData) {
   const bookingId = String(formData.get("bookingId") ?? "");
+  const requestedScope = String(formData.get("scope") ?? "SINGLE");
+  const scope = requestedScope === "FUTURE" || requestedScope === "ALL" ? requestedScope : "SINGLE";
   if (!bookingId) {
     return;
   }
@@ -259,9 +262,11 @@ export async function cancelMyBookingAction(formData: FormData) {
     return;
   }
 
-  await cancelClientBooking({ bookingId, customerPhone: client.phone });
-  const cancelled = await getBookingById(bookingId);
-  if (cancelled) await notifyOwnerAboutBookingEvent(cancelled, "BOOKING_CANCELLED").catch(() => undefined);
+  const result = await cancelBookingSeries({ bookingId, clientId: client.id, scope });
+  await Promise.all(result.bookingIds.map(async (id) => {
+    const cancelled = await getBookingById(id);
+    if (cancelled) await notifyOwnerAboutBookingEvent(cancelled, "BOOKING_CANCELLED").catch(() => undefined);
+  }));
   revalidatePath("/cliente");
   revalidatePath("/admin/agenda");
 }

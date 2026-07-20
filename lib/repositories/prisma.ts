@@ -27,6 +27,9 @@ type BookingRow = {
   confirmationTokenUsedAt?: Date | null;
   createdBy?: "BARBER" | "CLIENT" | null;
   createdAt: Date;
+  seriesId?: string | null;
+  occurrenceIndex?: number | null;
+  occurrenceLocalDate?: Date | null;
 };
 
 type BookingWithRelationsRow = BookingRow & {
@@ -58,6 +61,9 @@ function toBooking(row: BookingRow): Booking {
     confirmationTokenUsedAt: row.confirmationTokenUsedAt?.toISOString(),
     createdBy: row.createdBy ?? "CLIENT",
     createdAt: row.createdAt.toISOString(),
+    seriesId: row.seriesId ?? undefined,
+    occurrenceIndex: row.occurrenceIndex ?? undefined,
+    occurrenceLocalDate: row.occurrenceLocalDate?.toISOString().slice(0, 10),
   };
 }
 
@@ -192,6 +198,8 @@ let availabilityTableChecked = false;
 let availabilityTableExists = false;
 let bookingPaymentColumnsChecked = false;
 let bookingPaymentColumnsExist = false;
+let bookingSeriesColumnsChecked = false;
+let bookingSeriesColumnsExist = false;
 
 function getGalleryDelegate() {
   return (prisma as unknown as {
@@ -339,8 +347,35 @@ async function ensureBookingPaymentColumnsExist(): Promise<boolean> {
   return bookingPaymentColumnsExist;
 }
 
+async function ensureBookingSeriesColumnsExist(): Promise<boolean> {
+  if (bookingSeriesColumnsChecked) return bookingSeriesColumnsExist;
+  try {
+    const result = await prisma.$queryRaw<Array<{ columns: number }>>`
+      SELECT COUNT(*)::int AS "columns"
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'Booking'
+        AND column_name IN ('seriesId', 'occurrenceIndex', 'occurrenceLocalDate')
+    `;
+    bookingSeriesColumnsExist = Number(result[0]?.columns ?? 0) === 3;
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) throw error;
+    bookingSeriesColumnsExist = false;
+  } finally {
+    bookingSeriesColumnsChecked = true;
+  }
+  return bookingSeriesColumnsExist;
+}
+
+function bookingSeriesColumnsSql(exist: boolean) {
+  return exist
+    ? Prisma.sql`b."seriesId", b."occurrenceIndex", b."occurrenceLocalDate",`
+    : Prisma.sql`NULL::text AS "seriesId", NULL::integer AS "occurrenceIndex", NULL::date AS "occurrenceLocalDate",`;
+}
+
 async function getBookingWithRelationsById(id: string): Promise<BookingWithRelations | undefined> {
   const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
+  const seriesColumns = bookingSeriesColumnsSql(await ensureBookingSeriesColumnsExist());
   const rows = hasPaymentColumns
     ? await prisma.$queryRaw<BookingWithRelationsRow[]>`
         SELECT
@@ -362,6 +397,7 @@ async function getBookingWithRelationsById(id: string): Promise<BookingWithRelat
           b."confirmationTokenUsedAt",
           b."createdBy"::text AS "createdBy",
           b."createdAt",
+          ${seriesColumns}
           br.name AS "barberName",
           br."avatarUrl" AS "barberAvatarUrl",
           br."isActive" AS "barberIsActive",
@@ -395,6 +431,7 @@ async function getBookingWithRelationsById(id: string): Promise<BookingWithRelat
           NULL::timestamp AS "confirmationTokenUsedAt",
           'CLIENT' AS "createdBy",
           b."createdAt",
+          ${seriesColumns}
           br.name AS "barberName",
           br."avatarUrl" AS "barberAvatarUrl",
           br."isActive" AS "barberIsActive",
@@ -486,6 +523,7 @@ export const prismaRepository: BookingRepository = {
 
   async getBookingByConfirmationToken(token: string) {
     const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
+    const seriesColumns = bookingSeriesColumnsSql(await ensureBookingSeriesColumnsExist());
     const tokenHash = sha256(token);
     const rows = hasPaymentColumns
       ? await prisma.$queryRaw<BookingWithRelationsRow[]>`
@@ -508,6 +546,7 @@ export const prismaRepository: BookingRepository = {
             b."confirmationTokenUsedAt",
             b."createdBy"::text AS "createdBy",
             b."createdAt",
+            ${seriesColumns}
             br.name AS "barberName",
             br."avatarUrl" AS "barberAvatarUrl",
             br."isActive" AS "barberIsActive",
@@ -542,6 +581,7 @@ export const prismaRepository: BookingRepository = {
             NULL::timestamp AS "confirmationTokenUsedAt",
             'CLIENT' AS "createdBy",
             b."createdAt",
+            ${seriesColumns}
             br.name AS "barberName",
             br."avatarUrl" AS "barberAvatarUrl",
             br."isActive" AS "barberIsActive",
@@ -562,6 +602,7 @@ export const prismaRepository: BookingRepository = {
 
   async listBookings(filters) {
     const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
+    const seriesColumns = bookingSeriesColumnsSql(await ensureBookingSeriesColumnsExist());
     const barberFilter = filters?.barberId ? Prisma.sql`AND b."barberId" = ${filters.barberId}` : Prisma.empty;
     const clientFilter = filters?.clientId ? Prisma.sql`AND b."clientId" = ${filters.clientId}` : Prisma.empty;
     const statusFilter =
@@ -594,6 +635,7 @@ export const prismaRepository: BookingRepository = {
             b."confirmationTokenUsedAt",
             b."createdBy"::text AS "createdBy",
             b."createdAt",
+            ${seriesColumns}
             br.name AS "barberName",
             br."avatarUrl" AS "barberAvatarUrl",
             br."isActive" AS "barberIsActive",
@@ -631,6 +673,7 @@ export const prismaRepository: BookingRepository = {
             NULL::timestamp AS "confirmationTokenUsedAt",
             'CLIENT' AS "createdBy",
             b."createdAt",
+            ${seriesColumns}
             br.name AS "barberName",
             br."avatarUrl" AS "barberAvatarUrl",
             br."isActive" AS "barberIsActive",
@@ -657,10 +700,8 @@ export const prismaRepository: BookingRepository = {
     const rows = await prisma.blockedSlot.findMany({
       where: dayRange
         ? {
-          dateTimeStart: {
-            gte: new Date(dayRange.start),
-            lte: new Date(dayRange.end),
-          },
+          dateTimeStart: { lt: new Date(dayRange.end) },
+          dateTimeEnd: { gt: new Date(dayRange.start) },
         }
         : undefined,
       orderBy: { dateTimeStart: "asc" },

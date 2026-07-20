@@ -58,24 +58,41 @@ enum BookingCreatedBy {
   CLIENT
 }
 
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum BookingSeriesStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum RecurrenceConflictPolicy {
+  REJECT_ALL
+}
+
 model Barber {
-  id           String               @id @default(cuid())
-  name         String
-  avatarUrl    String?
-  isActive     Boolean              @default(true)
-  bookings     Booking[]
-  blocked      BlockedSlot[]
-  availability BarberAvailability[]
-  access       AdminAccess?
+  id            String               @id @default(cuid())
+  name          String
+  avatarUrl     String?
+  isActive      Boolean              @default(true)
+  bookings      Booking[]
+  bookingSeries BookingSeries[]
+  blocked       BlockedSlot[]
+  availability  BarberAvailability[]
+  access        AdminAccess?
 }
 
 model Service {
-  id              String    @id @default(cuid())
+  id              String          @id @default(cuid())
   name            String
   durationMinutes Int
   priceCents      Int
-  isActive        Boolean   @default(true)
+  isActive        Boolean         @default(true)
   bookings        Booking[]
+  bookingSeries   BookingSeries[]
 }
 
 model Booking {
@@ -97,18 +114,57 @@ model Booking {
   confirmationTokenUsedAt    DateTime?
   createdBy                  BookingCreatedBy     @default(CLIENT)
   createdAt                  DateTime             @default(now())
+  seriesId                   String?
+  occurrenceIndex            Int?
+  occurrenceLocalDate        DateTime?            @db.Date
 
   barber        Barber                 @relation(fields: [barberId], references: [id])
   service       Service                @relation(fields: [serviceId], references: [id])
   client        Client?                @relation(fields: [clientId], references: [id], onDelete: SetNull)
   notifications NotificationDelivery[]
+  series        BookingSeries?         @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
+  @@unique([seriesId, occurrenceLocalDate])
   @@index([barberId, dateTimeStart])
   @@index([clientId])
   @@index([status])
   @@index([paymentStatus])
   @@index([confirmationToken])
   @@index([confirmationTokenHash])
+  @@index([seriesId])
+}
+
+model BookingSeries {
+  id             String                   @id @default(cuid())
+  barberId       String
+  serviceId      String
+  clientId       String?
+  customerName   String
+  customerPhone  String
+  observations   String?
+  frequency      RecurrenceFrequency
+  interval       Int                      @default(1)
+  weekdays       Int[]                    @default([])
+  localTime      String
+  timezone       String
+  startsOn       DateTime                 @db.Date
+  endsOn         DateTime                 @db.Date
+  status         BookingSeriesStatus      @default(ACTIVE)
+  conflictPolicy RecurrenceConflictPolicy @default(REJECT_ALL)
+  idempotencyKey String                   @unique
+  requestHash    String
+  createdBy      BookingCreatedBy
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  barber   Barber    @relation(fields: [barberId], references: [id])
+  service  Service   @relation(fields: [serviceId], references: [id])
+  client   Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  bookings Booking[]
+
+  @@index([barberId, startsOn, endsOn])
+  @@index([clientId])
+  @@index([status])
 }
 
 model NotificationDelivery {
@@ -160,6 +216,7 @@ model Client {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   bookings            Booking[]
+  bookingSeries       BookingSeries[]
   passwordResetTokens PasswordResetToken[]
   sessions            ClientSession[]
 }

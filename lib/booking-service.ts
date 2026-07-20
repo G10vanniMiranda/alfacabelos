@@ -20,6 +20,7 @@ import { BookingFilters } from "@/types/domain";
 import { generateAvailableSlots, getDayRange } from "./time";
 import { addMinutesToIso, getLocalDateInput, overlaps } from "./utils";
 import { registerRateLimitEvent, sha256 } from "./security";
+import { detachOccurrenceFromSeries } from "./booking-series-service";
 
 const HOME_REVALIDATE_SECONDS = 60 * 15;
 
@@ -489,6 +490,7 @@ export async function rescheduleClientBooking(input: {
   if (!updated) {
     throw new Error("Não foi possível concluir o reagendamento");
   }
+  if (booking.seriesId) await detachOccurrenceFromSeries(updated.id);
   return updated;
 }
 
