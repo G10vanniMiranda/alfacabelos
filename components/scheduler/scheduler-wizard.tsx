@@ -20,13 +20,17 @@ import { DateCalendar } from "./date-calendar";
 import { Stepper } from "./stepper";
 
 const STORAGE_KEY = "scheduler-draft";
-type RecurrenceOption = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
+type RecurrenceOption = "NONE" | "WEEKLY" | "MONTHLY";
 type RecurrenceDraft = {
   date?: string;
   time?: string;
-  recurrence?: RecurrenceOption;
+  recurrence?: SchedulerDraft["recurrence"];
   repeatUntil?: string;
 };
+
+function normalizeRecurrence(recurrence?: SchedulerDraft["recurrence"]): RecurrenceOption {
+  return recurrence === "WEEKLY" || recurrence === "MONTHLY" ? recurrence : "NONE";
+}
 
 function formatFullDate(date?: string): string {
   if (!date) {
@@ -84,10 +88,6 @@ function daysInMonth(year: number, month: number) {
 function addDateByRecurrence(startDate: string, recurrence: RecurrenceOption, step: number) {
   const { year, month, day } = parseDateParts(startDate);
 
-  if (recurrence === "DAILY") {
-    const date = new Date(year, month - 1, day + step);
-    return toDateInput(date.getFullYear(), date.getMonth() + 1, date.getDate());
-  }
   if (recurrence === "WEEKLY") {
     const date = new Date(year, month - 1, day + step * 7);
     return toDateInput(date.getFullYear(), date.getMonth() + 1, date.getDate());
@@ -102,12 +102,6 @@ function addDateByRecurrence(startDate: string, recurrence: RecurrenceOption, st
   return startDate;
 }
 
-function addDaysToDateInput(date: string, amount: number) {
-  const { year, month, day } = parseDateParts(date);
-  const next = new Date(year, month - 1, day + amount);
-  return toDateInput(next.getFullYear(), next.getMonth() + 1, next.getDate());
-}
-
 function addMonthsToDateInput(date: string, amount: number) {
   const { year, month, day } = parseDateParts(date);
   const monthIndex = month - 1 + amount;
@@ -117,9 +111,6 @@ function addMonthsToDateInput(date: string, amount: number) {
 }
 
 function getDefaultRepeatUntil(date: string, recurrence: RecurrenceOption) {
-  if (recurrence === "DAILY") {
-    return addDaysToDateInput(date, 7);
-  }
   if (recurrence === "WEEKLY") {
     return addMonthsToDateInput(date, 1);
   }
@@ -130,9 +121,6 @@ function getDefaultRepeatUntil(date: string, recurrence: RecurrenceOption) {
 }
 
 function getRecurrenceLabel(recurrence: RecurrenceOption, date?: string) {
-  if (recurrence === "DAILY") {
-    return "Todos os dias";
-  }
   if (recurrence === "WEEKLY") {
     const label = date
       ? new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(new Date(`${date}T12:00:00`))
@@ -150,7 +138,7 @@ function buildOccurrenceStarts(draft: RecurrenceDraft) {
     return [];
   }
 
-  const recurrence = draft.recurrence ?? "NONE";
+  const recurrence = normalizeRecurrence(draft.recurrence);
   const time = getTimeLabelInTimeZone(draft.time, BUSINESS_CONFIG.timezone);
   if (recurrence === "NONE") {
     return [zonedDateTimeToUtcIso(draft.date, `${time}:00`, BUSINESS_CONFIG.timezone)];
@@ -200,7 +188,7 @@ export function SchedulerWizard({
       time: getTimeLabelInTimeZone(start, BUSINESS_CONFIG.timezone),
     }));
   }, [occurrenceStarts]);
-  const recurrence = draft.recurrence ?? "NONE";
+  const recurrence = normalizeRecurrence(draft.recurrence);
   const recurrenceHasLimitError = recurrence !== "NONE" && occurrenceStarts.length >= 60;
 
   useEffect(() => {
@@ -208,9 +196,7 @@ export function SchedulerWizard({
     if (raw) {
       try {
         const fromStorage = JSON.parse(raw) as SchedulerDraft;
-        const storedRecurrence = ["NONE", "DAILY", "WEEKLY", "MONTHLY"].includes(fromStorage.recurrence ?? "")
-          ? fromStorage.recurrence
-          : "NONE";
+        const storedRecurrence = normalizeRecurrence(fromStorage.recurrence);
         setDraft({
           ...fromStorage,
           serviceId: initialSelection?.serviceId ?? (services.some((service) => service.id === fromStorage.serviceId) ? fromStorage.serviceId : undefined),
@@ -474,9 +460,9 @@ export function SchedulerWizard({
                   date,
                   time: undefined,
                   repeatUntil:
-                    (prev.recurrence ?? "NONE") === "NONE"
+                    normalizeRecurrence(prev.recurrence) === "NONE"
                       ? date
-                      : getDefaultRepeatUntil(date, prev.recurrence ?? "NONE"),
+                      : getDefaultRepeatUntil(date, normalizeRecurrence(prev.recurrence)),
                 }));
               }}
             />
@@ -549,7 +535,6 @@ export function SchedulerWizard({
                     className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-cyan-300"
                   >
                     <option value="NONE">Nao repetir</option>
-                    <option value="DAILY">Todos os dias</option>
                     <option value="WEEKLY">Toda semana no mesmo dia</option>
                     <option value="MONTHLY">Uma vez por mes no mesmo dia</option>
                   </select>
