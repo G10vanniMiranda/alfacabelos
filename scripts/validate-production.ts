@@ -33,7 +33,7 @@ async function validateDatabase() {
 
   const expectedTables = [
     "AdminAccess", "AdminLoginAttempt", "AdminSession", "Barber", "BarberAvailability", "BlockedSlot",
-    "Booking", "Client", "ClientSession", "GalleryImage", "NotificationDelivery", "PasswordResetToken", "SecurityRateLimitEvent", "Service",
+    "Booking", "BookingSeries", "Client", "ClientSession", "GalleryImage", "NotificationDelivery", "PasswordResetToken", "SecurityRateLimitEvent", "Service",
   ];
   const tables = await prisma.$queryRaw<Array<{ tableName: string }>>`
     SELECT table_name AS "tableName"
@@ -43,6 +43,30 @@ async function validateDatabase() {
   const present = new Set(tables.map((item) => item.tableName));
   const missing = expectedTables.filter((name) => !present.has(name));
   record("database:tables", missing.length ? "FAIL" : "PASS", missing.length ? `ausentes: ${missing.join(", ")}` : `${expectedTables.length} tabelas esperadas presentes`);
+
+  const requiredColumns = await prisma.$queryRaw<Array<{ tableName: string; columnName: string }>>`
+    SELECT table_name AS "tableName", column_name AS "columnName"
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND (
+        (table_name = 'Service' AND column_name = 'isProcedure')
+        OR
+        (table_name = 'Booking' AND column_name IN ('seriesId', 'occurrenceIndex', 'occurrenceLocalDate'))
+      )
+  `;
+  const presentColumns = new Set(requiredColumns.map((item) => `${item.tableName}.${item.columnName}`));
+  const expectedColumns = [
+    "Service.isProcedure",
+    "Booking.seriesId",
+    "Booking.occurrenceIndex",
+    "Booking.occurrenceLocalDate",
+  ];
+  const missingColumns = expectedColumns.filter((column) => !presentColumns.has(column));
+  record(
+    "database:columns",
+    missingColumns.length ? "FAIL" : "PASS",
+    missingColumns.length ? `ausentes: ${missingColumns.join(", ")}` : "colunas evolutivas presentes",
+  );
 
   const rls = await prisma.$queryRaw<Array<{ tableName: string; enabled: boolean }>>`
     SELECT c.relname AS "tableName", c.relrowsecurity AS "enabled"
@@ -85,6 +109,18 @@ async function validateDatabase() {
 
   const invalidDurations = await prisma.service.count({ where: { OR: [{ durationMinutes: { lt: 15 } }, { durationMinutes: { gt: 240 } }] } });
   record("database:service-durations", invalidDurations === 0 ? "PASS" : "FAIL", invalidDurations ? `${invalidDurations} duração(ões) fora de 15–240 min` : "todas as durações dentro dos limites");
+  if (presentColumns.has("Service.isProcedure")) {
+    const invalidStandardDurations = await prisma.service.count({
+      where: { isProcedure: false, durationMinutes: { gt: 50 } },
+    });
+    record(
+      "database:standard-service-duration",
+      invalidStandardDurations === 0 ? "PASS" : "FAIL",
+      invalidStandardDurations
+        ? `${invalidStandardDurations} serviço(s) comum(ns) acima de 50 min`
+        : "serviços comuns respeitam o bloco de uma hora",
+    );
+  }
 }
 
 async function validateStorage() {

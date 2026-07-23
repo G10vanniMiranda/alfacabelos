@@ -38,6 +38,7 @@ type BookingWithRelationsRow = BookingRow & {
   barberIsActive: boolean;
   serviceName: string;
   serviceDurationMinutes: number;
+  serviceIsProcedure: boolean;
   servicePriceCents: number;
   serviceIsActive: boolean;
 };
@@ -80,6 +81,7 @@ function toBookingWithRelations(row: BookingWithRelationsRow): BookingWithRelati
       id: row.serviceId,
       name: row.serviceName,
       durationMinutes: row.serviceDurationMinutes,
+      isProcedure: row.serviceIsProcedure,
       priceCents: row.servicePriceCents,
       isActive: row.serviceIsActive,
     },
@@ -403,6 +405,7 @@ async function getBookingWithRelationsById(id: string): Promise<BookingWithRelat
           br."isActive" AS "barberIsActive",
           s.name AS "serviceName",
           s."durationMinutes" AS "serviceDurationMinutes",
+          s."isProcedure" AS "serviceIsProcedure",
           s."priceCents" AS "servicePriceCents",
           s."isActive" AS "serviceIsActive"
         FROM "Booking" b
@@ -437,6 +440,7 @@ async function getBookingWithRelationsById(id: string): Promise<BookingWithRelat
           br."isActive" AS "barberIsActive",
           s.name AS "serviceName",
           s."durationMinutes" AS "serviceDurationMinutes",
+          s."isProcedure" AS "serviceIsProcedure",
           s."priceCents" AS "servicePriceCents",
           s."isActive" AS "serviceIsActive"
         FROM "Booking" b
@@ -464,6 +468,7 @@ export const prismaRepository: BookingRepository = {
         name: input.name,
         priceCents: input.priceCents,
         durationMinutes: input.durationMinutes,
+        isProcedure: input.isProcedure,
         isActive: true,
       },
     });
@@ -483,6 +488,7 @@ export const prismaRepository: BookingRepository = {
         name: input.name,
         priceCents: input.priceCents,
         durationMinutes: input.durationMinutes,
+        isProcedure: input.isProcedure,
       },
     });
   },
@@ -552,6 +558,7 @@ export const prismaRepository: BookingRepository = {
             br."isActive" AS "barberIsActive",
             s.name AS "serviceName",
             s."durationMinutes" AS "serviceDurationMinutes",
+            s."isProcedure" AS "serviceIsProcedure",
             s."priceCents" AS "servicePriceCents",
             s."isActive" AS "serviceIsActive"
           FROM "Booking" b
@@ -587,6 +594,7 @@ export const prismaRepository: BookingRepository = {
             br."isActive" AS "barberIsActive",
             s.name AS "serviceName",
             s."durationMinutes" AS "serviceDurationMinutes",
+            s."isProcedure" AS "serviceIsProcedure",
             s."priceCents" AS "servicePriceCents",
             s."isActive" AS "serviceIsActive"
           FROM "Booking" b
@@ -641,6 +649,7 @@ export const prismaRepository: BookingRepository = {
             br."isActive" AS "barberIsActive",
             s.name AS "serviceName",
             s."durationMinutes" AS "serviceDurationMinutes",
+            s."isProcedure" AS "serviceIsProcedure",
             s."priceCents" AS "servicePriceCents",
             s."isActive" AS "serviceIsActive"
           FROM "Booking" b
@@ -679,6 +688,7 @@ export const prismaRepository: BookingRepository = {
             br."isActive" AS "barberIsActive",
             s.name AS "serviceName",
             s."durationMinutes" AS "serviceDurationMinutes",
+            s."isProcedure" AS "serviceIsProcedure",
             s."priceCents" AS "servicePriceCents",
             s."isActive" AS "serviceIsActive"
           FROM "Booking" b

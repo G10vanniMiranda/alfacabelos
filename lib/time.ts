@@ -1,49 +1,22 @@
 import { BUSINESS_CONFIG } from "@/lib/config";
+import { getBookingOccupiedMinutes, mergeOperatingWindows } from "@/lib/scheduling-rules";
 import { getDayRangeIso, getTimeLabelInTimeZone, overlaps, toMinutes, zonedDateTimeToUtcIso } from "@/lib/utils";
 import { AvailableSlot } from "@/types/scheduler";
 import { BlockedSlot, Booking, DailyOperatingConfig } from "@/types/domain";
-
-function mergeDailyWindows(windows: DailyOperatingConfig[]): DailyOperatingConfig[] {
-  const sorted = [...windows].sort((a, b) => a.open.localeCompare(b.open));
-  if (sorted.length === 0) {
-    return [];
-  }
-
-  const merged: DailyOperatingConfig[] = [{ ...sorted[0] }];
-
-  for (let i = 1; i < sorted.length; i += 1) {
-    const current = sorted[i];
-    const last = merged[merged.length - 1];
-    if (!current || !last) {
-      continue;
-    }
-
-    // Join contiguous or overlapping ranges (e.g. 09:00-10:00 + 10:00-11:00 => 09:00-11:00).
-    if (current.open <= last.close) {
-      if (current.close > last.close) {
-        last.close = current.close;
-      }
-      continue;
-    }
-
-    merged.push({ ...current });
-  }
-
-  return merged;
-}
 
 export function generateAvailableSlots(params: {
   date: string;
   barberId: string;
   serviceDurationMinutes: number;
+  serviceIsProcedure?: boolean;
   barberBookings: Booking[];
   blockedSlots: BlockedSlot[];
   operatingHours?: DailyOperatingConfig[];
 }): AvailableSlot[] {
-  const { date, barberId, serviceDurationMinutes, barberBookings, blockedSlots, operatingHours } = params;
+  const { date, barberId, serviceDurationMinutes, serviceIsProcedure, barberBookings, blockedSlots, operatingHours } = params;
   const [year, month, dayOfMonth] = date.split("-").map(Number);
   const day = new Date(Date.UTC(year, month - 1, dayOfMonth, 12)).getUTCDay();
-  const windows = mergeDailyWindows(
+  const windows = mergeOperatingWindows(
     (operatingHours ?? BUSINESS_CONFIG.operatingHours).filter((entry) => entry.dayOfWeek === day),
   );
   if (windows.length === 0) {
@@ -68,7 +41,10 @@ export function generateAvailableSlots(params: {
       const start = new Date(zonedDateTimeToUtcIso(date, startTime, BUSINESS_CONFIG.timezone));
 
       const end = new Date(start);
-      end.setMinutes(end.getMinutes() + serviceDurationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes);
+      end.setMinutes(end.getMinutes() + getBookingOccupiedMinutes({
+        durationMinutes: serviceDurationMinutes,
+        isProcedure: serviceIsProcedure ?? false,
+      }));
 
       if (end > windowEnd) {
         continue;

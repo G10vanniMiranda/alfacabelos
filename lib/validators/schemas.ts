@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STANDARD_SERVICE_MAX_MINUTES } from "@/lib/scheduling-rules";
 
 export const phoneSchema = z
   .string()
@@ -276,18 +277,29 @@ export const replaceBarberDayAvailabilitySchema = z
     path: ["ranges"],
   });
 
-export const createServiceSchema = z.object({
+const serviceFieldsSchema = z.object({
   name: z.string().trim().min(2, "Nome do serviço é obrigatório"),
   priceCents: z.number().int().positive("Preço deve ser maior que zero"),
   durationMinutes: z.number().int().min(15, "Duração mínima de 15 minutos").max(240, "Duração máxima de 240 minutos"),
+  isProcedure: z.boolean().default(false),
 });
 
-export const updateServiceSchema = z.object({
+const standardServiceDurationRule = {
+  message: `Serviços comuns podem durar no máximo ${STANDARD_SERVICE_MAX_MINUTES} minutos`,
+  path: ["durationMinutes"],
+};
+
+export const createServiceSchema = serviceFieldsSchema.refine(
+  (data) => data.isProcedure || data.durationMinutes <= STANDARD_SERVICE_MAX_MINUTES,
+  standardServiceDurationRule,
+);
+
+export const updateServiceSchema = serviceFieldsSchema.extend({
   serviceId: z.string().min(1, "Serviço inválido"),
-  name: z.string().trim().min(2, "Nome do serviço é obrigatório"),
-  priceCents: z.number().int().positive("Preço deve ser maior que zero"),
-  durationMinutes: z.number().int().min(15, "Duração mínima de 15 minutos").max(240, "Duração máxima de 240 minutos"),
-});
+}).refine(
+  (data) => data.isProcedure || data.durationMinutes <= STANDARD_SERVICE_MAX_MINUTES,
+  standardServiceDurationRule,
+);
 
 export const createGalleryImageSchema = z.object({
   imageUrl: z

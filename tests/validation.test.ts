@@ -21,6 +21,8 @@ test("aceita telefone de cliente com mascara e normaliza DDI opcional", () => {
 
 test("valida limites de duração do serviço", () => {
   assert.equal(createServiceSchema.safeParse({ name: "Corte", priceCents: 4500, durationMinutes: 45 }).success, true);
+  assert.equal(createServiceSchema.safeParse({ name: "Serviço longo", priceCents: 9000, durationMinutes: 75 }).success, false);
+  assert.equal(createServiceSchema.safeParse({ name: "Procedimento", priceCents: 9000, durationMinutes: 75, isProcedure: true }).success, true);
   assert.equal(createServiceSchema.safeParse({ name: "Corte", priceCents: 4500, durationMinutes: 10 }).success, false);
   assert.equal(createServiceSchema.safeParse({ name: "Corte", priceCents: 4500, durationMinutes: 300 }).success, false);
 });

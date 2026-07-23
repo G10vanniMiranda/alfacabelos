@@ -89,6 +89,7 @@ model Service {
   id              String          @id @default(cuid())
   name            String
   durationMinutes Int
+  isProcedure     Boolean         @default(false)
   priceCents      Int
   isActive        Boolean         @default(true)
   bookings        Booking[]

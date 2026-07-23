@@ -19,6 +19,7 @@ export type Service = {
   id: string;
   name: string;
   durationMinutes: number;
+  isProcedure: boolean;
   priceCents: number;
   isActive: boolean;
 };

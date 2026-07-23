@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { randomBytes } from "node:crypto";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { isClosedOperatingWindow } from "@/lib/constants/availability";
+import { getBookingOccupiedMinutes } from "@/lib/scheduling-rules";
 import { DEFAULT_BARBER_ID } from "@/lib/constants/barber";
 import { repository } from "@/lib/repositories";
 import {
@@ -61,6 +62,7 @@ export async function createService(input: unknown) {
     name: parsed.data.name,
     priceCents: parsed.data.priceCents,
     durationMinutes: parsed.data.durationMinutes,
+    isProcedure: parsed.data.isProcedure,
   });
 }
 
@@ -74,6 +76,7 @@ export async function updateService(input: unknown) {
     name: parsed.data.name,
     priceCents: parsed.data.priceCents,
     durationMinutes: parsed.data.durationMinutes,
+    isProcedure: parsed.data.isProcedure,
   });
 
   if (!updated) {
@@ -143,6 +146,7 @@ export async function getAvailableSlots(params: { date: string; barberId?: strin
     date: params.date,
     barberId,
     serviceDurationMinutes: service.durationMinutes,
+    serviceIsProcedure: service.isProcedure,
     barberBookings: bookings,
     blockedSlots,
     operatingHours: availabilities
@@ -170,7 +174,7 @@ export async function createBooking(input: unknown, options?: { clientId?: strin
 
   const computedEnd = addMinutesToIso(
     data.start,
-    service.durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes,
+    getBookingOccupiedMinutes(service),
   );
 
   const requestedDate = getLocalDateInput(data.start, BUSINESS_CONFIG.timezone);
@@ -185,6 +189,7 @@ export async function createBooking(input: unknown, options?: { clientId?: strin
     date: requestedDate,
     barberId,
     serviceDurationMinutes: service.durationMinutes,
+    serviceIsProcedure: service.isProcedure,
     barberBookings: dayBookings,
     blockedSlots: dayBlockedSlots,
     operatingHours: availabilities
@@ -257,7 +262,7 @@ export async function createBarberBooking(input: unknown) {
 
   const computedEnd = addMinutesToIso(
     data.start,
-    service.durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes,
+    getBookingOccupiedMinutes(service),
   );
 
   const conflicts = await repository.listBookingsInRange(data.start, computedEnd, barberId);
@@ -317,7 +322,7 @@ export async function updateAdminBooking(input: unknown) {
 
   const computedEnd = addMinutesToIso(
     parsed.data.start,
-    service.durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes,
+    getBookingOccupiedMinutes(service),
   );
 
   const updated = await repository.updateBooking({
@@ -454,7 +459,7 @@ export async function rescheduleClientBooking(input: {
   }
   const computedEnd = addMinutesToIso(
     input.start,
-    service.durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes,
+    getBookingOccupiedMinutes(service),
   );
   const requestedDate = getLocalDateInput(input.start, BUSINESS_CONFIG.timezone);
   const { start: dayStart, end: dayEnd } = getDayRange(requestedDate);
@@ -467,6 +472,7 @@ export async function rescheduleClientBooking(input: {
     date: requestedDate,
     barberId: input.barberId,
     serviceDurationMinutes: service.durationMinutes,
+    serviceIsProcedure: service.isProcedure,
     barberBookings: dayBookings.filter((item) => item.id !== booking.id),
     blockedSlots,
     operatingHours: availabilities

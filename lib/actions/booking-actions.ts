@@ -563,6 +563,7 @@ export async function updateServiceAction(payload: {
   name: string;
   priceCents: number;
   durationMinutes: number;
+  isProcedure: boolean;
 }) {
   await assertAdminSession();
   await updateService(payload);
@@ -576,6 +577,7 @@ export async function createServiceAction(payload: {
   name: string;
   priceCents: number;
   durationMinutes: number;
+  isProcedure: boolean;
 }) {
   await assertAdminSession();
   await createService(payload);

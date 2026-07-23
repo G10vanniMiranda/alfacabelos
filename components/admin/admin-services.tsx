@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { createServiceAction, deleteServiceAction, updateServiceAction } from "@/lib/actions/booking-actions";
 import { useToast } from "@/components/ui/toast";
+import { STANDARD_SERVICE_MAX_MINUTES } from "@/lib/scheduling-rules";
 import { formatBRLFromCents } from "@/lib/utils";
 import { Service } from "@/types/domain";
 
@@ -26,9 +27,9 @@ function parsePriceToCents(value: string): number {
 export function AdminServices({ services }: AdminServicesProps) {
   const [isPending, startTransition] = useTransition();
   const { pushToast } = useToast();
-  const [newService, setNewService] = useState({ name: "", price: "", durationMinutes: "45" });
+  const [newService, setNewService] = useState({ name: "", price: "", durationMinutes: "45", isProcedure: false });
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", price: "", durationMinutes: "45" });
+  const [editForm, setEditForm] = useState({ name: "", price: "", durationMinutes: "45", isProcedure: false });
 
   const editingService = useMemo(
     () => services.find((service) => service.id === editingServiceId),
@@ -49,19 +50,21 @@ export function AdminServices({ services }: AdminServicesProps) {
       name: service.name,
       price: formatPriceInput(service.priceCents),
       durationMinutes: String(service.durationMinutes),
+      isProcedure: service.isProcedure,
     });
   }
 
   function closeEditModal() {
     setEditingServiceId(null);
-    setEditForm({ name: "", price: "", durationMinutes: "45" });
+    setEditForm({ name: "", price: "", durationMinutes: "45", isProcedure: false });
   }
 
   function submitNewService() {
     const priceCents = parsePriceToCents(newService.price);
     const durationMinutes = Number(newService.durationMinutes);
-    if (!newService.name.trim() || !Number.isFinite(priceCents) || !Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 240) {
-      pushToast("Preencha nome, preço e duração entre 15 e 240 minutos", "error");
+    const maxDuration = newService.isProcedure ? 240 : STANDARD_SERVICE_MAX_MINUTES;
+    if (!newService.name.trim() || !Number.isFinite(priceCents) || !Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > maxDuration) {
+      pushToast(`Preencha nome, preço e duração entre 15 e ${maxDuration} minutos`, "error");
       return;
     }
 
@@ -71,8 +74,9 @@ export function AdminServices({ services }: AdminServicesProps) {
           name: newService.name.trim(),
           priceCents,
           durationMinutes,
+          isProcedure: newService.isProcedure,
         });
-        setNewService({ name: "", price: "", durationMinutes: "45" });
+        setNewService({ name: "", price: "", durationMinutes: "45", isProcedure: false });
         pushToast("Servico criado", "success");
         window.location.reload();
       } catch (error) {
@@ -88,8 +92,9 @@ export function AdminServices({ services }: AdminServicesProps) {
 
     const priceCents = parsePriceToCents(editForm.price);
     const durationMinutes = Number(editForm.durationMinutes);
-    if (!editForm.name.trim() || !Number.isFinite(priceCents) || !Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 240) {
-      pushToast("Preencha nome, preço e duração entre 15 e 240 minutos", "error");
+    const maxDuration = editForm.isProcedure ? 240 : STANDARD_SERVICE_MAX_MINUTES;
+    if (!editForm.name.trim() || !Number.isFinite(priceCents) || !Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > maxDuration) {
+      pushToast(`Preencha nome, preço e duração entre 15 e ${maxDuration} minutos`, "error");
       return;
     }
 
@@ -100,6 +105,7 @@ export function AdminServices({ services }: AdminServicesProps) {
           name: editForm.name.trim(),
           priceCents,
           durationMinutes,
+          isProcedure: editForm.isProcedure,
         });
         pushToast("Servico atualizado", "success");
         closeEditModal();
@@ -200,12 +206,26 @@ export function AdminServices({ services }: AdminServicesProps) {
               <input
                 type="number"
                 min={15}
-                max={240}
+                max={newService.isProcedure ? 240 : STANDARD_SERVICE_MAX_MINUTES}
                 step={5}
                 value={newService.durationMinutes}
                 onChange={(event) => setNewService((prev) => ({ ...prev, durationMinutes: event.target.value }))}
                 className="mt-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-amber-200"
               />
+            </label>
+            <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+              <input
+                type="checkbox"
+                checked={newService.isProcedure}
+                onChange={(event) => setNewService((prev) => ({ ...prev, isProcedure: event.target.checked }))}
+                className="mt-1 size-4 accent-cyan-400"
+              />
+              <span>
+                <span className="block text-sm font-medium text-zinc-200">Este serviço é um procedimento</span>
+                <span className="mt-1 block text-xs text-zinc-500">
+                  Serviços comuns usam um bloco de 1 hora; procedimentos podem durar mais.
+                </span>
+              </span>
             </label>
             <button
               type="button"
@@ -242,6 +262,11 @@ export function AdminServices({ services }: AdminServicesProps) {
                       <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-100">
                         Ativo
                       </span>
+                      {service.isProcedure ? (
+                        <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+                          Procedimento
+                        </span>
+                      ) : null}
                     </div>
                     <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
@@ -326,12 +351,26 @@ export function AdminServices({ services }: AdminServicesProps) {
                 <input
                   type="number"
                   min={15}
-                  max={240}
+                  max={editForm.isProcedure ? 240 : STANDARD_SERVICE_MAX_MINUTES}
                   step={5}
                   value={editForm.durationMinutes}
                   onChange={(event) => setEditForm((prev) => ({ ...prev, durationMinutes: event.target.value }))}
                   className="mt-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-amber-200"
                 />
+              </label>
+              <label className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+                <input
+                  type="checkbox"
+                  checked={editForm.isProcedure}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, isProcedure: event.target.checked }))}
+                  className="mt-1 size-4 accent-cyan-400"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-zinc-200">Este serviço é um procedimento</span>
+                  <span className="mt-1 block text-xs text-zinc-500">
+                    Serviços comuns usam um bloco de 1 hora; procedimentos podem durar mais.
+                  </span>
+                </span>
               </label>
             </div>
 

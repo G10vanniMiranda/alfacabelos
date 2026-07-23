@@ -22,10 +22,10 @@ async function main() {
 
   await prisma.service.createMany({
     data: [
-      { id: "service-corte", name: "Corte", durationMinutes: 45, priceCents: 5500 },
-      { id: "service-barba", name: "Barba", durationMinutes: 30, priceCents: 4000 },
-      { id: "service-combo", name: "Corte + Barba", durationMinutes: 75, priceCents: 8900 },
-      { id: "service-sobrancelha", name: "Sobrancelha", durationMinutes: 20, priceCents: 2500 },
+      { id: "service-corte", name: "Corte", durationMinutes: 45, isProcedure: false, priceCents: 5500 },
+      { id: "service-barba", name: "Barba", durationMinutes: 30, isProcedure: false, priceCents: 4000 },
+      { id: "service-combo", name: "Corte + Barba", durationMinutes: 50, isProcedure: false, priceCents: 8900 },
+      { id: "service-sobrancelha", name: "Sobrancelha", durationMinutes: 20, isProcedure: false, priceCents: 2500 },
     ],
   });
 

@@ -27,6 +27,10 @@ type RecurrenceDraft = {
   recurrence?: SchedulerDraft["recurrence"];
   repeatUntil?: string;
 };
+type BookingPreviewResponse = {
+  occurrences: Array<{ localDate: string; available: boolean; reason?: string }>;
+  hasConflicts: boolean;
+};
 
 function normalizeRecurrence(recurrence?: SchedulerDraft["recurrence"]): RecurrenceOption {
   return recurrence === "WEEKLY" || recurrence === "MONTHLY" ? recurrence : "NONE";
@@ -65,6 +69,30 @@ async function fetchAvailableSlots(date: string, serviceId: string, barberId: st
     throw new Error((data as { message: string }).message ?? "Falha ao carregar horarios");
   }
 
+  return data;
+}
+
+async function fetchBookingPreview(
+  payload: {
+    serviceId: string;
+    barberId: string;
+    start: string;
+    recurrence: RecurrenceOption;
+    repeatUntil?: string;
+    weekdays?: number[];
+  },
+  signal?: AbortSignal,
+) {
+  const response = await fetch("/api/booking/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, interval: 1 }),
+    signal,
+  });
+  const data = (await response.json()) as BookingPreviewResponse | { message?: string };
+  if (!response.ok || !("occurrences" in data)) {
+    throw new Error(("message" in data && data.message) || "Falha ao validar as repetições");
+  }
   return data;
 }
 
@@ -178,6 +206,8 @@ export function SchedulerWizard({
   const [draft, setDraft] = useState<SchedulerDraft>({ ...initialSelection });
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string>();
   const slotsRequestRef = useRef<AbortController | null>(null);
 
   const minDate = useMemo(() => getTodayInTimeZone(BUSINESS_CONFIG.timezone), []);
@@ -286,6 +316,63 @@ export function SchedulerWizard({
     return () => slotsRequestRef.current?.abort();
   }, []);
 
+  useEffect(() => {
+    if (
+      step !== 3 ||
+      recurrence === "NONE" ||
+      !draft.serviceId ||
+      !draft.barberId ||
+      !draft.time ||
+      !draft.date ||
+      !draft.repeatUntil
+    ) {
+      setPreviewLoading(false);
+      setPreviewError(undefined);
+      return;
+    }
+
+    const controller = new AbortController();
+    setPreviewLoading(true);
+    setPreviewError(undefined);
+    fetchBookingPreview({
+      serviceId: draft.serviceId,
+      barberId: draft.barberId,
+      start: draft.time,
+      recurrence,
+      repeatUntil: draft.repeatUntil,
+      weekdays: recurrence === "WEEKLY"
+        ? [new Date(`${draft.date}T12:00:00Z`).getUTCDay()]
+        : undefined,
+    }, controller.signal)
+      .then((preview) => {
+        const unavailable = preview.occurrences.find((item) => !item.available);
+        setPreviewError(unavailable
+          ? unavailable.reason ?? `Horário indisponível em ${unavailable.localDate}`
+          : undefined);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setPreviewError(error instanceof Error ? error.message : "Falha ao validar as repetições");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setPreviewLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [
+    draft.barberId,
+    draft.date,
+    draft.repeatUntil,
+    draft.serviceId,
+    draft.time,
+    recurrence,
+    step,
+  ]);
+
   function canAdvance(): boolean {
     if (step === 1) {
       return Boolean(draft.serviceId);
@@ -299,7 +386,9 @@ export function SchedulerWizard({
           draft.time &&
           slots.some((slot) => slot.start === draft.time) &&
           occurrenceStarts.length > 0 &&
-          !recurrenceHasLimitError,
+          !recurrenceHasLimitError &&
+          !previewLoading &&
+          !previewError,
       );
     }
     return Boolean(draft.customerName && draft.customerPhone);
@@ -307,6 +396,12 @@ export function SchedulerWizard({
 
   function submitBooking() {
     if (isPending) {
+      return;
+    }
+
+    if (previewLoading || previewError) {
+      pushToast(previewError ?? "Aguarde a validação das repetições", "error");
+      setStep(3);
       return;
     }
 
@@ -570,6 +665,12 @@ export function SchedulerWizard({
                 )}
                 {recurrenceHasLimitError ? (
                   <p className="mt-2 text-xs text-red-100">Reduza o periodo para menos de 60 agendamentos.</p>
+                ) : null}
+                {previewLoading ? (
+                  <p className="mt-2 text-xs text-cyan-100">Validando todas as repetições...</p>
+                ) : null}
+                {previewError ? (
+                  <p className="mt-2 text-xs text-red-100">{previewError}</p>
                 ) : null}
               </div>
             </section>

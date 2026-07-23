@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { isClosedDayAvailability } from "@/lib/constants/availability";
 import { expandRecurrenceRule, weekdayForDate, type RecurrenceRule } from "@/lib/recurrence";
+import { getBookingOccupiedMinutes, mergeOperatingWindows } from "@/lib/scheduling-rules";
 import { getLocalDateInput, getTimeLabelInTimeZone, overlaps, zonedDateTimeToUtcIso } from "@/lib/utils";
 import type { BookingCreatedBy, RecurrenceFrequency, SeriesMutationScope } from "@/types/domain";
 import { sha256 } from "@/lib/security";
@@ -51,7 +52,10 @@ function recurrenceRuleFromInput(input: CreateBookingSeriesInput): RecurrenceRul
   };
 }
 
-function makeOccurrences(input: CreateBookingSeriesInput, durationMinutes: number): Occurrence[] {
+function makeOccurrences(
+  input: CreateBookingSeriesInput,
+  service: { durationMinutes: number; isProcedure: boolean },
+): Occurrence[] {
   const firstDate = getLocalDateInput(input.start, BUSINESS_CONFIG.timezone);
   const localTime = getTimeLabelInTimeZone(input.start, BUSINESS_CONFIG.timezone);
   const rule = recurrenceRuleFromInput(input);
@@ -59,7 +63,7 @@ function makeOccurrences(input: CreateBookingSeriesInput, durationMinutes: numbe
   if (dates[0] !== firstDate) throw new Error("A primeira ocorrencia nao corresponde ao inicio informado");
   return dates.map((localDate, index) => {
     const start = new Date(zonedDateTimeToUtcIso(localDate, `${localTime}:00`, BUSINESS_CONFIG.timezone));
-    const end = new Date(start.getTime() + (durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes) * 60_000);
+    const end = new Date(start.getTime() + getBookingOccupiedMinutes(service) * 60_000);
     return { localDate, start, end, index };
   });
 }
@@ -93,9 +97,9 @@ function validateAgainstOperatingHours(
 ) {
   const weekday = weekdayForDate(occurrence.localDate);
   const savedForDay = availabilityRows.filter((row) => row.dayOfWeek === weekday);
-  const ranges = savedForDay.length
+  const ranges = mergeOperatingWindows(savedForDay.length
     ? savedForDay.filter((row) => !isClosedDayAvailability(row)).map((row) => ({ open: row.openTime, close: row.closeTime }))
-    : BUSINESS_CONFIG.operatingHours.filter((row) => row.dayOfWeek === weekday).map((row) => ({ open: row.open, close: row.close }));
+    : BUSINESS_CONFIG.operatingHours.filter((row) => row.dayOfWeek === weekday).map((row) => ({ open: row.open, close: row.close })));
   const startMinutes = Number(getTimeLabelInTimeZone(occurrence.start.toISOString(), BUSINESS_CONFIG.timezone).slice(0, 2)) * 60
     + Number(getTimeLabelInTimeZone(occurrence.start.toISOString(), BUSINESS_CONFIG.timezone).slice(3));
   const endMinutes = startMinutes + Math.round((occurrence.end.getTime() - occurrence.start.getTime()) / 60_000);
@@ -138,7 +142,7 @@ export async function createBookingSeriesAtomic(input: CreateBookingSeriesInput)
       if (!service) throw new Error("Servico nao encontrado ou inativo");
       if (!barber) throw new Error("Barbeiro nao encontrado ou inativo");
 
-      const occurrences = makeOccurrences(input, service.durationMinutes);
+      const occurrences = makeOccurrences(input, service);
       for (const occurrence of occurrences) validateAgainstOperatingHours(occurrence, availabilityRows);
       const rangeStart = occurrences[0]!.start;
       const rangeEnd = occurrences[occurrences.length - 1]!.end;
@@ -247,7 +251,7 @@ export async function previewBookingSeries(input: CreateBookingSeriesInput) {
   ]);
   if (!service) throw new Error("Servico nao encontrado ou inativo");
   if (!barber) throw new Error("Barbeiro nao encontrado ou inativo");
-  const occurrences = makeOccurrences(input, service.durationMinutes);
+  const occurrences = makeOccurrences(input, service);
   const rangeStart = occurrences[0]!.start;
   const rangeEnd = occurrences[occurrences.length - 1]!.end;
   const [bookings, blocks] = await Promise.all([
@@ -342,7 +346,7 @@ export async function updateBookingSeriesOccurrences(input: {
     const delta = requestedStart.getTime() - target.dateTimeStart.getTime();
     const occurrences = selected.map((booking, index) => {
       const start = new Date(booking.dateTimeStart.getTime() + delta);
-      const end = new Date(start.getTime() + (service.durationMinutes + BUSINESS_CONFIG.bufferBetweenBookingsMinutes) * 60_000);
+      const end = new Date(start.getTime() + getBookingOccupiedMinutes(service) * 60_000);
       return { localDate: getLocalDateInput(start.toISOString(), BUSINESS_CONFIG.timezone), start, end, index };
     });
     const availabilityRows = await tx.barberAvailability.findMany({ where: { barberId: input.barberId } });
