@@ -42,12 +42,12 @@ export default async function ConfirmarAgendamentoPage({
         <h1 className="text-3xl font-bold text-zinc-100 sm:text-4xl">Confirmar agendamento</h1>
 
         {!state.valid ? (
-          <section className="mt-6 rounded-xl border border-amber-400/40 bg-amber-500/10 p-5 text-amber-100">
+          <section className="mt-6 rounded-xl border border-brand/40 bg-brand/10 p-5 text-brand-soft">
             {getUnavailableMessage(state.reason)}
           </section>
         ) : (
           <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-6">
-            <p className="text-sm font-semibold uppercase tracking-wide text-cyan-200">Alfa Cabelos</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-brand-highlight">Alfa Cabelos</p>
             <div className="mt-5 space-y-2 text-zinc-200">
               <p>
                 <span className="text-zinc-400">Servico:</span> {state.booking.service.name}
@@ -67,7 +67,7 @@ export default async function ConfirmarAgendamentoPage({
         )}
 
         <div className="mt-6">
-          <Link href="/agendar" className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-bold text-zinc-100">
+          <Link href="/agendar" className="button-secondary px-4 py-2">
             Ir para agendamentos
           </Link>
         </div>

@@ -90,7 +90,7 @@ export function AdminGallery({ images }: AdminGalleryProps) {
         <h3 className="text-lg font-semibold text-zinc-100">Nova midia</h3>
         <div className="mt-3 min-w-0 grid gap-2 md:grid-cols-[1fr_280px_auto]">
           <div className="min-w-0 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2">
-            <label className="inline-flex cursor-pointer items-center rounded-md border border-zinc-600 px-3 py-1.5 text-sm font-semibold text-zinc-200 transition hover:border-cyan-300 hover:text-cyan-200">
+            <label className="inline-flex cursor-pointer items-center rounded-md border border-zinc-600 px-3 py-1.5 text-sm font-semibold text-zinc-200 transition hover:border-brand-highlight hover:text-brand-highlight">
               Escolher arquivo
               <input
                 type="file"
@@ -108,18 +108,18 @@ export function AdminGallery({ images }: AdminGalleryProps) {
             value={form.altText}
             onChange={(event) => setForm((prev) => ({ ...prev, altText: event.target.value }))}
             placeholder="Descricao da midia (opcional)"
-            className="min-w-0 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+            className="ui-control min-w-0 px-3 py-2"
           />
           <button
             type="button"
             disabled={isPending}
             onClick={submitMedia}
-            className="w-full rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-70 md:w-auto"
+            className="button-primary w-full px-4 py-2 disabled:opacity-70 md:w-auto"
           >
             Adicionar
           </button>
         </div>
-        <p className="mt-2 text-xs text-zinc-500">
+        <p className="mt-2 text-xs text-copy-muted">
           Formatos: JPG, PNG, WEBP, AVIF ate 5MB; MP4, WEBM ou MOV ate 50MB.
           {file ? ` Selecionado: ${selectedFileIsVideo ? "video" : "foto"}.` : ""}
         </p>
@@ -162,7 +162,7 @@ export function AdminGallery({ images }: AdminGalleryProps) {
                     type="button"
                     disabled={isPending}
                     onClick={() => deleteMedia(image.id)}
-                    className="rounded-md border border-red-500/60 px-3 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-500/10 disabled:opacity-70"
+                    className="button-danger px-3 py-2 text-xs"
                   >
                     Remover
                   </button>

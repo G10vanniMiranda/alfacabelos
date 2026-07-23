@@ -58,7 +58,7 @@ export function AvailableSlots({
 
   if (slots.length === 0) {
     return (
-      <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+      <div className="ui-alert ui-alert-warning text-sm">
         Nao ha horarios disponiveis para esse dia.
       </div>
     );
@@ -69,7 +69,7 @@ export function AvailableSlots({
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-zinc-100">Horarios disponiveis</p>
-          <p className="text-xs text-zinc-500">Selecione um horario para continuar.</p>
+          <p className="text-xs text-copy-muted">Selecione um horario para continuar.</p>
         </div>
         <span className="rounded-full border border-zinc-700 px-2.5 py-1 text-xs font-semibold text-zinc-300">
           {slots.length}
@@ -79,7 +79,7 @@ export function AvailableSlots({
       <div className="divide-y divide-zinc-800">
         {groupSlots(slots).map((group) => (
           <section key={group.title} className="grid gap-3 px-4 py-4 sm:grid-cols-[72px_1fr]">
-            <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{group.title}</p>
+            <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-copy-muted">{group.title}</p>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
               {group.slots.map((slot) => {
                 const selected = slot.start === selectedStart;
@@ -88,10 +88,11 @@ export function AvailableSlots({
                     type="button"
                     key={slot.start}
                     onClick={() => onSelect(slot)}
-                    className={`h-10 rounded-lg border px-3 text-sm font-semibold transition ${
+                    aria-pressed={selected}
+                    className={`h-11 rounded-lg border px-3 text-sm font-semibold transition ${
                       selected
-                        ? "border-cyan-300 bg-cyan-400 text-zinc-950 shadow-lg shadow-cyan-950/30"
-                        : "border-zinc-700 bg-zinc-900/80 text-zinc-200 hover:border-cyan-300 hover:bg-zinc-800"
+                        ? "border-brand-highlight bg-brand text-zinc-950 shadow-lg shadow-brand-deep/30"
+                        : "border-zinc-700 bg-zinc-900/80 text-zinc-200 hover:border-brand-highlight hover:bg-zinc-800"
                     }`}
                   >
                     {slot.label}

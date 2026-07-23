@@ -27,7 +27,7 @@ export default async function RootLayout({
       <body className="antialiased">
         <a
           href="#conteudo"
-          className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-lg bg-amber-200 px-4 py-2 font-bold text-zinc-950 transition focus:translate-y-0"
+          className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-lg bg-brand-highlight px-4 py-2 font-bold text-zinc-950 transition focus:translate-y-0"
         >
           Ir para o conteúdo
         </a>

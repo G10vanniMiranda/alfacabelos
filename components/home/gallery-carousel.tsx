@@ -57,7 +57,7 @@ export function GalleryCarousel({ images }: GalleryCarouselProps) {
               />
             )
           ) : (
-            <div className="aspect-4/5 w-full bg-linear-to-br from-zinc-900 via-zinc-800 to-cyan-950" />
+            <div className="aspect-4/5 w-full bg-linear-to-br from-zinc-900 via-zinc-800 to-brand-deep" />
           )}
         </article>
       ))}

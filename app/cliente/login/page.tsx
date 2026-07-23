@@ -19,7 +19,7 @@ export default async function ClientLoginPage({ searchParams }: { searchParams: 
       description="Entre para agendar, reagendar e acompanhar seus horários."
       highlights={["Agende em poucos passos", "Acompanhe seus próximos horários", "Reagende com praticidade"]}
     >
-      <Suspense fallback={<p className="mt-6 text-sm text-[var(--muted)]">Preparando acesso...</p>}>
+      <Suspense fallback={<p className="mt-6 text-sm text-copy-muted">Preparando acesso...</p>}>
         <ClientLoginForm />
       </Suspense>
     </AuthShell>

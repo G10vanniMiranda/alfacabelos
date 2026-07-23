@@ -10,7 +10,7 @@ export function ConfirmBookingForm({ token }: { token: string }) {
 
   if (state.success) {
     return (
-      <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">
+      <div className="ui-alert ui-alert-success text-sm font-semibold">
         {state.message}
       </div>
     );
@@ -20,14 +20,14 @@ export function ConfirmBookingForm({ token }: { token: string }) {
     <form action={formAction} className="space-y-3">
       <input type="hidden" name="token" value={token} />
       {state.message ? (
-        <div className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+        <div className="ui-alert ui-alert-warning text-sm">
           {state.message}
         </div>
       ) : null}
       <button
         type="submit"
         disabled={isPending}
-        className="w-full rounded-lg bg-cyan-400 px-4 py-3 text-sm font-bold text-zinc-950 transition hover:bg-cyan-300 disabled:opacity-60 sm:w-auto"
+        className="button-primary w-full px-4 py-3 disabled:opacity-60 sm:w-auto"
       >
         {isPending ? "Confirmando..." : "Confirmar agendamento"}
       </button>

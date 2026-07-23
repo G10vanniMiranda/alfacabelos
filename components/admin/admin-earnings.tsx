@@ -83,7 +83,7 @@ function DateInputWithPicker({ name, defaultValue }: DateInputWithPickerProps) {
   }
 
   return (
-    <div className="relative rounded-lg border border-zinc-700 bg-zinc-950">
+    <div className="ui-control relative">
       <input
         ref={inputRef}
         type="date"
@@ -94,7 +94,7 @@ function DateInputWithPicker({ name, defaultValue }: DateInputWithPickerProps) {
       <button
         type="button"
         onClick={openPicker}
-        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-zinc-600 px-2 py-1 text-sm text-zinc-200 transition hover:border-cyan-400/60 hover:text-cyan-300"
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-zinc-600 px-2 py-1 text-sm text-zinc-200 transition hover:border-brand/60 hover:text-brand-highlight"
         aria-label={`Abrir calendario de ${name === "from" ? "data inicial" : "data final"}`}
       >
         Abrir
@@ -145,7 +145,7 @@ export function AdminEarnings({
         <select
           name="barberId"
           defaultValue={barberId}
-          className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+          className="ui-control px-3 py-2"
         >
           <option value="TODOS">Todos os barbeiros</option>
           {barbers.map((barber) => (
@@ -156,7 +156,7 @@ export function AdminEarnings({
         </select>
         <button
           type="submit"
-          className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950"
+          className="button-primary px-4 py-2"
         >
           Aplicar
         </button>
@@ -165,12 +165,12 @@ export function AdminEarnings({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Faturamento</p>
-          <p className="mt-2 text-2xl font-black text-emerald-300">{formatBRLFromCents(totalConfirmedCents)}</p>
+          <p className="mt-2 text-2xl font-black text-success-soft">{formatBRLFromCents(totalConfirmedCents)}</p>
           <p className="mt-1 text-sm text-zinc-400">apenas pagamentos confirmados</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Previsao</p>
-          <p className="mt-2 text-2xl font-black text-amber-300">{formatBRLFromCents(pendingPotentialCents)}</p>
+          <p className="mt-2 text-2xl font-black text-warning">{formatBRLFromCents(pendingPotentialCents)}</p>
           <p className="mt-1 text-sm text-zinc-400">valor aguardando confirmacao de pagamento</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
@@ -192,11 +192,11 @@ export function AdminEarnings({
             {dailyRevenue.map((item) => (
               <article key={item.key} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
                 <p className="font-semibold text-zinc-100">{item.label}</p>
-                <p className="mt-1 text-sm text-cyan-300">{formatBRLFromCents(item.totalCents)}</p>
-                <p className="mt-1 text-xs text-zinc-500">{item.bookingsCount} pagamento(s) confirmado(s)</p>
+                <p className="mt-1 text-sm text-brand-highlight">{formatBRLFromCents(item.totalCents)}</p>
+                <p className="mt-1 text-xs text-copy-muted">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {dailyRevenue.length === 0 ? <p className="text-sm text-zinc-500">Sem faturamento no periodo.</p> : null}
+            {dailyRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem faturamento no periodo.</p> : null}
           </div>
         </section>
 
@@ -206,11 +206,11 @@ export function AdminEarnings({
             {serviceRevenue.map((item) => (
               <article key={item.key} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
                 <p className="font-semibold text-zinc-100">{item.label}</p>
-                <p className="mt-1 text-sm text-cyan-300">{formatBRLFromCents(item.totalCents)}</p>
-                <p className="mt-1 text-xs text-zinc-500">{item.bookingsCount} pagamento(s) confirmado(s)</p>
+                <p className="mt-1 text-sm text-brand-highlight">{formatBRLFromCents(item.totalCents)}</p>
+                <p className="mt-1 text-xs text-copy-muted">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {serviceRevenue.length === 0 ? <p className="text-sm text-zinc-500">Sem servicos pagos no periodo.</p> : null}
+            {serviceRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem servicos pagos no periodo.</p> : null}
           </div>
         </section>
 
@@ -220,26 +220,26 @@ export function AdminEarnings({
             {barberRevenue.map((item) => (
               <article key={item.key} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
                 <p className="font-semibold text-zinc-100">{item.label}</p>
-                <p className="mt-1 text-sm text-cyan-300">{formatBRLFromCents(item.totalCents)}</p>
-                <p className="mt-1 text-xs text-zinc-500">{item.bookingsCount} pagamento(s) confirmado(s)</p>
+                <p className="mt-1 text-sm text-brand-highlight">{formatBRLFromCents(item.totalCents)}</p>
+                <p className="mt-1 text-xs text-copy-muted">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {barberRevenue.length === 0 ? <p className="text-sm text-zinc-500">Sem barbeiros com ganhos no periodo.</p> : null}
+            {barberRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem barbeiros com ganhos no periodo.</p> : null}
           </div>
         </section>
       </div>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
         <h3 className="text-lg font-semibold text-zinc-100">Ultimos recebimentos confirmados</h3>
-        <div className="mt-4 overflow-x-auto">
+        <div className="ui-table-shell mt-4">
           <table className="w-full min-w-190 text-left text-sm">
             <thead className="text-zinc-400">
               <tr>
-                <th className="px-2 py-2">Cliente</th>
-                <th className="px-2 py-2">Servico</th>
-                <th className="px-2 py-2">Barbeiro</th>
-                <th className="px-2 py-2">Data</th>
-                <th className="px-2 py-2">Valor</th>
+                <th scope="col" className="px-2 py-2">Cliente</th>
+                <th scope="col" className="px-2 py-2">Servico</th>
+                <th scope="col" className="px-2 py-2">Barbeiro</th>
+                <th scope="col" className="px-2 py-2">Data</th>
+                <th scope="col" className="px-2 py-2">Valor</th>
               </tr>
             </thead>
             <tbody>
@@ -253,12 +253,12 @@ export function AdminEarnings({
                     <td className="px-2 py-2">{booking.service.name}</td>
                     <td className="px-2 py-2">{booking.barber.name}</td>
                     <td className="px-2 py-2 text-zinc-400">{formatDateTime(booking.paymentConfirmedAt ?? booking.dateTimeStart)}</td>
-                    <td className="px-2 py-2 text-emerald-300">{formatBRLFromCents(booking.service.priceCents)}</td>
+                    <td className="px-2 py-2 text-success-soft">{formatBRLFromCents(booking.service.priceCents)}</td>
                   </tr>
                 ))}
               {confirmedBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-2 py-4 text-center text-zinc-500">
+                  <td colSpan={5} className="px-2 py-4 text-center text-copy-muted">
                     Nenhum recebimento confirmado no periodo selecionado.
                   </td>
                 </tr>

@@ -19,7 +19,7 @@ export default async function ClientRegisterPage({ searchParams }: { searchParam
       description="Tenha seus horários e preferências sempre à mão. Leva menos de um minuto."
       highlights={["Cadastro rápido e seguro", "Seus horários em um só lugar", "Atendimento do seu jeito"]}
     >
-      <Suspense fallback={<p className="mt-6 text-sm text-[var(--muted)]">Preparando cadastro...</p>}>
+      <Suspense fallback={<p className="mt-6 text-sm text-copy-muted">Preparando cadastro...</p>}>
         <ClientRegisterForm />
       </Suspense>
     </AuthShell>

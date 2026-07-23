@@ -132,14 +132,14 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
       <header className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">Agenda</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-highlight">Agenda</p>
             <h2 className="mt-2 text-2xl font-bold text-zinc-100 sm:text-3xl">Bloqueios</h2>
             <p className="mt-2 max-w-2xl text-sm text-zinc-400">
               Bloqueie intervalos de atendimento para almoco, folgas, manutencoes ou compromissos externos.
             </p>
           </div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
-            <p className="text-xs text-zinc-500">Escopo selecionado</p>
+            <p className="text-xs text-copy-muted">Escopo selecionado</p>
             <p className="mt-1 text-sm font-semibold text-zinc-100">
               {selectedBarber?.name ?? "Todos os barbeiros"}
             </p>
@@ -149,17 +149,17 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Ativos</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-copy-muted">Ativos</p>
           <p className="mt-3 text-3xl font-black text-zinc-100">{activeBlockedSlots.length}</p>
           <p className="mt-1 text-sm text-zinc-400">intervalos bloqueados</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Globais</p>
-          <p className="mt-3 text-3xl font-black text-cyan-100">{globalBlocks}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-copy-muted">Globais</p>
+          <p className="mt-3 text-3xl font-black text-brand-soft">{globalBlocks}</p>
           <p className="mt-1 text-sm text-zinc-400">afetam todos os barbeiros</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Encerrados</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-copy-muted">Encerrados</p>
           <p className="mt-3 text-3xl font-black text-zinc-300">{expiredBlockedSlots}</p>
           <p className="mt-1 text-sm text-zinc-400">historico ja vencido</p>
         </article>
@@ -168,7 +168,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
       <div className="grid gap-6 xl:grid-cols-[390px_1fr]">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
           <h3 className="text-lg font-semibold text-zinc-100">Novo bloqueio</h3>
-          <p className="mt-1 text-sm text-zinc-500">Defina o periodo que nao deve aparecer para agendamento.</p>
+          <p className="mt-1 text-sm text-copy-muted">Defina o periodo que nao deve aparecer para agendamento.</p>
 
           <div className="mt-5 space-y-4">
             <label className="block">
@@ -176,7 +176,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
               <select
                 value={blockForm.barberId}
                 onChange={(event) => setBlockForm((prev) => ({ ...prev, barberId: event.target.value }))}
-                className="mt-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-cyan-300"
+                className="ui-control mt-2 h-11 w-full px-3"
               >
                 <option value="">Todos os barbeiros</option>
                 {barbers.map((barber) => (
@@ -194,7 +194,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
                   type="datetime-local"
                   value={blockForm.dateTimeStart}
                   onChange={(event) => setBlockForm((prev) => ({ ...prev, dateTimeStart: event.target.value }))}
-                  className="mt-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-cyan-300"
+                  className="ui-control mt-2 h-11 w-full px-3"
                 />
               </label>
               <label className="block">
@@ -203,7 +203,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
                   type="datetime-local"
                   value={blockForm.dateTimeEnd}
                   onChange={(event) => setBlockForm((prev) => ({ ...prev, dateTimeEnd: event.target.value }))}
-                  className="mt-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-cyan-300"
+                  className="ui-control mt-2 h-11 w-full px-3"
                 />
               </label>
             </div>
@@ -215,7 +215,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
                 value={blockForm.reason}
                 onChange={(event) => setBlockForm((prev) => ({ ...prev, reason: event.target.value }))}
                 placeholder="Ex: Almoco, viagem, manutencao"
-                className="mt-2 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-cyan-300"
+                className="ui-control mt-2 h-11 w-full px-3"
               />
             </label>
 
@@ -232,7 +232,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
               type="button"
               disabled={isPending}
               onClick={submitBlock}
-              className="h-11 w-full rounded-lg bg-cyan-400 px-4 text-sm font-bold text-zinc-950 transition hover:bg-cyan-300 disabled:opacity-70"
+              className="button-primary h-11 w-full px-4 disabled:opacity-70"
             >
               Salvar bloqueio
             </button>
@@ -243,7 +243,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-lg font-semibold text-zinc-100">Bloqueios ativos</h3>
-              <p className="mt-1 text-sm text-zinc-500">Intervalos que ainda impedem novos agendamentos.</p>
+              <p className="mt-1 text-sm text-copy-muted">Intervalos que ainda impedem novos agendamentos.</p>
             </div>
             <span className="w-fit rounded-full border border-zinc-700 px-3 py-1 text-xs font-semibold text-zinc-300">
               {activeBlockedSlots.length} ativos
@@ -263,8 +263,8 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
                       <span
                         className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                           blocked.barberId
-                            ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
-                            : "border-amber-400/40 bg-amber-400/10 text-amber-100"
+                            ? "border-brand/30 bg-brand/10 text-brand-soft"
+                            : "border-warning/40 bg-warning/10 text-warning-soft"
                         }`}
                       >
                         {blocked.barberId ? "Individual" : "Global"}
@@ -272,25 +272,25 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
                     </div>
                     <div className="mt-3 grid gap-2 text-sm lg:grid-cols-3">
                       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
-                        <p className="text-xs text-zinc-500">Inicio</p>
+                        <p className="text-xs text-copy-muted">Inicio</p>
                         <p className="mt-1 font-semibold text-zinc-100">{formatDateTime(blocked.dateTimeStart)}</p>
                       </div>
                       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
-                        <p className="text-xs text-zinc-500">Fim</p>
+                        <p className="text-xs text-copy-muted">Fim</p>
                         <p className="mt-1 font-semibold text-zinc-100">{formatDateTime(blocked.dateTimeEnd)}</p>
                       </div>
                       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
-                        <p className="text-xs text-zinc-500">Escopo</p>
-                        <p className="mt-1 font-semibold text-cyan-100">{getBarberName(blocked.barberId)}</p>
+                        <p className="text-xs text-copy-muted">Escopo</p>
+                        <p className="mt-1 font-semibold text-brand-soft">{getBarberName(blocked.barberId)}</p>
                       </div>
                     </div>
-                    <p className="mt-3 text-xs text-zinc-500">Duracao: {formatDuration(blocked.dateTimeStart, blocked.dateTimeEnd)}</p>
+                    <p className="mt-3 text-xs text-copy-muted">Duracao: {formatDuration(blocked.dateTimeStart, blocked.dateTimeEnd)}</p>
                   </div>
                   <button
                     type="button"
                     disabled={isPending}
                     onClick={() => removeBlock(blocked)}
-                    className="rounded-lg border border-red-500/60 px-3 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/10 disabled:opacity-70"
+                    className="button-danger px-3 py-2"
                   >
                     Remover
                   </button>
@@ -299,7 +299,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
             ))}
 
             {activeBlockedSlots.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950/40 p-6 text-center text-sm text-zinc-500">
+              <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950/40 p-6 text-center text-sm text-copy-muted">
                 Sem bloqueios ativos.
               </div>
             ) : null}

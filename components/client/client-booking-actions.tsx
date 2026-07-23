@@ -53,7 +53,7 @@ export function ClientBookingActions({ bookingId, status, rebookHref, whatsappHr
         {status !== "CANCELADO" && canManage ? (
           <>
             <Link href={rebookHref} className="button-secondary min-h-10 px-3 py-2 text-xs">Reagendar</Link>
-            <button type="button" onClick={() => setShowCancel(true)} className="button-ghost min-h-10 px-3 py-2 text-xs text-red-200">
+            <button type="button" onClick={() => setShowCancel(true)} className="button-danger min-h-10 px-3 py-2 text-xs">
               Cancelar
             </button>
           </>
@@ -63,21 +63,21 @@ export function ClientBookingActions({ bookingId, status, rebookHref, whatsappHr
         </a>
       </div>
 
-      {message ? <p role="status" className="mt-3 text-xs text-emerald-200">{message}</p> : null}
+      {message ? <p role="status" className="mt-3 text-xs text-success-soft">{message}</p> : null}
 
       {showCancel ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowCancel(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby={`cancel-${bookingId}`} className="premium-card w-full max-w-md rounded-2xl p-6">
+          <div role="dialog" aria-modal="true" aria-labelledby={`cancel-${bookingId}`} className="ui-modal-panel w-full max-w-md p-6">
             <p className="eyebrow">Confirmação</p>
             <h2 id={`cancel-${bookingId}`} className="mt-2 text-2xl font-semibold text-stone-100">Cancelar este horário?</h2>
             <p className="mt-3 text-sm leading-6 text-stone-400">O horário voltará a ficar disponível. Se quiser apenas trocar a data, fale com a equipe para reagendar.</p>
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" disabled={isPending} onClick={() => setShowCancel(false)} className="button-secondary">Manter horário</button>
-              <button type="button" disabled={isPending} onClick={() => runAction(cancelMyBookingAction, "Agendamento cancelado.", "SINGLE")} className="button-secondary border-red-400/40 text-red-100 hover:bg-red-500/10">
+              <button type="button" disabled={isPending} onClick={() => runAction(cancelMyBookingAction, "Agendamento cancelado.", "SINGLE")} className="button-danger">
                 {isPending ? "Cancelando…" : "Somente este"}
               </button>
-              {isRecurring ? <button type="button" disabled={isPending} onClick={() => runAction(cancelMyBookingAction, "Esta e as próximas ocorrências foram canceladas.", "FUTURE")} className="button-secondary border-red-400/40 text-red-100 hover:bg-red-500/10">Esta e futuras</button> : null}
-              {isRecurring ? <button type="button" disabled={isPending} onClick={() => runAction(cancelMyBookingAction, "Série cancelada.", "ALL")} className="button-secondary border-red-400/40 text-red-100 hover:bg-red-500/10">Toda a série</button> : null}
+              {isRecurring ? <button type="button" disabled={isPending} onClick={() => runAction(cancelMyBookingAction, "Esta e as próximas ocorrências foram canceladas.", "FUTURE")} className="button-danger">Esta e futuras</button> : null}
+              {isRecurring ? <button type="button" disabled={isPending} onClick={() => runAction(cancelMyBookingAction, "Série cancelada.", "ALL")} className="button-danger">Toda a série</button> : null}
             </div>
           </div>
         </div>

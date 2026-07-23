@@ -28,7 +28,7 @@ export async function HomeSections() {
   return (
     <>
       {dataUnavailable ? (
-        <div role="alert" className="border-b border-amber-300/20 bg-amber-200/10 px-4 py-3 text-center text-sm text-amber-100">
+        <div role="alert" className="border-b border-brand/20 bg-brand-highlight/10 px-4 py-3 text-center text-sm text-brand-soft">
           Alguns dados estão temporariamente indisponíveis. Tente novamente em instantes ou fale com nossa equipe.
         </div>
       ) : null}
@@ -41,15 +41,15 @@ export async function HomeSections() {
         {services.length ? (
           <div className="mt-10 grid gap-3 md:grid-cols-2">
             {services.map((service, index) => (
-              <article key={service.id} className="group premium-card flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl p-5 transition hover:border-amber-200/30 sm:gap-4 sm:p-6">
-                <span className="grid size-11 shrink-0 place-items-center rounded-full border border-white/10 text-xs font-bold text-stone-500 group-hover:border-amber-200/30 group-hover:text-amber-200">
+              <article key={service.id} className="group premium-card flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl p-5 transition hover:border-brand-highlight/30 sm:gap-4 sm:p-6">
+                <span className="grid size-11 shrink-0 place-items-center rounded-full border border-white/10 text-xs font-bold text-copy-muted group-hover:border-brand-highlight/30 group-hover:text-brand-highlight">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <div className="min-w-0 flex-1">
                   <h3 className="break-words text-lg font-semibold text-stone-100">{service.name}</h3>
-                  <p className="mt-1 text-sm text-stone-500">{service.durationMinutes} minutos de atendimento</p>
+                  <p className="mt-1 text-sm text-copy-muted">{service.durationMinutes} minutos de atendimento</p>
                 </div>
-                <p className="shrink-0 text-base font-bold text-amber-200">{formatBRLFromCents(service.priceCents)}</p>
+                <p className="shrink-0 text-base font-bold text-brand-highlight">{formatBRLFromCents(service.priceCents)}</p>
               </article>
             ))}
           </div>
@@ -66,13 +66,13 @@ export async function HomeSections() {
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {barbers.length ? barbers.map((barber) => (
               <article key={barber.id} className="premium-card relative min-h-56 overflow-hidden rounded-3xl p-6">
-                <div className="absolute -bottom-16 -right-12 size-52 rounded-full border border-amber-200/10 bg-amber-200/[0.04]" />
-                <span className="grid size-12 place-items-center rounded-full bg-amber-200 text-lg font-black text-zinc-950" aria-hidden="true">
+                <div className="absolute -bottom-16 -right-12 size-52 rounded-full border border-brand-highlight/10 bg-brand-highlight/[0.04]" />
+                <span className="grid size-12 place-items-center rounded-full bg-brand-highlight text-lg font-black text-zinc-950" aria-hidden="true">
                   {barber.name.charAt(0).toUpperCase()}
                 </span>
                 <div className="absolute bottom-6 left-6 right-6">
                   <h3 className="text-xl font-semibold text-stone-100">{barber.name}</h3>
-                  <p className="mt-1 text-sm text-stone-500">Cortes clássicos e contemporâneos</p>
+                  <p className="mt-1 text-sm text-copy-muted">Cortes clássicos e contemporâneos</p>
                 </div>
               </article>
             )) : (
@@ -87,7 +87,7 @@ export async function HomeSections() {
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {testimonials.map((item) => (
             <figure key={item.name} className="premium-card rounded-2xl p-6">
-              <div className="text-sm tracking-[0.22em] text-amber-200" aria-label="5 estrelas">★★★★★</div>
+              <div className="text-sm tracking-[0.22em] text-brand-highlight" aria-label="5 estrelas">★★★★★</div>
               <blockquote className="mt-5 leading-7 text-stone-300">“{item.text}”</blockquote>
               <figcaption className="mt-6 text-sm font-semibold text-stone-100">{item.name}</figcaption>
             </figure>
@@ -146,7 +146,7 @@ export async function HomeSections() {
             ].map(([question, answer]) => (
               <details key={question} className="group py-5">
                 <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 font-semibold text-stone-100">
-                  {question}<span className="text-xl font-light text-amber-200 transition group-open:rotate-45" aria-hidden="true">+</span>
+                  {question}<span className="text-xl font-light text-brand-highlight transition group-open:rotate-45" aria-hidden="true">+</span>
                 </summary>
                 <p className="max-w-2xl pb-2 pr-8 text-sm leading-6 text-stone-400">{answer}</p>
               </details>
@@ -156,7 +156,7 @@ export async function HomeSections() {
       </section>
 
       <section className="shell py-16">
-        <div className="overflow-hidden rounded-3xl border border-amber-200/20 bg-amber-200 p-7 text-zinc-950 sm:p-10 md:flex md:items-center md:justify-between md:gap-8">
+        <div className="overflow-hidden rounded-3xl border border-brand-highlight/20 bg-brand-highlight p-7 text-zinc-950 sm:p-10 md:flex md:items-center md:justify-between md:gap-8">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-zinc-700">Seu próximo corte</p>
             <h2 className="mt-2 text-3xl font-semibold md:text-4xl">O melhor horário é o que cabe na sua rotina.</h2>
@@ -168,7 +168,7 @@ export async function HomeSections() {
       </section>
 
       <footer className="border-t border-white/[0.07]">
-        <div className="shell flex flex-col gap-4 py-8 text-sm text-stone-500 sm:flex-row sm:items-center sm:justify-between">
+        <div className="shell flex flex-col gap-4 py-8 text-sm text-copy-muted sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Espaço Alfa. Todos os direitos reservados.</p>
           <div className="flex gap-5"><Link href="/cliente/login">Área do cliente</Link><Link href="/admin">Administração</Link></div>
         </div>

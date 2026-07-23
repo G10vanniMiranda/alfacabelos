@@ -470,7 +470,7 @@ export function SchedulerWizard({
   return (
     <section className="premium-card rounded-3xl p-4 sm:p-6">
       {initialSelection?.rescheduleBookingId ? (
-        <div role="status" className="mb-5 rounded-2xl border border-amber-200/30 bg-amber-200/10 p-4 text-sm text-amber-100">
+        <div role="status" className="mb-5 rounded-2xl border border-brand-highlight/30 bg-brand-highlight/10 p-4 text-sm text-brand-soft">
           Você está reagendando um horário existente. O horário antigo só será liberado depois da confirmação do novo.
         </div>
       ) : null}
@@ -490,16 +490,16 @@ export function SchedulerWizard({
               onClick={() => setDraft((prev) => ({ ...prev, serviceId: service.id, time: undefined }))}
               className={`rounded-xl border p-4 text-left transition ${
                 draft.serviceId === service.id
-                  ? "border-amber-200/70 bg-amber-200/10 shadow-lg shadow-black/20"
-                  : "border-zinc-800 bg-zinc-950/50 hover:border-amber-200/40 hover:bg-zinc-950"
+                  ? "border-brand-highlight/70 bg-brand-highlight/10 shadow-lg shadow-black/20"
+                  : "border-zinc-800 bg-zinc-950/50 hover:border-brand-highlight/40 hover:bg-zinc-950"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold text-zinc-50">{service.name}</p>
-                  <p className="mt-1 text-xs text-zinc-500">{service.durationMinutes} minutos</p>
+                  <p className="mt-1 text-xs text-copy-muted">{service.durationMinutes} minutos</p>
                 </div>
-                <p className="rounded-full border border-zinc-700 px-3 py-1 text-xs font-semibold text-amber-100">
+                <p className="rounded-full border border-zinc-700 px-3 py-1 text-xs font-semibold text-brand-soft">
                   {formatBRLFromCents(service.priceCents)}
                 </p>
               </div>
@@ -522,12 +522,12 @@ export function SchedulerWizard({
                   key={barber.id}
                   aria-pressed={selected}
                   onClick={() => setDraft((prev) => ({ ...prev, barberId: barber.id, date: undefined, time: undefined }))}
-                  className={`flex min-h-24 items-center gap-4 rounded-2xl border p-4 text-left transition ${selected ? "border-amber-200/70 bg-amber-200/10" : "border-zinc-800 bg-zinc-950/50 hover:border-amber-200/40"}`}
+                  className={`flex min-h-24 items-center gap-4 rounded-2xl border p-4 text-left transition ${selected ? "border-brand-highlight/70 bg-brand-highlight/10" : "border-zinc-800 bg-zinc-950/50 hover:border-brand-highlight/40"}`}
                 >
-                  <span className={`grid size-12 shrink-0 place-items-center rounded-full text-lg font-black ${selected ? "bg-amber-200 text-zinc-950" : "bg-zinc-800 text-zinc-300"}`}>
+                  <span className={`grid size-12 shrink-0 place-items-center rounded-full text-lg font-black ${selected ? "bg-brand-highlight text-zinc-950" : "bg-zinc-800 text-zinc-300"}`}>
                     {barber.name.charAt(0).toUpperCase()}
                   </span>
-                  <span><span className="block font-semibold text-zinc-100">{barber.name}</span><span className="mt-1 block text-xs text-zinc-500">Ver agenda disponível</span></span>
+                  <span><span className="block font-semibold text-zinc-100">{barber.name}</span><span className="mt-1 block text-xs text-copy-muted">Ver agenda disponível</span></span>
                 </button>
               );
             })}
@@ -565,21 +565,21 @@ export function SchedulerWizard({
             <aside className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Resumo</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-copy-muted">Resumo</p>
                   <p className="mt-2 text-sm font-semibold text-zinc-100">{selectedService?.name ?? "-"}</p>
                 </div>
-                <span className="rounded-full border border-zinc-700 px-2.5 py-1 text-xs font-semibold text-cyan-100">
+                <span className="rounded-full border border-zinc-700 px-2.5 py-1 text-xs font-semibold text-brand-soft">
                   {selectedServicePrice}
                 </span>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-                  <p className="text-xs text-zinc-500">Dia</p>
+                  <p className="text-xs text-copy-muted">Dia</p>
                   <p className="mt-1 font-semibold capitalize text-zinc-100">{selectedDateLabel}</p>
                 </div>
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-                  <p className="text-xs text-zinc-500">Horario</p>
-                  <p className="mt-1 font-semibold text-cyan-100">{selectedTimeLabel}</p>
+                  <p className="text-xs text-copy-muted">Horario</p>
+                  <p className="mt-1 font-semibold text-brand-soft">{selectedTimeLabel}</p>
                 </div>
               </div>
             </aside>
@@ -601,13 +601,13 @@ export function SchedulerWizard({
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-zinc-100">Frequencia</p>
-                  <p className="text-xs text-zinc-500">Repita esse mesmo horario se for um atendimento fixo.</p>
+                  <p className="text-xs text-copy-muted">Repita esse mesmo horario se for um atendimento fixo.</p>
                 </div>
                 <span
                   className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${
                     recurrenceHasLimitError
-                      ? "border-red-400/50 bg-red-500/15 text-red-100"
-                      : "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
+                      ? "border-danger/50 bg-danger/15 text-danger-soft"
+                      : "border-brand/30 bg-brand/10 text-brand-soft"
                   }`}
                 >
                   {recurrence === "NONE" ? "1 horario" : `${occurrenceStarts.length} horarios`}
@@ -627,7 +627,7 @@ export function SchedulerWizard({
                         repeatUntil: getDefaultRepeatUntil(prev.date ?? minDate, nextRecurrence),
                       }));
                     }}
-                    className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-cyan-300"
+                    className="ui-control h-11 w-full px-3"
                   >
                     <option value="NONE">Nao repetir</option>
                     <option value="WEEKLY">Toda semana no mesmo dia</option>
@@ -643,7 +643,7 @@ export function SchedulerWizard({
                     min={draft.date ?? minDate}
                     disabled={recurrence === "NONE"}
                     onChange={(event) => setDraft((prev) => ({ ...prev, repeatUntil: event.target.value }))}
-                    className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition disabled:opacity-50 focus:border-cyan-300"
+                    className="ui-control h-11 w-full px-3"
                   />
                 </label>
               </div>
@@ -651,7 +651,7 @@ export function SchedulerWizard({
               <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-3">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm font-semibold text-zinc-100">{getRecurrenceLabel(recurrence, draft.date)}</p>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-copy-muted">
                     {recurrence === "NONE" ? "Sem repeticao" : `Ate ${formatFullDate(draft.repeatUntil)}`}
                   </p>
                 </div>
@@ -661,16 +661,16 @@ export function SchedulerWizard({
                     {occurrenceStarts.length > occurrencePreview.length ? "..." : ""}
                   </p>
                 ) : (
-                  <p className="mt-2 text-xs text-amber-100">Escolha data, horario e periodo para calcular a repeticao.</p>
+                  <p className="mt-2 text-xs text-brand-soft">Escolha data, horario e periodo para calcular a repeticao.</p>
                 )}
                 {recurrenceHasLimitError ? (
-                  <p className="mt-2 text-xs text-red-100">Reduza o periodo para menos de 60 agendamentos.</p>
+                  <p className="mt-2 text-xs text-danger-soft">Reduza o periodo para menos de 60 agendamentos.</p>
                 ) : null}
                 {previewLoading ? (
-                  <p className="mt-2 text-xs text-cyan-100">Validando todas as repetições...</p>
+                  <p className="mt-2 text-xs text-brand-soft">Validando todas as repetições...</p>
                 ) : null}
                 {previewError ? (
-                  <p className="mt-2 text-xs text-red-100">{previewError}</p>
+                  <p className="mt-2 text-xs text-danger-soft">{previewError}</p>
                 ) : null}
               </div>
             </section>
@@ -692,7 +692,7 @@ export function SchedulerWizard({
                 type="text"
                 value={draft.customerName ?? ""}
                 onChange={(event) => setDraft((prev) => ({ ...prev, customerName: event.target.value }))}
-                className="mt-2 h-12 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-cyan-300"
+                className="ui-control mt-2 h-12 w-full px-3"
               />
             </div>
 
@@ -705,42 +705,42 @@ export function SchedulerWizard({
                   setDraft((prev) => ({ ...prev, customerPhone: formatPhone(event.target.value) }))
                 }
                 placeholder="(11) 99999-9999"
-                className="mt-2 h-12 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-cyan-300"
+                className="ui-control mt-2 h-12 w-full px-3"
               />
             </div>
           </div>
 
           <aside className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Agendamento</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-copy-muted">Agendamento</p>
             <div className="mt-4 space-y-3 text-sm">
               <div className="flex justify-between gap-4">
-                <span className="text-zinc-500">Servico</span>
+                <span className="text-copy-muted">Servico</span>
                 <span className="font-semibold text-zinc-100">{selectedService?.name ?? "-"}</span>
               </div>
               <div className="flex justify-between gap-4">
-                <span className="text-zinc-500">Barbeiro</span>
+                <span className="text-copy-muted">Barbeiro</span>
                 <span className="font-semibold text-zinc-100">{selectedBarber?.name ?? "-"}</span>
               </div>
               <div className="flex justify-between gap-4">
-                <span className="text-zinc-500">Dia</span>
+                <span className="text-copy-muted">Dia</span>
                 <span className="text-right font-semibold capitalize text-zinc-100">{selectedDateLabel}</span>
               </div>
               <div className="flex justify-between gap-4">
-                <span className="text-zinc-500">Horario</span>
-                <span className="font-semibold text-cyan-100">{selectedTimeLabel}</span>
+                <span className="text-copy-muted">Horario</span>
+                <span className="font-semibold text-brand-soft">{selectedTimeLabel}</span>
               </div>
               <div className="flex justify-between gap-4">
-                <span className="text-zinc-500">Frequencia</span>
+                <span className="text-copy-muted">Frequencia</span>
                 <span className="text-right font-semibold text-zinc-100">
                   {recurrence === "NONE" ? "Nao repetir" : `${getRecurrenceLabel(recurrence, draft.date)} (${occurrenceStarts.length})`}
                 </span>
               </div>
               <div className="flex justify-between gap-4 border-t border-zinc-800 pt-3">
-                <span className="text-zinc-500">Valor</span>
+                <span className="text-copy-muted">Valor</span>
                 <span className="font-semibold text-zinc-100">{selectedServicePrice}</span>
               </div>
             </div>
-            <p className="mt-5 border-t border-zinc-800 pt-4 text-xs leading-5 text-zinc-500">
+            <p className="mt-5 border-t border-zinc-800 pt-4 text-xs leading-5 text-copy-muted">
               Ao confirmar, seu horário será reservado. Se precisar cancelar, avise a equipe com antecedência pela sua área.
             </p>
           </aside>
@@ -752,7 +752,7 @@ export function SchedulerWizard({
           type="button"
           onClick={() => setStep((prev) => Math.max(1, prev - 1))}
           disabled={step === 1 || isPending}
-          className="w-full rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 disabled:opacity-50 sm:w-auto"
+          className="button-secondary w-full px-4 py-2 sm:w-auto"
         >
           Voltar
         </button>

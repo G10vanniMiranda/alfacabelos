@@ -101,10 +101,10 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
       </div>
 
       {loadError ? (
-        <div className="rounded-2xl border border-amber-600/50 bg-amber-500/10 p-4 text-sm text-amber-100">
+        <div className="rounded-2xl border border-brand-deep/50 bg-brand/10 p-4 text-sm text-brand-soft">
           <p className="font-semibold">A secao de acessos precisa de migration</p>
           <p className="mt-1">{loadError}</p>
-          <p className="mt-2 text-amber-200">Execute: npm run prisma:migrate:deploy</p>
+          <p className="mt-2 text-brand-highlight">Execute: npm run prisma:migrate:deploy</p>
         </div>
       ) : null}
 
@@ -115,26 +115,26 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
             type="email"
             name="email"
             placeholder="novo-admin@alfa.com"
-            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+            className="ui-control px-3 py-2"
           />
-          <select name="role" className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"><option value="ADMIN">Administrador</option><option value="BARBER">Barbeiro</option></select>
-          <select name="barberId" className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"><option value="">Sem vinculo</option>{barbers.map((barber) => <option key={barber.id} value={barber.id}>{barber.name}</option>)}</select>
+          <select name="role" className="ui-control px-3 py-2"><option value="ADMIN">Administrador</option><option value="BARBER">Barbeiro</option></select>
+          <select name="barberId" className="ui-control px-3 py-2"><option value="">Sem vinculo</option>{barbers.map((barber) => <option key={barber.id} value={barber.id}>{barber.name}</option>)}</select>
           <input
             type="password"
             name="password"
             placeholder="Senha"
-            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+            className="ui-control px-3 py-2"
           />
           <input
             type="password"
             name="confirmPassword"
             placeholder="Confirmar senha"
-            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+            className="ui-control px-3 py-2"
           />
           <button
             type="submit"
             disabled={isPendingCreate || Boolean(loadError)}
-            className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-60"
+            className="button-primary px-4 py-2 disabled:opacity-60"
           >
             {isPendingCreate ? "Salvando..." : "Adicionar"}
           </button>
@@ -143,15 +143,15 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
         <h3 className="text-lg font-semibold text-zinc-100">Acessos cadastrados</h3>
-        <div className="mt-4 overflow-x-auto">
+        <div className="ui-table-shell mt-4">
           <table className="w-full min-w-180 text-left text-sm">
             <thead className="text-zinc-400">
               <tr>
-                <th className="px-2 py-2">Email</th>
-                <th className="px-2 py-2">Perfil</th>
-                <th className="px-2 py-2">Criado em</th>
-                <th className="px-2 py-2">Ultimo login</th>
-                <th className="px-2 py-2">Acoes</th>
+                <th scope="col" className="px-2 py-2">Email</th>
+                <th scope="col" className="px-2 py-2">Perfil</th>
+                <th scope="col" className="px-2 py-2">Criado em</th>
+                <th scope="col" className="px-2 py-2">Ultimo login</th>
+                <th scope="col" className="px-2 py-2">Acoes</th>
               </tr>
             </thead>
             <tbody>
@@ -170,7 +170,7 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
                             onChange={(event) =>
                               setEditDraft((prev) => (prev ? { ...prev, email: event.target.value } : prev))
                             }
-                            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                            className="ui-control w-full px-3 py-2"
                           />
                           <input
                             type="password"
@@ -179,7 +179,7 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
                               setEditDraft((prev) => (prev ? { ...prev, password: event.target.value } : prev))
                             }
                             placeholder="Nova senha (opcional)"
-                            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                            className="ui-control w-full px-3 py-2"
                           />
                           <input
                             type="password"
@@ -190,14 +190,14 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
                               )
                             }
                             placeholder="Confirmar nova senha"
-                            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100"
+                            className="ui-control w-full px-3 py-2"
                           />
                         </div>
                       ) : (
                         access.email
                       )}
                     </td>
-                    <td className="px-2 py-2 text-zinc-300">{currentEdit ? <div className="space-y-2"><select value={currentEdit.role} onChange={(event) => setEditDraft((prev) => prev ? { ...prev, role: event.target.value as "ADMIN" | "BARBER" } : prev)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2"><option value="ADMIN">Administrador</option><option value="BARBER">Barbeiro</option></select>{currentEdit.role === "BARBER" ? <select value={currentEdit.barberId} onChange={(event) => setEditDraft((prev) => prev ? { ...prev, barberId: event.target.value } : prev)} className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2"><option value="">Selecione</option>{barbers.map((barber) => <option key={barber.id} value={barber.id}>{barber.name}</option>)}</select> : null}</div> : access.role === "ADMIN" ? "Administrador" : barbers.find((barber) => barber.id === access.barberId)?.name ?? "Barbeiro"}</td>
+                    <td className="px-2 py-2 text-zinc-300">{currentEdit ? <div className="space-y-2"><select value={currentEdit.role} onChange={(event) => setEditDraft((prev) => prev ? { ...prev, role: event.target.value as "ADMIN" | "BARBER" } : prev)} className="ui-control w-full px-2 py-2"><option value="ADMIN">Administrador</option><option value="BARBER">Barbeiro</option></select>{currentEdit.role === "BARBER" ? <select value={currentEdit.barberId} onChange={(event) => setEditDraft((prev) => prev ? { ...prev, barberId: event.target.value } : prev)} className="ui-control w-full px-2 py-2"><option value="">Selecione</option>{barbers.map((barber) => <option key={barber.id} value={barber.id}>{barber.name}</option>)}</select> : null}</div> : access.role === "ADMIN" ? "Administrador" : barbers.find((barber) => barber.id === access.barberId)?.name ?? "Barbeiro"}</td>
                     <td className="px-2 py-2 text-zinc-400">{formatDateTime(access.createdAt)}</td>
                     <td className="px-2 py-2 text-zinc-400">{formatDateTime(access.lastLoginAt)}</td>
                     <td className="px-2 py-2">
@@ -210,7 +210,7 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
                               aria-label="Salvar"
                               disabled={isBusy}
                               onClick={handleSave}
-                              className="rounded-md border border-cyan-500/60 px-3 py-1.5 text-sm text-cyan-200 transition hover:bg-cyan-500/10 disabled:opacity-50"
+                              className="rounded-md border border-brand/60 px-3 py-1.5 text-sm text-brand-highlight transition hover:bg-brand/10 disabled:opacity-50"
                             >
                               {"\uD83D\uDCBE"}
                             </button>
@@ -233,7 +233,7 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
                               aria-label="Editar"
                               disabled={isBusy}
                               onClick={() => startEditing(access)}
-                              className="rounded-md border border-cyan-500/60 px-3 py-1.5 text-sm text-cyan-200 transition hover:bg-cyan-500/10 disabled:opacity-50"
+                              className="rounded-md border border-brand/60 px-3 py-1.5 text-sm text-brand-highlight transition hover:bg-brand/10 disabled:opacity-50"
                             >
                               {"\u270F\uFE0F"}
                             </button>
@@ -243,7 +243,7 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
                               aria-label="Remover"
                               disabled={isBusy || accesses.length <= 1}
                               onClick={() => handleDelete(access.id)}
-                              className="rounded-md border border-red-500/60 px-3 py-1.5 text-sm text-red-200 transition hover:bg-red-500/10 disabled:opacity-50"
+                              className="button-danger px-3 py-1.5"
                             >
                               {"\uD83D\uDDD1\uFE0F"}
                             </button>
@@ -256,7 +256,7 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
               })}
               {accesses.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-2 py-4 text-center text-zinc-500">
+                  <td colSpan={5} className="px-2 py-4 text-center text-copy-muted">
                     Nenhum acesso admin cadastrado.
                   </td>
                 </tr>

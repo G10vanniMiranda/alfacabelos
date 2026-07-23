@@ -97,7 +97,7 @@ export function DateCalendar({
               }
               setView({ year: today.getFullYear(), month: today.getMonth() });
             }}
-            className={`rounded-full border border-zinc-700 text-xs font-semibold text-zinc-100 transition hover:border-cyan-300 ${
+            className={`min-h-10 rounded-full border border-zinc-700 text-xs font-semibold text-zinc-100 transition hover:border-brand-highlight ${
               isCompact ? "px-2.5 py-1" : "px-3 py-1.5"
             }`}
           >
@@ -110,7 +110,7 @@ export function DateCalendar({
               disabled={!canGoPrev}
               aria-label="Mes anterior"
               className={`grid place-items-center rounded-full leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${
-                isCompact ? "h-7 w-7 text-base" : "h-8 w-8 text-lg"
+                isCompact ? "h-9 w-9 text-base" : "h-10 w-10 text-lg"
               }`}
             >
               {"<"}
@@ -121,7 +121,7 @@ export function DateCalendar({
               disabled={!canGoNext}
               aria-label="Proximo mes"
               className={`grid place-items-center rounded-full leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${
-                isCompact ? "h-7 w-7 text-base" : "h-8 w-8 text-lg"
+                isCompact ? "h-9 w-9 text-base" : "h-10 w-10 text-lg"
               }`}
             >
               {">"}
@@ -134,7 +134,7 @@ export function DateCalendar({
       </div>
 
       <div
-        className={`grid grid-cols-7 border-b border-zinc-800 text-center font-semibold uppercase tracking-wide text-zinc-500 ${
+        className={`grid grid-cols-7 border-b border-zinc-800 text-center font-semibold uppercase tracking-wide text-copy-muted ${
           isCompact ? "pb-1.5 text-[10px]" : "pb-2 text-[11px]"
         }`}
       >
@@ -166,11 +166,11 @@ export function DateCalendar({
                 isCompact ? "text-xs" : "text-sm"
               } ${
                 selected
-                  ? "border-cyan-300 bg-cyan-400 text-zinc-950 shadow-lg shadow-cyan-950/30"
+                  ? "border-brand-highlight bg-brand text-zinc-950 shadow-lg shadow-brand-deep/30"
                   : disabled
                     ? "border-transparent bg-transparent text-zinc-700"
                     : today
-                      ? "border-cyan-400/70 bg-zinc-900 text-cyan-100 hover:bg-zinc-800"
+                      ? "border-brand/70 bg-zinc-900 text-brand-soft hover:bg-zinc-800"
                       : "border-transparent bg-transparent text-zinc-200 hover:bg-zinc-800"
               }`}
             >

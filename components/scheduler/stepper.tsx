@@ -16,19 +16,19 @@ export function Stepper({ currentStep }: { currentStep: number }) {
             aria-current={active ? "step" : undefined}
             className={`flex min-w-0 items-center gap-2 rounded-xl border px-2 py-2.5 text-sm transition sm:gap-3 sm:px-3 ${
               active
-                ? "border-amber-200/60 bg-amber-200/10 text-amber-100"
+                ? "border-brand-highlight/60 bg-brand-highlight/10 text-brand-soft"
                 : done
-                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
+                  ? "border-success/40 bg-success/10 text-success-soft"
                   : "border-zinc-800 bg-zinc-950/50 text-zinc-400"
             }`}
           >
             <span
               className={`grid size-7 shrink-0 place-items-center rounded-full border text-xs font-bold sm:size-8 ${
                 active
-                  ? "border-amber-200 bg-amber-200 text-zinc-950"
+                  ? "border-brand-highlight bg-brand-highlight text-zinc-950"
                   : done
-                    ? "border-emerald-300 bg-emerald-400 text-zinc-950"
-                    : "border-zinc-700 bg-zinc-900 text-zinc-500"
+                    ? "border-success-soft bg-success text-zinc-950"
+                    : "border-zinc-700 bg-zinc-900 text-copy-muted"
               }`}
             >
               {done ? "✓" : number}

@@ -44,8 +44,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             key={toast.id}
             className={`rounded-xl border px-4 py-3 text-sm backdrop-blur ${
               toast.tone === "error"
-                ? "border-red-500/60 bg-red-500/15 text-red-100"
-                : "border-amber-200/40 bg-amber-200/10 text-amber-50"
+                ? "border-danger/60 bg-danger/15 text-danger-soft"
+                : "border-success/50 bg-success/12 text-success-soft"
             }`}
           >
             {toast.message}
