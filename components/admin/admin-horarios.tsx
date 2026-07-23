@@ -24,11 +24,11 @@ type DayDraft = {
 const WEEK_DAYS = [
   { dayOfWeek: 0, label: "Domingo" },
   { dayOfWeek: 1, label: "Segunda" },
-  { dayOfWeek: 2, label: "Terca" },
+  { dayOfWeek: 2, label: "Terça" },
   { dayOfWeek: 3, label: "Quarta" },
   { dayOfWeek: 4, label: "Quinta" },
   { dayOfWeek: 5, label: "Sexta" },
-  { dayOfWeek: 6, label: "Sabado" },
+  { dayOfWeek: 6, label: "Sábado" },
 ] as const;
 
 const DEFAULT_DAY_RANGES: Record<number, TimeRange[]> = {
@@ -251,7 +251,7 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
 
   function saveRanges(dayOfWeek: number, ranges: TimeRange[]) {
     if (hasInvalidRanges(ranges)) {
-      pushToast("Revise as faixas: horario invalido ou sobreposto", "error");
+      pushToast("Revise as faixas: horário inválido ou sobreposto", "error");
       return;
     }
 
@@ -262,10 +262,10 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
           dayOfWeek,
           ranges: [...ranges].sort((a, b) => a.openTime.localeCompare(b.openTime)),
         });
-        pushToast("Horarios salvos", "success");
+        pushToast("Horários salvos", "success");
         window.location.reload();
       } catch (error) {
-        pushToast(error instanceof Error ? error.message : "Erro ao salvar horarios", "error");
+        pushToast(error instanceof Error ? error.message : "Erro ao salvar horários", "error");
       }
     });
   }
@@ -283,7 +283,7 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
     return (
       <section className="space-y-6">
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-4">
-          <h2 className="text-2xl font-semibold text-zinc-100">Horarios disponiveis</h2>
+          <h2 className="text-2xl font-semibold text-zinc-100">Horários disponíveis</h2>
           <p className="mt-1 text-sm text-zinc-400">Nenhum barbeiro ativo encontrado.</p>
         </div>
       </section>
@@ -295,7 +295,7 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-5 py-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-zinc-100">Horarios disponiveis</h2>
+            <h2 className="text-2xl font-semibold text-zinc-100">Horários disponíveis</h2>
             <p className="mt-1 max-w-2xl text-sm text-zinc-400">
               Defina a grade semanal de atendimento por barbeiro. Cada dia pode ter uma ou mais faixas.
             </p>
@@ -335,7 +335,7 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
             <p className="text-xs uppercase tracking-wide text-brand-highlight/80">Configurando</p>
             <p className="mt-1 text-sm font-semibold text-brand-soft">{selectedBarber?.name}</p>
             <p className="mt-1 text-xs text-brand-soft/70">
-              Alteracoes sao salvas por dia. Use fechar dia para bloquear a agenda semanal inteira daquele dia.
+              Alterações são salvas por dia. Use fechar dia para bloquear a agenda semanal inteira daquele dia.
             </p>
           </div>
         </div>
@@ -347,7 +347,7 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
             <h3 className="text-lg font-semibold text-zinc-100">Grade semanal</h3>
             <p className="mt-1 text-sm text-copy-muted">Revise os dias, ajuste faixas e salve somente o dia alterado.</p>
           </div>
-          {isPending ? <p className="text-sm text-brand-highlight">Salvando alteracoes...</p> : null}
+          {isPending ? <p className="text-sm text-brand-highlight">Salvando alterações...</p> : null}
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -396,7 +396,7 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
                       onClick={() => applyTemplate(day.dayOfWeek)}
                       className="button-secondary px-3 py-2 text-xs"
                     >
-                      Modelo padrao
+                      Modelo padrão
                     </button>
                     <button
                       type="button"
@@ -416,7 +416,7 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
                       className="grid gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 md:grid-cols-[1fr_1fr_auto] md:items-end"
                     >
                       <label className="space-y-1">
-                        <span className="text-xs font-medium text-copy-muted">Inicio</span>
+                        <span className="text-xs font-medium text-copy-muted">Início</span>
                         <input
                           type="time"
                           value={range.openTime}
@@ -452,13 +452,13 @@ export function AdminHorarios({ barbers, availabilityByBarber }: AdminHorariosPr
 
                 {hasError ? (
                   <p className="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-soft">
-                    Corrija faixas sobrepostas ou horarios em que o fim vem antes do inicio.
+                    Corrija faixas sobrepostas ou horários em que o fim vem antes do início.
                   </p>
                 ) : null}
 
                 <div className="mt-4 flex items-center justify-between gap-3 border-t border-zinc-800 pt-4">
                   <p className="text-xs text-copy-muted">
-                    {isClosed ? "Nenhum horario sera exibido para clientes." : "Este dia aparece na agenda publica."}
+                    {isClosed ? "Nenhum horário será exibido para clientes." : "Este dia aparece na agenda pública."}
                   </p>
                   <button
                     type="button"

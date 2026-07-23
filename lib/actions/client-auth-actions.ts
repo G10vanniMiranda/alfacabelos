@@ -167,7 +167,7 @@ export async function requestClientPasswordResetAction(
   });
 
   if (!parsed.success) {
-    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados invalidos" };
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
   try {
@@ -209,16 +209,16 @@ export async function resetClientPasswordAction(_prev: ActionState, formData: Fo
   });
 
   if (!parsed.success) {
-    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados invalidos" };
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
   try {
     const updated = await resetClientPasswordWithToken(parsed.data.token, parsed.data.password);
     if (!updated) {
-      return { success: false, message: "Este link de recuperacao e invalido, expirou ou ja foi utilizado." };
+      return { success: false, message: "Este link de recuperação é inválido, expirou ou já foi utilizado." };
     }
 
-    return { success: true, message: "Senha redefinida com sucesso. Faca login para continuar." };
+    return { success: true, message: "Senha redefinida com sucesso. Faça login para continuar." };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("Can't reach database server")) {

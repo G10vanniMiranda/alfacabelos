@@ -196,7 +196,7 @@ function getRecurrenceLabel(recurrence: RecurrenceOption, date: string) {
   if (recurrence === "MONTHLY") {
     return `Mensalmente no dia ${parseDateParts(date).day}`;
   }
-  return "Nao repetir";
+  return "Não repetir";
 }
 
 function getPaymentBadgeClasses(paymentStatus: "PENDENTE" | "CONFIRMADO") {
@@ -349,7 +349,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   async function enableNotificationSound() {
     const audioContext = getNotificationAudioContext();
     if (!audioContext) {
-      pushToast("Som indisponivel neste navegador", "error");
+      pushToast("Som indisponível neste navegador", "error");
       return;
     }
 
@@ -359,7 +359,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       playNewBookingSound();
       pushToast("Som de novos agendamentos ativado", "success");
     } catch {
-      pushToast("Nao foi possivel ativar o som", "error");
+      pushToast("Não foi possível ativar o som", "error");
     }
   }
 
@@ -389,7 +389,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
           if (latestBooking) {
             const alertMessage =
               newBookings.length === 1
-                ? `Novo agendamento: ${latestBooking.customerName} as ${formatTimeLabel(latestBooking.dateTimeStart)}.`
+                ? `Novo agendamento: ${latestBooking.customerName} às ${formatTimeLabel(latestBooking.dateTimeStart)}.`
                 : `${newBookings.length} novos agendamentos recebidos.`;
 
             setLastAlert(alertMessage);
@@ -561,23 +561,23 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
 
   function handleCreateBooking() {
     if (!createDraft.date || !createDraft.time) {
-      pushToast("Selecione data e horario", "error");
+      pushToast("Selecione data e horário", "error");
       return;
     }
 
     const starts = buildOccurrenceStarts(createDraft);
     if (starts.length === 0) {
-      pushToast("Data/hora invalida", "error");
+      pushToast("Data/hora inválida", "error");
       return;
     }
 
     if (createDraft.recurrence !== "NONE" && createDraft.repeatUntil < createDraft.date) {
-      pushToast("A data final da repeticao precisa ser igual ou posterior ao inicio", "error");
+      pushToast("A data final da repetição precisa ser igual ou posterior ao início", "error");
       return;
     }
 
     if (createDraft.recurrence !== "NONE" && starts.length >= 60) {
-      pushToast("Reduza o periodo da repeticao para menos de 60 ocorrencias", "error");
+      pushToast("Reduza o período da repetição para menos de 60 ocorrências", "error");
       return;
     }
 
@@ -618,7 +618,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
 
   function handleEditBooking() {
     if (!editingBooking?.date || !editingBooking.time) {
-      pushToast("Selecione data e horario", "error");
+      pushToast("Selecione data e horário", "error");
       return;
     }
 
@@ -652,7 +652,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-5 sm:px-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-highlight">Operacao</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-highlight">Operação</p>
             <h2 className="mt-1 text-xl font-semibold text-zinc-100 sm:text-2xl">Agenda</h2>
             <p className="mt-1 text-sm capitalize text-zinc-400">{selectedDayLabel}</p>
           </div>
@@ -661,11 +661,10 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             <button
               type="button"
               onClick={() => void enableNotificationSound()}
-              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${
-                notificationSoundEnabled
-                  ? "border-success/40 bg-success/10 text-success-soft"
-                  : "border-zinc-700 bg-zinc-950 text-zinc-100 hover:border-brand/70"
-              }`}
+              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${notificationSoundEnabled
+                ? "border-success/40 bg-success/10 text-success-soft"
+                : "border-zinc-700 bg-zinc-950 text-zinc-100 hover:border-brand/70"
+                }`}
             >
               {notificationSoundEnabled ? "Som ativo" : "Ativar som"}
             </button>
@@ -790,7 +789,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               >
                 Limpar filtros
               </button>
-              <p className="text-xs text-copy-muted">Atualizacao automatica a cada 15 segundos.</p>
+              <p className="text-xs text-copy-muted">Atualização automatica a cada 15 segundos.</p>
             </div>
           </div>
         </div>
@@ -807,75 +806,75 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         </div>
 
         <div className="ui-table-shell">
-        <table className="w-full min-w-[900px] text-left text-sm">
-          <thead className="bg-zinc-950/80 text-zinc-300">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Cliente</th>
-              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Servico</th>
-              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Barbeiro</th>
-              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Horario</th>
-              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
-              <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Pagamento</th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">Acoes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((booking) => {
-              const dateTime = formatDateTimeLabel(booking.dateTimeStart);
-
-              return (
-              <tr key={booking.id} className="border-t border-zinc-800 bg-zinc-950/35 transition hover:bg-zinc-950/70">
-                <td className="px-4 py-3 text-zinc-200">
-                  <p className="font-semibold">{booking.customerName}</p>
-                  <p className="mt-0.5 text-xs text-copy-muted">{booking.customerPhone}</p>
-                </td>
-                <td className="px-4 py-3 text-zinc-200">
-                  <p>{booking.service.name}</p>
-                  <p className="mt-0.5 text-xs text-copy-muted">{booking.service.durationMinutes} min</p>
-                </td>
-                <td className="px-4 py-3 text-zinc-200">{booking.barber.name}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-300">
-                  <p className="font-semibold text-zinc-100">{dateTime.time}</p>
-                  <p className="mt-0.5 text-xs text-copy-muted">{dateTime.date}</p>
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={booking.status} />
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${getPaymentBadgeClasses(booking.paymentStatus)}`}>
-                    {booking.paymentStatus}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="relative">
-                    <button
-                      type="button"
-                      data-actions-trigger="true"
-                      disabled={isBusy}
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => toggleActionsMenu(booking.id, event.currentTarget)}
-                      aria-haspopup="menu"
-                      aria-expanded={openActionsBookingId === booking.id}
-                      aria-label="Abrir acoes do agendamento"
-                      className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:border-brand/60 hover:text-brand-highlight disabled:opacity-40"
-                    >
-                      ...
-                    </button>
-
-                  </div>
-                </td>
-              </tr>
-              );
-            })}
-            {filtered.length === 0 && (
+          <table className="w-full min-w-225 text-left text-sm">
+            <thead className="bg-zinc-950/80 text-zinc-300">
               <tr>
-                <td colSpan={7} className="px-3 py-5 text-center text-copy-muted">
-                  Nenhum agendamento encontrado.
-                </td>
+                <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Cliente</th>
+                <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Serviço</th>
+                <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Barbeiro</th>
+                <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Horário</th>
+                <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
+                <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Pagamento</th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">Ações</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map((booking) => {
+                const dateTime = formatDateTimeLabel(booking.dateTimeStart);
+
+                return (
+                  <tr key={booking.id} className="border-t border-zinc-800 bg-zinc-950/35 transition hover:bg-zinc-950/70">
+                    <td className="px-4 py-3 text-zinc-200">
+                      <p className="font-semibold">{booking.customerName}</p>
+                      <p className="mt-0.5 text-xs text-copy-muted">{booking.customerPhone}</p>
+                    </td>
+                    <td className="px-4 py-3 text-zinc-200">
+                      <p>{booking.service.name}</p>
+                      <p className="mt-0.5 text-xs text-copy-muted">{booking.service.durationMinutes} min</p>
+                    </td>
+                    <td className="px-4 py-3 text-zinc-200">{booking.barber.name}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-300">
+                      <p className="font-semibold text-zinc-100">{dateTime.time}</p>
+                      <p className="mt-0.5 text-xs text-copy-muted">{dateTime.date}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={booking.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${getPaymentBadgeClasses(booking.paymentStatus)}`}>
+                        {booking.paymentStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="relative">
+                        <button
+                          type="button"
+                          data-actions-trigger="true"
+                          disabled={isBusy}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => toggleActionsMenu(booking.id, event.currentTarget)}
+                          aria-haspopup="menu"
+                          aria-expanded={openActionsBookingId === booking.id}
+                          aria-label="Abrir ações do agendamento"
+                          className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:border-brand/60 hover:text-brand-highlight disabled:opacity-40"
+                        >
+                          ...
+                        </button>
+
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-3 py-5 text-center text-copy-muted">
+                    Nenhum agendamento encontrado.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -884,9 +883,8 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
           ref={actionsMenuRef}
           role="menu"
           style={{ top: actionsMenuPosition.top, left: actionsMenuPosition.left }}
-          className={`fixed z-[100] w-[252px] rounded-xl border border-zinc-800 bg-zinc-950 p-2 shadow-2xl shadow-black/40 ${
-            actionsMenuPlacement === "up" ? "origin-bottom-right" : "origin-top-right"
-          }`}
+          className={`fixed z-100 w-63 rounded-xl border border-zinc-800 bg-zinc-950 p-2 shadow-2xl shadow-black/40 ${actionsMenuPlacement === "up" ? "origin-bottom-right" : "origin-top-right"
+            }`}
         >
           <button
             type="button"
@@ -894,7 +892,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             disabled={isBusy || openActionsBooking.status === "CONCLUIDO"}
             onClick={() => changeStatus(openActionsBooking.id, "CONCLUIDO")}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-brand-soft transition hover:bg-brand/10 disabled:opacity-40"
-          ><span className="w-6 text-xs font-semibold">FIM</span><span>Marcar como concluido</span></button>
+          ><span className="w-6 text-xs font-semibold">FIM</span><span>Marcar como concluído</span></button>
           <button
             type="button"
             role="menuitem"
@@ -955,7 +953,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             <span>Cancelar agendamento</span>
           </button>
           {openActionsBooking.seriesId ? <button type="button" role="menuitem" disabled={isBusy || openActionsBooking.status === "CANCELADO"} onClick={() => changeStatus(openActionsBooking.id, "CANCELADO", "FUTURE")} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-danger-soft transition hover:bg-danger/10 disabled:opacity-40"><span className="w-6 text-xs font-semibold text-danger-soft">X+</span><span>Cancelar esta e futuras</span></button> : null}
-          {openActionsBooking.seriesId ? <button type="button" role="menuitem" disabled={isBusy || openActionsBooking.status === "CANCELADO"} onClick={() => changeStatus(openActionsBooking.id, "CANCELADO", "ALL")} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-danger-soft transition hover:bg-danger/10 disabled:opacity-40"><span className="w-6 text-xs font-semibold text-danger-soft">ALL</span><span>Cancelar toda a serie</span></button> : null}
+          {openActionsBooking.seriesId ? <button type="button" role="menuitem" disabled={isBusy || openActionsBooking.status === "CANCELADO"} onClick={() => changeStatus(openActionsBooking.id, "CANCELADO", "ALL")} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-danger-soft transition hover:bg-danger/10 disabled:opacity-40"><span className="w-6 text-xs font-semibold text-danger-soft">ALL</span><span>Cancelar toda a série</span></button> : null}
         </div>
       ) : null}
 
@@ -966,7 +964,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               <div>
                 <h3 id="create-booking-title" className="text-xl font-semibold text-zinc-100">Novo agendamento</h3>
                 <p className="mt-1 text-sm text-zinc-400">
-                  Crie um horario manual e, se quiser, repita como na agenda do Google.
+                  Crie um horário manual e, se quiser, repita como na agenda do Google.
                 </p>
               </div>
               <button
@@ -1003,7 +1001,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               </label>
 
               <label className="space-y-2 sm:col-span-2">
-                <span className="text-sm text-zinc-300">Observacoes</span>
+                <span className="text-sm text-zinc-300">Observações</span>
                 <textarea
                   value={createDraft.observations}
                   onChange={(event) => setCreateDraft((prev) => ({ ...prev, observations: event.target.value }))}
@@ -1014,7 +1012,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm text-zinc-300">Servico</span>
+                <span className="text-sm text-zinc-300">Serviço</span>
                 <select
                   value={createDraft.serviceId}
                   onChange={(event) => setCreateDraft((prev) => ({ ...prev, serviceId: event.target.value }))}
@@ -1066,7 +1064,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm text-zinc-300">Horario</span>
+                <span className="text-sm text-zinc-300">Horário</span>
                 <input
                   type="time"
                   value={createDraft.time}
@@ -1077,10 +1075,10 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             </div>
 
             <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-              <h4 className="text-sm font-semibold text-zinc-100">Repeticao</h4>
+              <h4 className="text-sm font-semibold text-zinc-100">Repetição</h4>
               <div className="mt-3 grid gap-4 sm:grid-cols-[1fr_1fr]">
                 <label className="space-y-2">
-                  <span className="text-sm text-zinc-300">Frequencia</span>
+                  <span className="text-sm text-zinc-300">Frequência</span>
                   <select
                     value={createDraft.recurrence}
                     onChange={(event) => {
@@ -1093,15 +1091,15 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                     }}
                     className="ui-control w-full px-3 py-2"
                   >
-                    <option value="NONE">Nao repetir</option>
+                    <option value="NONE">Não repetir</option>
                     <option value="DAILY">Diariamente</option>
                     <option value="WEEKLY">Toda semana no mesmo dia</option>
-                    <option value="MONTHLY">Uma vez por mes no mesmo dia</option>
+                    <option value="MONTHLY">Uma vez por mês no mesmo dia</option>
                   </select>
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm text-zinc-300">Repetir ate</span>
+                  <span className="text-sm text-zinc-300">Repetir até</span>
                   <input
                     type="date"
                     value={createDraft.repeatUntil}
@@ -1118,26 +1116,25 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                     {getRecurrenceLabel(createDraft.recurrence, createDraft.date)}
                   </p>
                   <span
-                    className={`w-fit rounded-full border px-2 py-1 text-xs font-semibold ${
-                      recurrenceHasLimitError
-                        ? "border-danger/50 bg-danger/15 text-danger-soft"
-                        : "border-brand/30 bg-brand/10 text-brand-soft"
-                    }`}
+                    className={`w-fit rounded-full border px-2 py-1 text-xs font-semibold ${recurrenceHasLimitError
+                      ? "border-danger/50 bg-danger/15 text-danger-soft"
+                      : "border-brand/30 bg-brand/10 text-brand-soft"
+                      }`}
                   >
-                    {createOccurrenceStarts.length} ocorrencia{createOccurrenceStarts.length === 1 ? "" : "s"}
+                    {createOccurrenceStarts.length} ocorrência{createOccurrenceStarts.length === 1 ? "" : "s"}
                   </span>
                 </div>
                 {createOccurrencePreview.length > 0 ? (
                   <p className="mt-2 text-xs text-copy-muted">
-                    Primeiros horarios:{" "}
+                    Primeiros horários:{" "}
                     {createOccurrencePreview.map((item) => `${item.date} ${item.time}`).join(", ")}
                     {createOccurrenceStarts.length > createOccurrencePreview.length ? "..." : ""}
                   </p>
                 ) : (
-                  <p className="mt-2 text-xs text-danger-soft">Revise a data final da repeticao.</p>
+                  <p className="mt-2 text-xs text-danger-soft">Revise a data final da repetição.</p>
                 )}
                 <p className="mt-2 text-xs text-copy-muted">
-                  A serie usa exatamente o horario selecionado. Limite: 59 ocorrencias por operacao.
+                  A série usa exatamente o horário selecionado. Limite: 59 ocorrências por operação.
                 </p>
               </div>
             </div>
@@ -1175,7 +1172,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               <div>
                 <h3 id="edit-booking-title" className="text-xl font-semibold text-zinc-100">Editar agendamento</h3>
                 <p className="mt-1 text-sm text-zinc-400">
-                  Atualize este horario e, se precisar, crie novas ocorrencias a partir dele.
+                  Atualize este horário e, se precisar, crie novas ocorrências a partir dele.
                 </p>
               </div>
               <button
@@ -1215,7 +1212,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm text-zinc-300">Servico</span>
+                <span className="text-sm text-zinc-300">Serviço</span>
                 <select
                   value={editingBooking.serviceId}
                   onChange={(event) =>
@@ -1259,7 +1256,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm text-zinc-300">Horario</span>
+                <span className="text-sm text-zinc-300">Horário</span>
                 <input
                   type="time"
                   value={editingBooking.time}
@@ -1274,9 +1271,9 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
             <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h4 className="text-sm font-semibold text-zinc-100">Alcance da edicao</h4>
+                  <h4 className="text-sm font-semibold text-zinc-100">Alcance da edição</h4>
                   <p className="mt-1 text-xs text-copy-muted">
-                    Em uma serie, escolha se a mudanca vale apenas para esta ocorrencia, para as futuras ou para toda a serie.
+                    Em uma série, escolha se a mudança vale apenas para esta ocorrência, para as futuras ou para toda a série.
                   </p>
                 </div>
                 <span className="w-fit rounded-full border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-300">
@@ -1296,9 +1293,9 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                     }}
                     className="ui-control w-full px-3 py-2"
                   >
-                    <option value="SINGLE">Somente esta ocorrencia</option>
+                    <option value="SINGLE">Somente esta ocorrência</option>
                     {editingBooking.seriesId ? <option value="FUTURE">Esta e as futuras</option> : null}
-                    {editingBooking.seriesId ? <option value="ALL">Toda a serie</option> : null}
+                    {editingBooking.seriesId ? <option value="ALL">Toda a série</option> : null}
                   </select>
                 </label>
 
@@ -1307,13 +1304,13 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
               <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-3">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm font-semibold text-zinc-100">
-                    {editingBooking.scope === "SINGLE" ? "Somente esta ocorrencia" : editingBooking.scope === "FUTURE" ? "Esta e as futuras" : "Toda a serie"}
+                    {editingBooking.scope === "SINGLE" ? "Somente esta ocorrência" : editingBooking.scope === "FUTURE" ? "Esta e as futuras" : "Toda a série"}
                   </p>
                   <span className="w-fit rounded-full border border-brand/30 bg-brand/10 px-2 py-1 text-xs font-semibold text-brand-soft">
-                    {editingBooking.scope === "SINGLE" ? "1 atualizacao" : "Atualizacao em serie"}
+                    {editingBooking.scope === "SINGLE" ? "1 atualização" : "Atualização em série"}
                   </span>
                 </div>
-                <p className="mt-2 text-xs text-copy-muted">Todos os horarios afetados serao revalidados atomicamente contra expediente, bloqueios e conflitos.</p>
+                <p className="mt-2 text-xs text-copy-muted">Todos os horários afetados serão revalidados atomicamente contra expediente, bloqueios e conflitos.</p>
               </div>
             </div>
 
@@ -1332,7 +1329,7 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
                 disabled={isPendingCreate || !editingBooking.date || !editingBooking.time}
                 className="button-primary px-4 py-2 disabled:opacity-60"
               >
-                {isPendingCreate ? "Salvando..." : "Salvar alteracoes"}
+                {isPendingCreate ? "Salvando..." : "Salvar alterações"}
               </button>
             </div>
           </div>

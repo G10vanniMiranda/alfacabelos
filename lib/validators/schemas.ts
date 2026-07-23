@@ -19,14 +19,14 @@ const passwordSchema = z
   .string()
   .min(8, "Senha deve ter pelo menos 8 caracteres")
   .refine((value) => value === value.trim(), {
-    message: "Senha nao pode comecar ou terminar com espacos",
+    message: "Senha não pode começar ou terminar com espaços",
   });
 
 const passwordResetIdentifierSchema = z
   .string()
   .trim()
   .min(1, "Informe o telefone cadastrado")
-  .max(32, "Telefone invalido")
+  .max(32, "Telefone inválido")
   .refine((value) => {
     const digits = value.replace(/\D/g, "");
     const localDigits = digits.startsWith("55") && (digits.length === 12 || digits.length === 13)
@@ -34,7 +34,7 @@ const passwordResetIdentifierSchema = z
       : digits;
     return localDigits.length >= 10 && localDigits.length <= 11;
   }, {
-    message: "Telefone invalido. Use DDD + numero",
+    message: "Telefone inválido. Use DDD + número",
   });
 
 export const createBookingSchema = z.object({
@@ -43,7 +43,7 @@ export const createBookingSchema = z.object({
   start: z.string().datetime("Data/hora inválida"),
   customerName: z.string().trim().min(2, "Informe o nome completo"),
   customerPhone: phoneSchema,
-  observations: z.string().trim().max(500, "Observacoes devem ter ate 500 caracteres").optional(),
+  observations: z.string().trim().max(500, "Observações devem ter até 500 caracteres").optional(),
 });
 
 export const clientRegisterSchema = z
@@ -69,23 +69,23 @@ export const requestPasswordResetSchema = z.object({
 
 export const resetPasswordSchema = z
   .object({
-    token: z.string().trim().min(16, "Token invalido").max(256, "Token invalido"),
+    token: z.string().trim().min(16, "Token inválido").max(256, "Token inválido"),
     password: passwordSchema,
     confirmPassword: passwordSchema,
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "As senhas nao conferem",
+    message: "As senhas não conferem",
     path: ["confirmPassword"],
   });
 
 export const adminLoginSchema = z.object({
-  email: z.string().trim().email("Email inválido"),
+  email: z.string().trim().email("E-mail inválido"),
   password: z.string().min(1, "Senha obrigatória"),
 });
 
 export const createAdminAccessSchema = z
   .object({
-    email: z.string().trim().email("Email inválido"),
+    email: z.string().trim().email("E-mail inválido"),
     password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
     confirmPassword: z.string().min(8, "Confirme a senha"),
     role: z.enum(["ADMIN", "BARBER"]).default("ADMIN"),
@@ -107,24 +107,24 @@ export const updateBookingPaymentStatusSchema = z.object({
 });
 
 export const updateAdminBookingSchema = z.object({
-  bookingId: z.string().min(1, "Agendamento invalido"),
-  serviceId: z.string().min(1, "Servico e obrigatorio"),
-  barberId: z.string().min(1, "Barbeiro e obrigatorio"),
+  bookingId: z.string().min(1, "Agendamento inválido"),
+  serviceId: z.string().min(1, "Serviço é obrigatório"),
+  barberId: z.string().min(1, "Barbeiro é obrigatório"),
   customerName: z.string().trim().min(2, "Informe o nome do cliente"),
   customerPhone: phoneSchema,
-  observations: z.string().trim().max(500, "Observacoes devem ter ate 500 caracteres").optional(),
-  start: z.string().datetime("Data/hora invalida"),
+  observations: z.string().trim().max(500, "Observações devem ter até 500 caracteres").optional(),
+  start: z.string().datetime("Data/hora inválida"),
 });
 
 export const createAdminBookingSchema = z
   .object({
-    serviceId: z.string().min(1, "Servico e obrigatorio"),
-    barberId: z.string().min(1, "Barbeiro e obrigatorio"),
+    serviceId: z.string().min(1, "Serviço é obrigatório"),
+    barberId: z.string().min(1, "Barbeiro é obrigatório"),
     customerName: z.string().trim().min(2, "Informe o nome do cliente"),
     customerPhone: phoneSchema,
-    observations: z.string().trim().max(500, "Observacoes devem ter ate 500 caracteres").optional(),
-    start: z.string().datetime("Data/hora invalida"),
-    starts: z.array(z.string().datetime("Data/hora invalida")).min(1).max(59).optional(),
+    observations: z.string().trim().max(500, "Observações devem ter até 500 caracteres").optional(),
+    start: z.string().datetime("Data/hora inválida"),
+    starts: z.array(z.string().datetime("Data/hora inválida")).min(1).max(59).optional(),
     recurrence: z.enum(["NONE", "DAILY", "WEEKLY", "MONTHLY"]),
     repeatUntil: z.string().optional(),
     interval: z.number().int().min(1).max(52).optional(),
@@ -139,7 +139,7 @@ export const createAdminBookingSchema = z
     if (!data.idempotencyKey) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Chave de idempotencia obrigatoria para recorrencia",
+        message: "Chave de idempotência obrigatória para recorrência",
         path: ["idempotencyKey"],
       });
       return;
@@ -148,7 +148,7 @@ export const createAdminBookingSchema = z
     if (data.starts && data.starts.length >= 60) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Limite de 59 repeticoes por criacao. Reduza o periodo.",
+        message: "Limite de 59 repetições por criação. Reduza o período.",
         path: ["starts"],
       });
       return;
@@ -158,7 +158,7 @@ export const createAdminBookingSchema = z
     if (!repeatUntil) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Informe ate quando repetir",
+        message: "Informe até quando repetir",
         path: ["repeatUntil"],
       });
       return;
@@ -167,7 +167,7 @@ export const createAdminBookingSchema = z
     if (!/^\d{4}-\d{2}-\d{2}$/.test(repeatUntil)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Data final invalida",
+        message: "Data final inválida",
         path: ["repeatUntil"],
       });
       return;
@@ -178,7 +178,7 @@ export const createAdminBookingSchema = z
     if (Number.isNaN(startDate.getTime()) || Number.isNaN(untilDate.getTime())) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Data final invalida",
+        message: "Data final inválida",
         path: ["repeatUntil"],
       });
       return;
@@ -187,7 +187,7 @@ export const createAdminBookingSchema = z
     if (untilDate < startDate) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "A repeticao deve terminar depois do primeiro agendamento",
+        message: "A repetição deve terminar depois do primeiro agendamento",
         path: ["repeatUntil"],
       });
     }
@@ -195,8 +195,8 @@ export const createAdminBookingSchema = z
 
 export const updateAdminAccessSchema = z
   .object({
-    accessId: z.string().min(1, "Acesso invalido"),
-    email: z.string().trim().email("Email invalido"),
+    accessId: z.string().min(1, "Acesso inválido"),
+    email: z.string().trim().email("E-mail inválido"),
     password: z.string(),
     confirmPassword: z.string(),
     role: z.enum(["ADMIN", "BARBER"]).default("ADMIN"),
@@ -229,7 +229,7 @@ export const updateAdminAccessSchema = z
     if (password !== confirmPassword) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "As senhas nao conferem",
+        message: "As senhas não conferem",
         path: ["confirmPassword"],
       });
     }
@@ -250,16 +250,16 @@ const timeStringRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 export const replaceBarberDayAvailabilitySchema = z
   .object({
-    barberId: z.string().min(1, "Barbeiro e obrigatorio"),
+    barberId: z.string().min(1, "Barbeiro é obrigatório"),
     dayOfWeek: z.number().int().min(0).max(6),
     ranges: z.array(
       z
         .object({
-          openTime: z.string().regex(timeStringRegex, "Horario inicial invalido"),
-          closeTime: z.string().regex(timeStringRegex, "Horario final invalido"),
+          openTime: z.string().regex(timeStringRegex, "Horário inicial inválido"),
+          closeTime: z.string().regex(timeStringRegex, "Horário final inválido"),
         })
         .refine((data) => data.openTime < data.closeTime, {
-          message: "Horario final deve ser maior que o inicial",
+          message: "Horário final deve ser maior que o inicial",
           path: ["closeTime"],
         }),
     ),
@@ -273,7 +273,7 @@ export const replaceBarberDayAvailabilitySchema = z
     }
     return true;
   }, {
-    message: "As faixas de horario nao podem se sobrepor",
+    message: "As faixas de horário não podem se sobrepor",
     path: ["ranges"],
   });
 
@@ -305,7 +305,7 @@ export const createGalleryImageSchema = z.object({
   imageUrl: z
     .string()
     .trim()
-    .url("Informe uma URL valida para a midia"),
+    .url("Informe uma URL válida para a mídia"),
   altText: z.string().trim().max(120, "Texto alternativo muito longo").optional(),
   mediaType: z.enum(["IMAGE", "VIDEO"]).optional(),
 });

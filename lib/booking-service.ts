@@ -202,7 +202,7 @@ export async function createBooking(input: unknown, options?: { clientId?: strin
   });
 
   if (!availableSlots.some((slot) => slot.start === data.start)) {
-    throw new Error("O horario selecionado nao esta mais disponivel.");
+    throw new Error("O horário selecionado não está mais disponível.");
   }
 
   const conflicts = await repository.listBookingsInRange(data.start, computedEnd, barberId);
@@ -250,14 +250,14 @@ function addHours(date: Date, hours: number): Date {
 export async function createBarberBooking(input: unknown) {
   const parsed = createBookingSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Dados do agendamento invalidos");
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados do agendamento inválidos");
   }
 
   const data = parsed.data;
   const barberId = data.barberId ?? DEFAULT_BARBER_ID;
   const service = await repository.getServiceById(data.serviceId);
   if (!service) {
-    throw new Error("Servico nao encontrado");
+    throw new Error("Serviço não encontrado");
   }
 
   const computedEnd = addMinutesToIso(
@@ -267,7 +267,7 @@ export async function createBarberBooking(input: unknown) {
 
   const conflicts = await repository.listBookingsInRange(data.start, computedEnd, barberId);
   if (conflicts.length > 0) {
-    throw new Error("Este horario acabou de ser reservado. Escolha outro horario.");
+    throw new Error("Este horário acabou de ser reservado. Escolha outro horário.");
   }
 
   const blockedSlots = await repository.listBlockedSlots(getLocalDateInput(data.start, BUSINESS_CONFIG.timezone));
@@ -279,7 +279,7 @@ export async function createBarberBooking(input: unknown) {
   });
 
   if (blockedConflict) {
-    throw new Error("Este horario esta bloqueado para atendimento.");
+    throw new Error("Este horário está bloqueado para atendimento.");
   }
 
   const client = await repository.upsertPendingClient({
@@ -312,12 +312,12 @@ export async function createBarberBooking(input: unknown) {
 export async function updateAdminBooking(input: unknown) {
   const parsed = updateAdminBookingSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Dados do agendamento invalidos");
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados do agendamento inválidos");
   }
 
   const service = await repository.getServiceById(parsed.data.serviceId);
   if (!service) {
-    throw new Error("Servico nao encontrado");
+    throw new Error("Serviço não encontrado");
   }
 
   const computedEnd = addMinutesToIso(
@@ -337,7 +337,7 @@ export async function updateAdminBooking(input: unknown) {
   });
 
   if (!updated) {
-    throw new Error("Agendamento nao encontrado");
+    throw new Error("Agendamento não encontrado");
   }
 
   return updated;
@@ -391,7 +391,7 @@ export function getPublicConfirmationState(
 
 export async function confirmBookingByToken(token: string) {
   if (!token || token.length < 32) {
-    throw new Error("Link de confirmacao invalido");
+    throw new Error("Link de confirmação inválido");
   }
 
   const rateLimit = await registerRateLimitEvent({
@@ -406,7 +406,7 @@ export async function confirmBookingByToken(token: string) {
 
   const confirmed = await repository.confirmBookingByToken(token);
   if (!confirmed) {
-    throw new Error("Link de confirmacao invalido, expirado ou ja utilizado");
+    throw new Error("Link de confirmação inválido, expirado ou já utilizado");
   }
 
   return confirmed;
@@ -524,11 +524,11 @@ export async function cancelClientBooking(input: { bookingId: string; customerPh
 export async function confirmClientBooking(input: { bookingId: string; customerPhone: string }) {
   const booking = await repository.getBookingById(input.bookingId);
   if (!booking) {
-    throw new Error("Agendamento nao encontrado");
+    throw new Error("Agendamento não encontrado");
   }
 
   if (normalizePhone(booking.customerPhone) !== normalizePhone(input.customerPhone)) {
-    throw new Error("Voce nao tem permissao para confirmar este agendamento");
+    throw new Error("Você não tem permissão para confirmar este agendamento");
   }
 
   if (new Date(booking.dateTimeStart).getTime() <= Date.now()) {
@@ -536,7 +536,7 @@ export async function confirmClientBooking(input: { bookingId: string; customerP
   }
 
   if (booking.status === "CANCELADO") {
-    throw new Error("Nao e possivel confirmar um agendamento cancelado");
+    throw new Error("Não é possível confirmar um agendamento cancelado");
   }
 
   if (booking.status === "CONFIRMADO") {
@@ -567,12 +567,12 @@ export async function listBlockedSlots(date?: string) {
 export async function updateBookingPaymentStatus(input: unknown) {
   const parsed = updateBookingPaymentStatusSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Status de pagamento invalido");
+    throw new Error(parsed.error.issues[0]?.message ?? "Status de pagamento inválido");
   }
 
   const updated = await repository.updateBookingPaymentStatus(parsed.data.bookingId, parsed.data.paymentStatus);
   if (!updated) {
-    throw new Error("Agendamento nao encontrado");
+    throw new Error("Agendamento não encontrado");
   }
 
   return updated;
@@ -607,7 +607,7 @@ export async function deleteBlockedSlot(blockedSlotId: string) {
 
 export async function listBarberAvailabilities(barberId: string) {
   if (!barberId) {
-    throw new Error("Barbeiro invalido");
+    throw new Error("Barbeiro inválido");
   }
   return repository.listBarberAvailabilities(barberId);
 }
@@ -615,7 +615,7 @@ export async function listBarberAvailabilities(barberId: string) {
 export async function replaceBarberDayAvailability(input: unknown) {
   const parsed = replaceBarberDayAvailabilitySchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Disponibilidade invalida");
+    throw new Error(parsed.error.issues[0]?.message ?? "Disponibilidade inválida");
   }
 
   return repository.replaceBarberDayAvailabilities(parsed.data);

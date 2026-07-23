@@ -34,7 +34,7 @@ export async function dispatchWhatsAppNotification(input: DispatchInput): Promis
       id: randomUUID(), event: input.event, recipient: input.to, recipientMasked: maskRecipient(input.to),
       message: input.message, context: input.context, idempotencyKey: input.idempotencyKey,
       status: initialStatus, bookingId: input.bookingId,
-      lastError: initialStatus === "NOT_CONFIGURED" ? "WhatsApp ainda nao configurado" : null,
+      lastError: initialStatus === "NOT_CONFIGURED" ? "WhatsApp ainda não configurado" : null,
     },
     update: {},
   });
@@ -51,11 +51,11 @@ export async function dispatchWhatsAppNotification(input: DispatchInput): Promis
     const sent = await sendWhatsAppMessage({ to: input.to, message: input.message, context: input.context });
     await prisma.notificationDelivery.update({
       where: { id: delivery.id },
-      data: sent ? { status: "SENT", sentAt: new Date(), nextRetryAt: null } : { status: "FAILED", lastError: "Provider nao confirmou o envio", nextRetryAt: new Date(Date.now() + 5 * 60_000) },
+      data: sent ? { status: "SENT", sentAt: new Date(), nextRetryAt: null } : { status: "FAILED", lastError: "Provedor não confirmou o envio", nextRetryAt: new Date(Date.now() + 5 * 60_000) },
     });
     return { status: sent ? "sent" : "failed", deliveryId: delivery.id };
   } catch (error) {
-    const message = error instanceof Error ? error.message.slice(0, 500) : "Falha desconhecida no provider";
+    const message = error instanceof Error ? error.message.slice(0, 500) : "Falha desconhecida no provedor";
     await prisma.notificationDelivery.update({ where: { id: delivery.id }, data: { status: "FAILED", lastError: message, nextRetryAt: new Date(Date.now() + 5 * 60_000) } });
     return { status: "failed", deliveryId: delivery.id };
   }
@@ -66,7 +66,7 @@ export async function retryPendingNotifications(limit = 25): Promise<Notificatio
   const now = new Date();
   await prisma.notificationDelivery.updateMany({
     where: { status: "SENDING", updatedAt: { lt: new Date(now.getTime() - 2 * 60_000) } },
-    data: { status: "FAILED", lastError: "Envio interrompido antes da confirmacao", nextRetryAt: now },
+    data: { status: "FAILED", lastError: "Envio interrompido antes da confirmação", nextRetryAt: now },
   });
   const pending = await prisma.notificationDelivery.findMany({
     where: {

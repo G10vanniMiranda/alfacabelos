@@ -117,19 +117,19 @@ function buildWhatsAppPayload(phone: string, message: string) {
 
 export async function sendWhatsAppMessage({ to, message, context = "whatsapp" }: SendWhatsAppMessageInput): Promise<boolean> {
   if (!WHATSAPP_ENABLED) {
-    console.info(`[whatsapp] notificacao ignorada (${context}): WHATSAPP_ENABLED diferente de true`);
+    console.info(`[whatsapp] notificação ignorada (${context}): WHATSAPP_ENABLED diferente de true`);
     return false;
   }
 
   const phone = normalizeWhatsAppPhone(to);
   if (!phone) {
-    console.warn(`[whatsapp] telefone invalido para notificacao (${context})`);
+    console.warn(`[whatsapp] telefone inválido para notificação (${context})`);
     return false;
   }
 
   const endpoint = resolveWhatsAppEndpoint();
   if (!endpoint || !WHATSAPP_API_TOKEN) {
-    console.warn(`[whatsapp] configuracao incompleta para envio (${context})`);
+    console.warn(`[whatsapp] configuração incompleta para envio (${context})`);
     return false;
   }
 
@@ -224,13 +224,13 @@ export function buildBookingConfirmationLink(booking: BookingWithRelations): str
 export function buildClientPreBookingConfirmation(booking: BookingWithRelations): string {
   const link = buildBookingConfirmationLink(booking);
   const lines = [
-    `Ola, ${booking.customerName}!`,
+    `Olá, ${booking.customerName}!`,
     "",
-    "Seu horario na Alfa Cabelos foi pre-agendado.",
+    "Seu horário na Alfa Cabelos foi pré-agendado.",
     "",
-    `Servico: ${booking.service.name}`,
+    `Serviço: ${booking.service.name}`,
     `Data: ${formatBookingDate(booking.dateTimeStart)}`,
-    `Horario: ${formatBookingTimeOnly(booking.dateTimeStart)}`,
+    `Horário: ${formatBookingTimeOnly(booking.dateTimeStart)}`,
   ];
 
   if (link) {
@@ -239,7 +239,7 @@ export function buildClientPreBookingConfirmation(booking: BookingWithRelations)
       "Para confirmar seu agendamento, clique no link abaixo:",
       link,
       "",
-      "Voce nao precisa ter senha para confirmar esse agendamento.",
+      "Você não precisa ter senha para confirmar esse agendamento.",
     );
   } else {
     lines.push("", "Entre em contato conosco para confirmar seu agendamento.");
@@ -251,7 +251,7 @@ export function buildClientPreBookingConfirmation(booking: BookingWithRelations)
 export async function notifyOwnerAboutClientBooking(booking: BookingWithRelations, observations?: string) {
   if (!WHATSAPP_OWNER_PHONE) {
     if (WHATSAPP_ENABLED) {
-      console.warn("[whatsapp] WHATSAPP_OWNER_PHONE ausente; notificacao ao dono ignorada");
+      console.warn("[whatsapp] WHATSAPP_OWNER_PHONE ausente; notificação ao dono ignorada");
     }
     return;
   }
@@ -319,16 +319,16 @@ export async function notifyOwnerAboutBookingEvent(
 
 export function buildBookingWhatsAppMessage(booking: BookingWithRelations): string {
   return [
-    `Ola, ${booking.customerName}!`,
+    `Olá, ${booking.customerName}!`,
     "",
     "Seu agendamento na ALFA Barber ficou assim:",
-    `Servico: ${booking.service.name}`,
+    `Serviço: ${booking.service.name}`,
     `Barbeiro: ${booking.barber.name}`,
-    `Data e horario: ${formatBookingDateTime(booking.dateTimeStart)}`,
+    `Data e horário: ${formatBookingDateTime(booking.dateTimeStart)}`,
     `Valor: ${formatBRLFromCents(booking.service.priceCents)}`,
     `Status: ${booking.status}`,
     "",
-    `Codigo do agendamento: ${booking.id}`,
+    `Código do agendamento: ${booking.id}`,
   ].join("\n");
 }
 

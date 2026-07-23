@@ -5,7 +5,7 @@ import type { AccessRole } from "@/types/domain";
 
 const ADMIN_SESSION_TTL_SECONDS = 60 * 60 * 8;
 const ADMIN_SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-const ADMIN_SESSION_TABLE_ERROR = "Sessão admin indisponível. Execute as migrations do banco.";
+const ADMIN_SESSION_TABLE_ERROR = "Sessão administrativa indisponível. Execute as migrações do banco.";
 
 let adminSessionTableChecked = false;
 let adminSessionTableExists = false;

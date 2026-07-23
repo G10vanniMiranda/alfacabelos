@@ -36,11 +36,11 @@ export async function createAdminAccessAction(
       barberId: parsed.data.barberId,
     });
     revalidatePath("/admin/acessos");
-    return { success: true, message: "Acesso admin criado com sucesso" };
+    return { success: true, message: "Acesso administrativo criado com sucesso" };
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Falha ao criar acesso admin",
+      message: error instanceof Error ? error.message : "Falha ao criar acesso administrativo",
     };
   }
 }
@@ -49,13 +49,13 @@ export async function deleteAdminAccessAction(accessId: string): Promise<ActionS
   await assertAdminSession();
 
   if (!accessId) {
-    return { success: false, message: "Acesso invalido" };
+    return { success: false, message: "Acesso inválido" };
   }
 
   try {
     const deleted = await deleteAdminAccess(accessId);
     if (!deleted) {
-      return { success: false, message: "Acesso nao encontrado" };
+      return { success: false, message: "Acesso não encontrado" };
     }
 
     revalidatePath("/admin/acessos");
@@ -88,7 +88,7 @@ export async function updateAdminAccessAction(input: {
   });
 
   if (!parsed.success) {
-    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados invalidos" };
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
   try {
@@ -101,7 +101,7 @@ export async function updateAdminAccessAction(input: {
     });
 
     if (!updated) {
-      return { success: false, message: "Acesso nao encontrado" };
+      return { success: false, message: "Acesso não encontrado" };
     }
 
     revalidatePath("/admin/acessos");

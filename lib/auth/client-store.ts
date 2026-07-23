@@ -159,7 +159,7 @@ export async function createClient(input: {
     });
 
     if (existing?.hasPassword) {
-      throw new Error("Ja existe cadastro com este telefone");
+      throw new Error("Já existe cadastro com este telefone");
     }
 
     if (existing) {
@@ -194,7 +194,7 @@ export async function createClient(input: {
     if (error instanceof Error && error.message) {
       throw error;
     }
-    throw new Error("Ja existe cadastro com este telefone");
+    throw new Error("Já existe cadastro com este telefone");
   }
 }
 

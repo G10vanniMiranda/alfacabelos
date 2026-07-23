@@ -6,7 +6,7 @@ import { isDatabaseUnavailableError } from "@/lib/errors";
 import { Prisma } from "@prisma/client";
 
 const scrypt = promisify(scryptCallback);
-const ADMIN_ACCESS_TABLE_ERROR = "Acesso admin indisponivel. Execute as migrations do banco.";
+const ADMIN_ACCESS_TABLE_ERROR = "Acesso administrativo indisponível. Execute as migrações do banco.";
 
 type AdminAccessRow = {
   id: string;
@@ -165,7 +165,7 @@ export async function createAdminAccess(input: {
     `;
 
     if (existing.length > 0) {
-      throw new Error("Já existe um acesso admin com este email");
+      throw new Error("Já existe um acesso administrativo com este e-mail");
     }
 
     const id = randomUUID();
@@ -185,12 +185,12 @@ export async function createAdminAccess(input: {
 
     const created = rows[0];
     if (!created) {
-      throw new Error("Falha ao criar acesso admin");
+      throw new Error("Falha ao criar acesso administrativo");
     }
 
     return toAdminAccessUser(stripPasswordHash(created));
   } catch (error) {
-    if (error instanceof Error && error.message === "Já existe um acesso admin com este email") {
+    if (error instanceof Error && error.message === "Já existe um acesso administrativo com este e-mail") {
       throw error;
     }
 
@@ -284,7 +284,7 @@ export async function updateAdminAccess(input: {
         WHERE "email" = ${email} AND "isActive" = true AND "id" <> ${input.accessId}
         LIMIT 1
       `;
-      if (existing.length > 0) throw new Error("Ja existe um acesso admin com este email");
+      if (existing.length > 0) throw new Error("Já existe um acesso administrativo com este e-mail");
       const now = new Date();
       if (passwordHash) {
         await tx.$executeRaw`
@@ -308,7 +308,7 @@ export async function updateAdminAccess(input: {
     const updated = rows[0];
     return updated ? toAdminAccessUser(stripPasswordHash(updated)) : null;
   } catch (error) {
-    if (error instanceof Error && error.message === "Ja existe um acesso admin com este email") {
+    if (error instanceof Error && error.message === "Já existe um acesso administrativo com este e-mail") {
       throw error;
     }
 

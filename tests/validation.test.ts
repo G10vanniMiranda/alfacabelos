@@ -10,7 +10,7 @@ test("normaliza telefones brasileiros para DDI 55", () => {
   assert.equal(normalizeWhatsAppPhone("123"), null);
 });
 
-test("aceita telefone de cliente com mascara e normaliza DDI opcional", () => {
+test("aceita telefone de cliente com máscara e normaliza DDI opcional", () => {
   assert.equal(phoneSchema.safeParse("(69) 99999-9999").success, true);
   assert.equal(phoneSchema.safeParse("+55 69 99999-9999").success, true);
   assert.equal(phoneSchema.safeParse("(69) 3333-4444").success, true);

@@ -15,8 +15,8 @@ export async function getCurrentStaff(): Promise<StaffPrincipal | null> {
 
 export async function requireStaff(allowed?: AccessRole[]): Promise<StaffPrincipal> {
   const principal = await getCurrentStaff();
-  if (!principal || (allowed && !allowed.includes(principal.role))) throw new Error("Nao autorizado");
-  if (principal.role === "BARBER" && !principal.barberId) throw new Error("Acesso de barbeiro sem vinculo ativo");
+  if (!principal || (allowed && !allowed.includes(principal.role))) throw new Error("Não autorizado");
+  if (principal.role === "BARBER" && !principal.barberId) throw new Error("Acesso de barbeiro sem vínculo ativo");
   return principal;
 }
 
@@ -28,12 +28,12 @@ export async function assertBookingScope(principal: StaffPrincipal, bookingId: s
   if (principal.role === "ADMIN") return;
   const { prisma } = await import("@/lib/prisma");
   const owned = await prisma.booking.count({ where: { id: bookingId, barberId: principal.barberId } });
-  if (!owned) throw new Error("Nao autorizado para este agendamento");
+  if (!owned) throw new Error("Não autorizado para este agendamento");
 }
 
 export async function assertBlockedSlotScope(principal: StaffPrincipal, blockedSlotId: string): Promise<void> {
   if (principal.role === "ADMIN") return;
   const { prisma } = await import("@/lib/prisma");
   const owned = await prisma.blockedSlot.count({ where: { id: blockedSlotId, barberId: principal.barberId } });
-  if (!owned) throw new Error("Nao autorizado para este bloqueio");
+  if (!owned) throw new Error("Não autorizado para este bloqueio");
 }

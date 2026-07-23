@@ -2,7 +2,7 @@ import { AdminHorarios } from "@/components/admin/admin-horarios";
 import { listBarberAvailabilities, listBarbers } from "@/lib/booking-service";
 
 export const metadata = {
-  title: "Horarios | Admin",
+  title: "Horários | Admin",
 };
 
 export default async function AdminHorariosPage() {

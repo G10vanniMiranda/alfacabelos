@@ -13,7 +13,7 @@ export type RecurrenceRule = {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseDate(date: string) {
-  if (!DATE_RE.test(date)) throw new Error("Data da recorrencia invalida");
+  if (!DATE_RE.test(date)) throw new Error("Data da recorrência inválida");
   const [year, month, day] = date.split("-").map(Number);
   const value = new Date(Date.UTC(year, month - 1, day, 12));
   if (
@@ -21,7 +21,7 @@ function parseDate(date: string) {
     value.getUTCMonth() !== month - 1 ||
     value.getUTCDate() !== day
   ) {
-    throw new Error("Data da recorrencia invalida");
+    throw new Error("Data da recorrência inválida");
   }
   return { year, month, day, value };
 }
@@ -56,10 +56,10 @@ export function weekdayForDate(date: string) {
 export function expandRecurrenceRule(rule: RecurrenceRule, max = MAX_SERIES_OCCURRENCES): string[] {
   parseDate(rule.startsOn);
   parseDate(rule.endsOn);
-  if (rule.endsOn < rule.startsOn) throw new Error("O periodo da recorrencia e invalido");
+  if (rule.endsOn < rule.startsOn) throw new Error("O período da recorrência é inválido");
   const interval = rule.interval ?? 1;
   if (!Number.isInteger(interval) || interval < 1 || interval > 52) {
-    throw new Error("Intervalo da recorrencia invalido");
+    throw new Error("Intervalo da recorrência inválido");
   }
 
   const dates: string[] = [];
@@ -68,7 +68,7 @@ export function expandRecurrenceRule(rule: RecurrenceRule, max = MAX_SERIES_OCCU
       const date = addDays(rule.startsOn, step * interval);
       if (date > rule.endsOn) break;
       dates.push(date);
-      if (dates.length > max) throw new Error(`Limite de ${max} ocorrencias por serie excedido`);
+      if (dates.length > max) throw new Error(`Limite de ${max} ocorrências por série excedido`);
     }
   } else if (rule.frequency === "WEEKLY") {
     const weekdays = [...new Set(rule.weekdays?.length ? rule.weekdays : [weekdayForDate(rule.startsOn)])]
@@ -80,7 +80,7 @@ export function expandRecurrenceRule(rule: RecurrenceRule, max = MAX_SERIES_OCCU
     while (cursor <= rule.endsOn) {
       const week = Math.floor(offset / 7);
       if (week % interval === 0 && weekdays.includes(weekdayForDate(cursor))) dates.push(cursor);
-      if (dates.length > max) throw new Error(`Limite de ${max} ocorrencias por serie excedido`);
+      if (dates.length > max) throw new Error(`Limite de ${max} ocorrências por série excedido`);
       offset += 1;
       cursor = addDays(rule.startsOn, offset);
     }
@@ -89,11 +89,10 @@ export function expandRecurrenceRule(rule: RecurrenceRule, max = MAX_SERIES_OCCU
       const date = addMonthsFromOrigin(rule.startsOn, step * interval);
       if (date > rule.endsOn) break;
       dates.push(date);
-      if (dates.length > max) throw new Error(`Limite de ${max} ocorrencias por serie excedido`);
+      if (dates.length > max) throw new Error(`Limite de ${max} ocorrências por série excedido`);
     }
   }
 
-  if (dates.length === 0) throw new Error("A recorrencia nao gerou nenhuma ocorrencia");
+  if (dates.length === 0) throw new Error("A recorrência não gerou nenhuma ocorrência");
   return dates;
 }
-

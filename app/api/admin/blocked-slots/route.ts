@@ -12,7 +12,7 @@ async function getPrincipal(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const principal = await getPrincipal(request);
   if (!principal) {
-    return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
+    return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
   }
 
   const date = request.nextUrl.searchParams.get("date") ?? undefined;
@@ -24,12 +24,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!isSameOriginRequest(request)) {
-    return NextResponse.json({ message: "Origem invalida" }, { status: 403 });
+    return NextResponse.json({ message: "Origem inválida" }, { status: 403 });
   }
 
   const principal = await getPrincipal(request);
   if (!principal) {
-    return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
+    return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
   }
 
   try {
@@ -44,17 +44,17 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   if (!isSameOriginRequest(request)) {
-    return NextResponse.json({ message: "Origem invalida" }, { status: 403 });
+    return NextResponse.json({ message: "Origem inválida" }, { status: 403 });
   }
 
   const principal = await getPrincipal(request);
   if (!principal) {
-    return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
+    return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
   }
 
   const blockedSlotId = request.nextUrl.searchParams.get("blockedSlotId");
   if (!blockedSlotId) {
-    return NextResponse.json({ message: "blockedSlotId e obrigatorio" }, { status: 400 });
+    return NextResponse.json({ message: "blockedSlotId é obrigatório" }, { status: 400 });
   }
 
   try {

@@ -23,7 +23,7 @@ export function PasswordResetRequestForm() {
         <AuthSubmitButton pending={isPending} idleLabel={state.success ? "Solicitar novamente" : "Enviar instruções"} pendingLabel="Enviando..." />
       </form>
       <p className="auth-footer">
-        Lembrou sua senha? <Link href="/cliente/login">Voltar para entrar</Link>
+        Lembrou-se da sua senha? <Link href="/cliente/login">Voltar para entrar</Link>
       </p>
     </>
   );

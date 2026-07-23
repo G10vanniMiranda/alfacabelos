@@ -234,7 +234,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
             <thead className="bg-zinc-950/70 text-xs uppercase tracking-wide text-copy-muted">
               <tr>
                 <th scope="col" className="px-4 py-3">Cliente</th>
-                <th scope="col" className="px-4 py-3">Servico</th>
+                <th scope="col" className="px-4 py-3">Serviço</th>
                 <th scope="col" className="px-4 py-3">Criado em</th>
                 <th scope="col" className="px-4 py-3">Status</th>
                 <th scope="col" className="px-4 py-3">Pagamento</th>

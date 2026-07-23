@@ -1,5 +1,13 @@
 import type { BookingStatus } from "@/types/domain";
 
+const statusLabels: Record<BookingStatus, string> = {
+  PENDENTE: "PENDENTE",
+  CONFIRMADO: "CONFIRMADO",
+  CANCELADO: "CANCELADO",
+  CONCLUIDO: "CONCLUÍDO",
+  AUSENTE: "AUSENTE",
+};
+
 export function StatusBadge({ status }: { status: BookingStatus }) {
   const classes =
     status === "CONFIRMADO"
@@ -10,6 +18,6 @@ export function StatusBadge({ status }: { status: BookingStatus }) {
           ? "border-brand/50 bg-brand/15 text-brand-soft"
           : "border-warning/50 bg-warning/15 text-warning-soft";
 
-  return <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${classes}`}>{status}</span>;
+  return <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${classes}`}>{statusLabels[status]}</span>;
 }
 

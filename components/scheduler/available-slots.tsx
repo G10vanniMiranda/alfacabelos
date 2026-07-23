@@ -59,7 +59,7 @@ export function AvailableSlots({
   if (slots.length === 0) {
     return (
       <div className="ui-alert ui-alert-warning text-sm">
-        Nao ha horarios disponiveis para esse dia.
+        Não há horários disponíveis para esse dia.
       </div>
     );
   }
@@ -68,8 +68,8 @@ export function AvailableSlots({
     <div className="rounded-xl border border-zinc-800 bg-zinc-950/60">
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
         <div>
-          <p className="text-sm font-semibold text-zinc-100">Horarios disponiveis</p>
-          <p className="text-xs text-copy-muted">Selecione um horario para continuar.</p>
+          <p className="text-sm font-semibold text-zinc-100">Horários disponíveis</p>
+          <p className="text-xs text-copy-muted">Selecione um horário para continuar.</p>
         </div>
         <span className="rounded-full border border-zinc-700 px-2.5 py-1 text-xs font-semibold text-zinc-300">
           {slots.length}
@@ -89,11 +89,10 @@ export function AvailableSlots({
                     key={slot.start}
                     onClick={() => onSelect(slot)}
                     aria-pressed={selected}
-                    className={`h-11 rounded-lg border px-3 text-sm font-semibold transition ${
-                      selected
+                    className={`h-11 rounded-lg border px-3 text-sm font-semibold transition ${selected
                         ? "border-brand-highlight bg-brand text-zinc-950 shadow-lg shadow-brand-deep/30"
                         : "border-zinc-700 bg-zinc-900/80 text-zinc-200 hover:border-brand-highlight hover:bg-zinc-800"
-                    }`}
+                      }`}
                   >
                     {slot.label}
                   </button>

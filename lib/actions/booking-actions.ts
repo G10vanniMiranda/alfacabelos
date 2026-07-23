@@ -68,7 +68,7 @@ async function notifyOwnerSafely(bookingId: string) {
   try {
     const booking = await getBookingById(bookingId);
     if (!booking) {
-      console.warn(`[whatsapp] agendamento ${bookingId} nao encontrado para notificar dono`);
+      console.warn(`[whatsapp] agendamento ${bookingId} não encontrado para notificar dono`);
       return;
     }
 
@@ -82,7 +82,7 @@ async function notifyClientSafely(bookingId: string, rawConfirmationToken?: stri
   try {
     const booking = await getBookingById(bookingId);
     if (!booking) {
-      console.warn(`[whatsapp] agendamento ${bookingId} nao encontrado para notificar cliente`);
+      console.warn(`[whatsapp] agendamento ${bookingId} não encontrado para notificar cliente`);
       return;
     }
 
@@ -178,7 +178,7 @@ export async function confirmBookingByTokenAction(payload: { token: string }): P
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Nao foi possivel confirmar o agendamento",
+      message: error instanceof Error ? error.message : "Não foi possível confirmar o agendamento",
     };
   }
 }
@@ -215,7 +215,7 @@ export async function createClientBookingsAction(payload: {
     });
     return {
       success: false,
-      message: "Sua sessao expirou. Faca login novamente para concluir o agendamento.",
+      message: "Sua sessão expirou. Faça login novamente para concluir o agendamento.",
     };
   }
 
@@ -232,7 +232,7 @@ export async function createClientBookingsAction(payload: {
     });
     return {
       success: false,
-      message: parsed.error.issues[0]?.message ?? "Dados invalidos para criar agendamento",
+      message: parsed.error.issues[0]?.message ?? "Dados inválidos para criar agendamento",
     };
   }
 
@@ -248,7 +248,7 @@ export async function createClientBookingsAction(payload: {
     if (parsed.data.recurrence !== "NONE" && starts.length >= 60) {
       return {
         success: false,
-        message: "Limite de 59 repeticoes por criacao. Reduza o periodo.",
+        message: "Limite de 59 repetições por criação. Reduza o período.",
       };
     }
 
@@ -338,7 +338,7 @@ export async function createAdminBookingsAction(payload: {
   if (!parsed.success) {
     return {
       success: false,
-      message: parsed.error.issues[0]?.message ?? "Dados invalidos para criar agendamento",
+      message: parsed.error.issues[0]?.message ?? "Dados inválidos para criar agendamento",
     };
   }
 
@@ -348,7 +348,7 @@ export async function createAdminBookingsAction(payload: {
     if (parsed.data.recurrence !== "NONE" && starts.length >= 60) {
       return {
         success: false,
-        message: "Limite de 59 repeticoes por criacao. Reduza o periodo.",
+        message: "Limite de 59 repetições por criação. Reduza o período.",
       };
     }
 
@@ -619,21 +619,21 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
     const altText = altRaw.length > 0 ? altRaw : undefined;
 
     if (!(fileValue instanceof File)) {
-      return { success: false, message: "Selecione uma foto ou video para upload" };
+      return { success: false, message: "Selecione uma foto ou vídeo para envio" };
     }
     const isImage = ACCEPTED_IMAGE_TYPES.has(fileValue.type);
     const isVideo = ACCEPTED_VIDEO_TYPES.has(fileValue.type);
     if (!isImage && !isVideo) {
-      return { success: false, message: "Formato invalido. Use JPG, PNG, WEBP, AVIF, MP4, WEBM ou MOV" };
+      return { success: false, message: "Formato inválido. Use JPG, PNG, WEBP, AVIF, MP4, WEBM ou MOV" };
     }
     if (fileValue.size === 0) {
       return { success: false, message: "Arquivo vazio" };
     }
     if (isImage && fileValue.size > MAX_IMAGE_BYTES) {
-      return { success: false, message: "Imagem deve ter ate 5MB" };
+      return { success: false, message: "Imagem deve ter até 5 MB" };
     }
     if (isVideo && fileValue.size > MAX_VIDEO_BYTES) {
-      return { success: false, message: "Video deve ter ate 50MB" };
+      return { success: false, message: "Vídeo deve ter até 50 MB" };
     }
 
     const ext = extensionFromMime(fileValue.type);
@@ -663,7 +663,7 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
     revalidatePath("/admin/galeria");
     revalidatePath("/");
     updateTag("gallery-images");
-    return { success: true, message: isVideo ? "Video adicionado na galeria" : "Foto adicionada na galeria" };
+    return { success: true, message: isVideo ? "Vídeo adicionado à galeria" : "Foto adicionada à galeria" };
   } catch (error) {
     return {
       success: false,
@@ -711,7 +711,7 @@ export async function createBarberAction(_state: ActionState, formData: FormData
 export async function updateBarberAction(input: { barberId: string; name: string; isActive: boolean }): Promise<ActionState> {
   await assertAdminSession();
   const name = input.name.trim();
-  if (!input.barberId || name.length < 2) return { success: false, message: "Dados invalidos" };
+  if (!input.barberId || name.length < 2) return { success: false, message: "Dados inválidos" };
   await prisma.barber.update({ where: { id: input.barberId }, data: { name, isActive: input.isActive } });
   revalidatePath("/admin/barbeiros");
   updateTag("barbers");

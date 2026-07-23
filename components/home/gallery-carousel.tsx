@@ -18,7 +18,7 @@ export function GalleryCarousel({ images }: GalleryCarouselProps) {
     ? images.map((image) => ({
         id: image.id,
         imageUrl: image.imageUrl,
-        alt: image.altText ?? "Midia da galeria da barbearia",
+        alt: image.altText ?? "Mídia da galeria da barbearia",
         mediaType: image.mediaType === "VIDEO" ? "VIDEO" : "IMAGE",
       }))
     : [1, 2, 3, 4].map((item) => ({

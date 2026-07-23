@@ -57,18 +57,18 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
 
   function validateForm() {
     if (!blockForm.dateTimeStart || !blockForm.dateTimeEnd) {
-      pushToast("Informe inicio e fim do bloqueio", "error");
+      pushToast("Informe início e fim do bloqueio", "error");
       return false;
     }
 
     const start = new Date(blockForm.dateTimeStart);
     const end = new Date(blockForm.dateTimeEnd);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      pushToast("Data ou horario invalido", "error");
+      pushToast("Data ou horário inválido", "error");
       return false;
     }
     if (start >= end) {
-      pushToast("O fim precisa ser depois do inicio", "error");
+      pushToast("O fim precisa ser depois do início", "error");
       return false;
     }
     if (!blockForm.reason.trim()) {
@@ -135,7 +135,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-highlight">Agenda</p>
             <h2 className="mt-2 text-2xl font-bold text-zinc-100 sm:text-3xl">Bloqueios</h2>
             <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Bloqueie intervalos de atendimento para almoco, folgas, manutencoes ou compromissos externos.
+              Bloqueie intervalos de atendimento para almoço, folgas, manutenções ou compromissos externos.
             </p>
           </div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
@@ -161,14 +161,14 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-copy-muted">Encerrados</p>
           <p className="mt-3 text-3xl font-black text-zinc-300">{expiredBlockedSlots}</p>
-          <p className="mt-1 text-sm text-zinc-400">historico ja vencido</p>
+          <p className="mt-1 text-sm text-zinc-400">Histórico já vencido</p>
         </article>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[390px_1fr]">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
           <h3 className="text-lg font-semibold text-zinc-100">Novo bloqueio</h3>
-          <p className="mt-1 text-sm text-copy-muted">Defina o periodo que nao deve aparecer para agendamento.</p>
+          <p className="mt-1 text-sm text-copy-muted">Defina o período que não deve aparecer para agendamento.</p>
 
           <div className="mt-5 space-y-4">
             <label className="block">
@@ -189,7 +189,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <label className="block">
-                <span className="text-sm font-medium text-zinc-300">Inicio</span>
+                <span className="text-sm font-medium text-zinc-300">Início</span>
                 <input
                   type="datetime-local"
                   value={blockForm.dateTimeStart}
@@ -214,14 +214,14 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
                 type="text"
                 value={blockForm.reason}
                 onChange={(event) => setBlockForm((prev) => ({ ...prev, reason: event.target.value }))}
-                placeholder="Ex: Almoco, viagem, manutencao"
+                placeholder="Ex.: almoço, viagem, manutenção"
                 className="ui-control mt-2 h-11 w-full px-3"
               />
             </label>
 
             {blockForm.dateTimeStart && blockForm.dateTimeEnd ? (
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 text-sm text-zinc-400">
-                Duracao prevista:{" "}
+                Duração prevista:{" "}
                 <span className="font-semibold text-zinc-100">
                   {formatDuration(new Date(blockForm.dateTimeStart).toISOString(), new Date(blockForm.dateTimeEnd).toISOString())}
                 </span>
@@ -272,7 +272,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
                     </div>
                     <div className="mt-3 grid gap-2 text-sm lg:grid-cols-3">
                       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
-                        <p className="text-xs text-copy-muted">Inicio</p>
+                        <p className="text-xs text-copy-muted">Início</p>
                         <p className="mt-1 font-semibold text-zinc-100">{formatDateTime(blocked.dateTimeStart)}</p>
                       </div>
                       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
@@ -284,7 +284,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
                         <p className="mt-1 font-semibold text-brand-soft">{getBarberName(blocked.barberId)}</p>
                       </div>
                     </div>
-                    <p className="mt-3 text-xs text-copy-muted">Duracao: {formatDuration(blocked.dateTimeStart, blocked.dateTimeEnd)}</p>
+                    <p className="mt-3 text-xs text-copy-muted">Duração: {formatDuration(blocked.dateTimeStart, blocked.dateTimeEnd)}</p>
                   </div>
                   <button
                     type="button"

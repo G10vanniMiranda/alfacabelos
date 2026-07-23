@@ -25,19 +25,19 @@ export function AdminGallery({ images }: AdminGalleryProps) {
 
   function submitMedia() {
     if (!file) {
-      pushToast("Selecione uma foto ou video para upload", "error");
+      pushToast("Selecione uma foto ou vídeo para envio", "error");
       return;
     }
     if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-      pushToast("Formato invalido", "error");
+      pushToast("Formato inválido", "error");
       return;
     }
     if (file.type.startsWith("image/") && file.size > maxImageBytes) {
-      pushToast("Imagem deve ter no maximo 5MB", "error");
+      pushToast("Imagem deve ter no máximo 5 MB", "error");
       return;
     }
     if (file.type.startsWith("video/") && file.size > maxVideoBytes) {
-      pushToast("Video deve ter no maximo 50MB", "error");
+      pushToast("Vídeo deve ter no máximo 50 MB", "error");
       return;
     }
 
@@ -58,7 +58,7 @@ export function AdminGallery({ images }: AdminGalleryProps) {
         setFile(null);
         window.location.reload();
       } catch (error) {
-        pushToast(error instanceof Error ? error.message : "Erro ao adicionar midia", "error");
+        pushToast(error instanceof Error ? error.message : "Erro ao adicionar mídia", "error");
       }
     });
   }
@@ -71,10 +71,10 @@ export function AdminGallery({ images }: AdminGalleryProps) {
           galleryImageId,
           imageUrl: image?.imageUrl,
         });
-        pushToast("Midia removida", "success");
+        pushToast("Mídia removida", "success");
         window.location.reload();
       } catch (error) {
-        pushToast(error instanceof Error ? error.message : "Erro ao remover midia", "error");
+        pushToast(error instanceof Error ? error.message : "Erro ao remover mídia", "error");
       }
     });
   }
@@ -83,11 +83,11 @@ export function AdminGallery({ images }: AdminGalleryProps) {
     <section className="space-y-6">
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-4 sm:px-5">
         <h2 className="text-xl font-semibold text-zinc-100 sm:text-2xl">Galeria</h2>
-        <p className="mt-1 text-sm text-zinc-400">Adicione fotos e videos para exibir na secao Galeria da home.</p>
+        <p className="mt-1 text-sm text-zinc-400">Adicione fotos e vídeos para exibir na seção Galeria da página inicial.</p>
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-        <h3 className="text-lg font-semibold text-zinc-100">Nova midia</h3>
+        <h3 className="text-lg font-semibold text-zinc-100">Nova mídia</h3>
         <div className="mt-3 min-w-0 grid gap-2 md:grid-cols-[1fr_280px_auto]">
           <div className="min-w-0 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2">
             <label className="inline-flex cursor-pointer items-center rounded-md border border-zinc-600 px-3 py-1.5 text-sm font-semibold text-zinc-200 transition hover:border-brand-highlight hover:text-brand-highlight">
@@ -107,7 +107,7 @@ export function AdminGallery({ images }: AdminGalleryProps) {
             type="text"
             value={form.altText}
             onChange={(event) => setForm((prev) => ({ ...prev, altText: event.target.value }))}
-            placeholder="Descricao da midia (opcional)"
+            placeholder="Descrição da mídia (opcional)"
             className="ui-control min-w-0 px-3 py-2"
           />
           <button
@@ -120,15 +120,15 @@ export function AdminGallery({ images }: AdminGalleryProps) {
           </button>
         </div>
         <p className="mt-2 text-xs text-copy-muted">
-          Formatos: JPG, PNG, WEBP, AVIF ate 5MB; MP4, WEBM ou MOV ate 50MB.
-          {file ? ` Selecionado: ${selectedFileIsVideo ? "video" : "foto"}.` : ""}
+          Formatos: JPG, PNG, WEBP, AVIF até 5 MB; MP4, WEBM ou MOV até 50 MB.
+          {file ? ` Selecionado: ${selectedFileIsVideo ? "vídeo" : "foto"}.` : ""}
         </p>
       </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-        <h3 className="text-lg font-semibold text-zinc-100">Midias cadastradas</h3>
+        <h3 className="text-lg font-semibold text-zinc-100">Mídias cadastradas</h3>
         {images.length === 0 ? (
-          <p className="mt-3 text-sm text-zinc-400">Nenhuma midia cadastrada ainda.</p>
+          <p className="mt-3 text-sm text-zinc-400">Nenhuma mídia cadastrada ainda.</p>
         ) : (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {images.map((image) => (
@@ -153,9 +153,9 @@ export function AdminGallery({ images }: AdminGalleryProps) {
                 )}
                 <div className="space-y-2 p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="line-clamp-2 text-xs text-zinc-400">{image.altText ?? "Sem descricao"}</p>
+                    <p className="line-clamp-2 text-xs text-zinc-400">{image.altText ?? "Sem descrição"}</p>
                     <span className="rounded-full border border-zinc-700 px-2 py-1 text-[10px] font-semibold text-zinc-300">
-                      {isVideoMedia(image) ? "VIDEO" : "FOTO"}
+                      {isVideoMedia(image) ? "VÍDEO" : "FOTO"}
                     </span>
                   </div>
                   <button

@@ -102,7 +102,7 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
 
       {loadError ? (
         <div className="rounded-2xl border border-brand-deep/50 bg-brand/10 p-4 text-sm text-brand-soft">
-          <p className="font-semibold">A secao de acessos precisa de migration</p>
+          <p className="font-semibold">A seção de acessos precisa de uma migração</p>
           <p className="mt-1">{loadError}</p>
           <p className="mt-2 text-brand-highlight">Execute: npm run prisma:migrate:deploy</p>
         </div>
@@ -118,7 +118,7 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
             className="ui-control px-3 py-2"
           />
           <select name="role" className="ui-control px-3 py-2"><option value="ADMIN">Administrador</option><option value="BARBER">Barbeiro</option></select>
-          <select name="barberId" className="ui-control px-3 py-2"><option value="">Sem vinculo</option>{barbers.map((barber) => <option key={barber.id} value={barber.id}>{barber.name}</option>)}</select>
+          <select name="barberId" className="ui-control px-3 py-2"><option value="">Sem vínculo</option>{barbers.map((barber) => <option key={barber.id} value={barber.id}>{barber.name}</option>)}</select>
           <input
             type="password"
             name="password"
@@ -147,11 +147,11 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
           <table className="w-full min-w-180 text-left text-sm">
             <thead className="text-zinc-400">
               <tr>
-                <th scope="col" className="px-2 py-2">Email</th>
+                <th scope="col" className="px-2 py-2">E-mail</th>
                 <th scope="col" className="px-2 py-2">Perfil</th>
                 <th scope="col" className="px-2 py-2">Criado em</th>
-                <th scope="col" className="px-2 py-2">Ultimo login</th>
-                <th scope="col" className="px-2 py-2">Acoes</th>
+                <th scope="col" className="px-2 py-2">Último login</th>
+                <th scope="col" className="px-2 py-2">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -257,7 +257,7 @@ export function AdminAccesses({ accesses, barbers, loadError }: AdminAccessesPro
               {accesses.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-2 py-4 text-center text-copy-muted">
-                    Nenhum acesso admin cadastrado.
+                    Nenhum acesso administrativo cadastrado.
                   </td>
                 </tr>
               ) : null}

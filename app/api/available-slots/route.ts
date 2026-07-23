@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const serviceId = request.nextUrl.searchParams.get("serviceId");
 
   if (!date || !serviceId) {
-    return NextResponse.json({ message: "date e serviceId sao obrigatorios" }, { status: 400 });
+    return NextResponse.json({ message: "date e serviceId são obrigatórios" }, { status: 400 });
   }
 
   try {

@@ -171,17 +171,17 @@ export function AdminEarnings({
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Previsao</p>
           <p className="mt-2 text-2xl font-black text-warning">{formatBRLFromCents(pendingPotentialCents)}</p>
-          <p className="mt-1 text-sm text-zinc-400">valor aguardando confirmacao de pagamento</p>
+          <p className="mt-1 text-sm text-zinc-400">valor aguardando confirmação de pagamento</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Atendimentos</p>
           <p className="mt-2 text-2xl font-black text-zinc-100">{totalBookings}</p>
-          <p className="mt-1 text-sm text-zinc-400">pagamentos confirmados no periodo</p>
+          <p className="mt-1 text-sm text-zinc-400">pagamentos confirmados no período</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Ticket medio</p>
           <p className="mt-2 text-2xl font-black text-zinc-100">{formatBRLFromCents(averageTicketCents)}</p>
-          <p className="mt-1 text-sm text-zinc-400">media por pagamento confirmado</p>
+          <p className="mt-1 text-sm text-zinc-400">média por pagamento confirmado</p>
         </article>
       </div>
 
@@ -196,12 +196,12 @@ export function AdminEarnings({
                 <p className="mt-1 text-xs text-copy-muted">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {dailyRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem faturamento no periodo.</p> : null}
+            {dailyRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem faturamento no período.</p> : null}
           </div>
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-          <h3 className="text-lg font-semibold text-zinc-100">Ganhos por servico</h3>
+          <h3 className="text-lg font-semibold text-zinc-100">Ganhos por serviço</h3>
           <div className="mt-4 space-y-2">
             {serviceRevenue.map((item) => (
               <article key={item.key} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
@@ -210,7 +210,7 @@ export function AdminEarnings({
                 <p className="mt-1 text-xs text-copy-muted">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {serviceRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem servicos pagos no periodo.</p> : null}
+            {serviceRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem serviços pagos no período.</p> : null}
           </div>
         </section>
 
@@ -224,19 +224,19 @@ export function AdminEarnings({
                 <p className="mt-1 text-xs text-copy-muted">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {barberRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem barbeiros com ganhos no periodo.</p> : null}
+            {barberRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem barbeiros com ganhos no período.</p> : null}
           </div>
         </section>
       </div>
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-        <h3 className="text-lg font-semibold text-zinc-100">Ultimos recebimentos confirmados</h3>
+        <h3 className="text-lg font-semibold text-zinc-100">Últimos recebimentos confirmados</h3>
         <div className="ui-table-shell mt-4">
           <table className="w-full min-w-190 text-left text-sm">
             <thead className="text-zinc-400">
               <tr>
                 <th scope="col" className="px-2 py-2">Cliente</th>
-                <th scope="col" className="px-2 py-2">Servico</th>
+                <th scope="col" className="px-2 py-2">Serviço</th>
                 <th scope="col" className="px-2 py-2">Barbeiro</th>
                 <th scope="col" className="px-2 py-2">Data</th>
                 <th scope="col" className="px-2 py-2">Valor</th>
@@ -259,7 +259,7 @@ export function AdminEarnings({
               {confirmedBookings.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-2 py-4 text-center text-copy-muted">
-                    Nenhum recebimento confirmado no periodo selecionado.
+                    Nenhum recebimento confirmado no período selecionado.
                   </td>
                 </tr>
               ) : null}

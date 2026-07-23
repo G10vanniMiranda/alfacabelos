@@ -93,7 +93,7 @@ async function validateDatabase() {
     publicMutationPolicies.length ? "WARN" : "PASS",
     publicMutationPolicies.length
       ? publicMutationPolicies.map((item) => `${item.tableName}:${item.command}:${item.roles.join("|")}:using=${item.usingExpression}:check=${item.checkExpression}`).join(", ")
-      : "nenhuma politica publica de mutacao",
+      : "nenhuma política pública de mutação",
   );
   record("database:rls-policies", "PASS", `${publicPolicies.length} política(s) públicas explícitas; acesso sem política permanece negado`);
   record("supabase:storage-policies", storagePolicies.length ? "PASS" : "WARN", `${storagePolicies.length} política(s) em storage.objects; uploads da aplicação usam service role no servidor`);
@@ -202,7 +202,7 @@ async function validateBarberAuthentication(runId: string) {
     assert.equal(principal?.role, "BARBER");
     assert.equal(principal?.barberId, barber.id);
     await revokeAdminSession(session.token);
-    record("auth:barber-rbac", "PASS", "sessao BARBER preserva papel e vinculo exclusivo ao profissional");
+    record("auth:barber-rbac", "PASS", "sessão BARBER preserva papel e vínculo exclusivo ao profissional");
   } finally {
     await deleteAdminAccess(access.id);
     await prisma.barber.delete({ where: { id: barber.id } });
@@ -217,7 +217,7 @@ async function validateNotificationOutbox(runId: string) {
     assert.equal(first.status, "not_configured");
     assert.equal(second.deliveryId, first.deliveryId);
     assert.equal(await prisma.notificationDelivery.count({ where: { idempotencyKey: key } }), 1);
-    record("whatsapp:outbox", "PASS", "sem credenciais retorna not_configured e idempotencia impede duplicidade");
+    record("whatsapp:outbox", "PASS", "sem credenciais retorna not_configured e idempotência impede duplicidade");
   } finally {
     await prisma.notificationDelivery.deleteMany({ where: { idempotencyKey: key } });
   }

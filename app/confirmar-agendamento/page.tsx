@@ -13,18 +13,18 @@ export const metadata = {
 
 function getUnavailableMessage(reason: "invalid" | "used" | "expired" | "not_pending") {
   if (reason === "used") {
-    return "Este link ja foi usado. Se voce precisa alterar algo, fale com a barbearia pelo WhatsApp.";
+    return "Este link já foi usado. Se você precisa alterar algo, fale com a barbearia pelo WhatsApp.";
   }
 
   if (reason === "expired") {
-    return "Este link expirou. Fale com a barbearia pelo WhatsApp para receber uma nova confirmacao.";
+    return "Este link expirou. Fale com a barbearia pelo WhatsApp para receber uma nova confirmação.";
   }
 
   if (reason === "not_pending") {
-    return "Este agendamento nao esta mais pendente. Fale com a barbearia pelo WhatsApp se precisar de ajuda.";
+    return "Este agendamento não está mais pendente. Fale com a barbearia pelo WhatsApp se precisar de ajuda.";
   }
 
-  return "Nao foi possivel validar este link. Verifique a mensagem recebida ou fale com a barbearia pelo WhatsApp.";
+  return "Não foi possível validar este link. Verifique a mensagem recebida ou fale com a barbearia pelo WhatsApp.";
 }
 
 export default async function ConfirmarAgendamentoPage({
@@ -50,13 +50,13 @@ export default async function ConfirmarAgendamentoPage({
             <p className="text-sm font-semibold uppercase tracking-wide text-brand-highlight">Alfa Cabelos</p>
             <div className="mt-5 space-y-2 text-zinc-200">
               <p>
-                <span className="text-zinc-400">Servico:</span> {state.booking.service.name}
+                <span className="text-zinc-400">Serviço:</span> {state.booking.service.name}
               </p>
               <p>
                 <span className="text-zinc-400">Barbeiro:</span> {state.booking.barber.name}
               </p>
               <p>
-                <span className="text-zinc-400">Data e horario:</span>{" "}
+                <span className="text-zinc-400">Data e horário:</span>{" "}
                 {formatDateTimeInTimeZone(state.booking.dateTimeStart, BUSINESS_CONFIG.timezone)}
               </p>
             </div>

@@ -81,9 +81,8 @@ export function DateCalendar({
 
   return (
     <div
-      className={`mt-2 rounded-xl border border-zinc-800 bg-zinc-950/60 shadow-inner shadow-black/20 ${
-        isCompact ? "p-3" : "p-3 sm:p-4"
-      }`}
+      className={`mt-2 rounded-xl border border-zinc-800 bg-zinc-950/60 shadow-inner shadow-black/20 ${isCompact ? "p-3" : "p-3 sm:p-4"
+        }`}
     >
       <div className={`${isCompact ? "mb-3" : "mb-4"} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}>
         <div className="flex items-center gap-2">
@@ -97,9 +96,8 @@ export function DateCalendar({
               }
               setView({ year: today.getFullYear(), month: today.getMonth() });
             }}
-            className={`min-h-10 rounded-full border border-zinc-700 text-xs font-semibold text-zinc-100 transition hover:border-brand-highlight ${
-              isCompact ? "px-2.5 py-1" : "px-3 py-1.5"
-            }`}
+            className={`min-h-10 rounded-full border border-zinc-700 text-xs font-semibold text-zinc-100 transition hover:border-brand-highlight ${isCompact ? "px-2.5 py-1" : "px-3 py-1.5"
+              }`}
           >
             Hoje
           </button>
@@ -108,10 +106,9 @@ export function DateCalendar({
               type="button"
               onClick={() => canGoPrev && setView((prev) => addMonths(prev.year, prev.month, -1))}
               disabled={!canGoPrev}
-              aria-label="Mes anterior"
-              className={`grid place-items-center rounded-full leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${
-                isCompact ? "h-9 w-9 text-base" : "h-10 w-10 text-lg"
-              }`}
+              aria-label="Mês anterior"
+              className={`grid place-items-center rounded-full leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${isCompact ? "h-9 w-9 text-base" : "h-10 w-10 text-lg"
+                }`}
             >
               {"<"}
             </button>
@@ -119,10 +116,9 @@ export function DateCalendar({
               type="button"
               onClick={() => canGoNext && setView((prev) => addMonths(prev.year, prev.month, 1))}
               disabled={!canGoNext}
-              aria-label="Proximo mes"
-              className={`grid place-items-center rounded-full leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${
-                isCompact ? "h-9 w-9 text-base" : "h-10 w-10 text-lg"
-              }`}
+              aria-label="Próximo mês"
+              className={`grid place-items-center rounded-full leading-none text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${isCompact ? "h-9 w-9 text-base" : "h-10 w-10 text-lg"
+                }`}
             >
               {">"}
             </button>
@@ -134,9 +130,8 @@ export function DateCalendar({
       </div>
 
       <div
-        className={`grid grid-cols-7 border-b border-zinc-800 text-center font-semibold uppercase tracking-wide text-copy-muted ${
-          isCompact ? "pb-1.5 text-[10px]" : "pb-2 text-[11px]"
-        }`}
+        className={`grid grid-cols-7 border-b border-zinc-800 text-center font-semibold uppercase tracking-wide text-copy-muted ${isCompact ? "pb-1.5 text-[10px]" : "pb-2 text-[11px]"
+          }`}
       >
         {["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"].map((day) => (
           <div key={day} className="py-1">
@@ -162,17 +157,15 @@ export function DateCalendar({
               disabled={disabled}
               onClick={() => onSelect(cell.iso!)}
               aria-pressed={selected}
-              className={`${isCompact ? "h-9 min-w-0" : "aspect-square"} rounded-full border font-semibold transition ${
-                isCompact ? "text-xs" : "text-sm"
-              } ${
-                selected
+              className={`${isCompact ? "h-9 min-w-0" : "aspect-square"} rounded-full border font-semibold transition ${isCompact ? "text-xs" : "text-sm"
+                } ${selected
                   ? "border-brand-highlight bg-brand text-zinc-950 shadow-lg shadow-brand-deep/30"
                   : disabled
                     ? "border-transparent bg-transparent text-zinc-700"
                     : today
                       ? "border-brand/70 bg-zinc-900 text-brand-soft hover:bg-zinc-800"
                       : "border-transparent bg-transparent text-zinc-200 hover:bg-zinc-800"
-              }`}
+                }`}
             >
               {cell.label}
             </button>

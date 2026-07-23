@@ -42,7 +42,7 @@ function toDateOnly(date: string) {
 function recurrenceRuleFromInput(input: CreateBookingSeriesInput): RecurrenceRule | null {
   if (input.recurrence === "NONE") return null;
   const startsOn = getLocalDateInput(input.start, BUSINESS_CONFIG.timezone);
-  if (!input.repeatUntil) throw new Error("Informe ate quando repetir");
+  if (!input.repeatUntil) throw new Error("Informe até quando repetir");
   return {
     frequency: input.recurrence,
     startsOn,
@@ -60,7 +60,7 @@ function makeOccurrences(
   const localTime = getTimeLabelInTimeZone(input.start, BUSINESS_CONFIG.timezone);
   const rule = recurrenceRuleFromInput(input);
   const dates = rule ? expandRecurrenceRule(rule) : [firstDate];
-  if (dates[0] !== firstDate) throw new Error("A primeira ocorrencia nao corresponde ao inicio informado");
+  if (dates[0] !== firstDate) throw new Error("A primeira ocorrência não corresponde ao início informado");
   return dates.map((localDate, index) => {
     const start = new Date(zonedDateTimeToUtcIso(localDate, `${localTime}:00`, BUSINESS_CONFIG.timezone));
     const end = new Date(start.getTime() + getBookingOccupiedMinutes(service) * 60_000);
@@ -74,7 +74,7 @@ async function existingResult(idempotencyKey: string, requestHash: string, requi
     include: { bookings: { orderBy: { occurrenceIndex: "asc" }, select: { id: true, status: true } } },
   });
   if (!existing) return null;
-  if (existing.requestHash !== requestHash) throw new Error("Chave de idempotencia reutilizada com dados diferentes");
+  if (existing.requestHash !== requestHash) throw new Error("Chave de idempotência reutilizada com dados diferentes");
   const rawConfirmationTokens = new Map<string, string>();
   if (requireConfirmation) {
     for (const booking of existing.bookings) {
@@ -110,14 +110,14 @@ function validateAgainstOperatingHours(
     return startMinutes >= openMinutes && endMinutes <= closeH * 60 + closeM
       && (startMinutes - openMinutes) % BUSINESS_CONFIG.slotIntervalMinutes === 0;
   });
-  if (!fits) throw new Error(`Horario fora do expediente em ${occurrence.localDate}`);
-  if (occurrence.start < new Date()) throw new Error(`Nao e possivel agendar no passado: ${occurrence.localDate}`);
+  if (!fits) throw new Error(`Horário fora do expediente em ${occurrence.localDate}`);
+  if (occurrence.start < new Date()) throw new Error(`Não é possível agendar no passado: ${occurrence.localDate}`);
 }
 
 export async function createBookingSeriesAtomic(input: CreateBookingSeriesInput): Promise<BookingSeriesCreationResult> {
   const idempotencyKey = input.idempotencyKey?.trim() || (input.recurrence === "NONE" ? randomUUID() : "");
   if (!idempotencyKey || idempotencyKey.length < 16 || idempotencyKey.length > 128) {
-    throw new Error("Chave de idempotencia obrigatoria para recorrencia");
+    throw new Error("Chave de idempotência obrigatória para recorrência");
   }
   const requestHash = sha256(JSON.stringify({
     serviceId: input.serviceId, barberId: input.barberId, clientId: input.clientId ?? null,
@@ -139,8 +139,8 @@ export async function createBookingSeriesAtomic(input: CreateBookingSeriesInput)
         tx.barber.findFirst({ where: { id: input.barberId, isActive: true } }),
         tx.barberAvailability.findMany({ where: { barberId: input.barberId } }),
       ]);
-      if (!service) throw new Error("Servico nao encontrado ou inativo");
-      if (!barber) throw new Error("Barbeiro nao encontrado ou inativo");
+      if (!service) throw new Error("Serviço não encontrado ou inativo");
+      if (!barber) throw new Error("Barbeiro não encontrado ou inativo");
 
       const occurrences = makeOccurrences(input, service);
       for (const occurrence of occurrences) validateAgainstOperatingHours(occurrence, availabilityRows);
@@ -172,7 +172,7 @@ export async function createBookingSeriesAtomic(input: CreateBookingSeriesInput)
         const conflict = bookings.find((booking) => overlaps(occurrence.start, occurrence.end, booking.dateTimeStart, booking.dateTimeEnd));
         if (conflict) throw new Error(`Conflito com agendamento existente em ${occurrence.localDate}`);
         const block = blocks.find((item) => overlaps(occurrence.start, occurrence.end, item.dateTimeStart, item.dateTimeEnd));
-        if (block) throw new Error(`Horario bloqueado em ${occurrence.localDate}: ${block.reason}`);
+        if (block) throw new Error(`Horário bloqueado em ${occurrence.localDate}: ${block.reason}`);
       }
 
       const rule = recurrenceRuleFromInput(input);
@@ -249,8 +249,8 @@ export async function previewBookingSeries(input: CreateBookingSeriesInput) {
     prisma.barber.findFirst({ where: { id: input.barberId, isActive: true } }),
     prisma.barberAvailability.findMany({ where: { barberId: input.barberId } }),
   ]);
-  if (!service) throw new Error("Servico nao encontrado ou inativo");
-  if (!barber) throw new Error("Barbeiro nao encontrado ou inativo");
+  if (!service) throw new Error("Serviço não encontrado ou inativo");
+  if (!barber) throw new Error("Barbeiro não encontrado ou inativo");
   const occurrences = makeOccurrences(input, service);
   const rangeStart = occurrences[0]!.start;
   const rangeEnd = occurrences[occurrences.length - 1]!.end;
@@ -274,18 +274,18 @@ export async function previewBookingSeries(input: CreateBookingSeriesInput) {
         throw new Error("Conflito com agendamento existente");
       }
       const block = blocks.find((item) => overlaps(occurrence.start, occurrence.end, item.dateTimeStart, item.dateTimeEnd));
-      if (block) throw new Error(`Horario bloqueado: ${block.reason}`);
+      if (block) throw new Error(`Horário bloqueado: ${block.reason}`);
       return { localDate: occurrence.localDate, start: occurrence.start.toISOString(), end: occurrence.end.toISOString(), available: true as const };
     } catch (error) {
-      return { localDate: occurrence.localDate, start: occurrence.start.toISOString(), end: occurrence.end.toISOString(), available: false as const, reason: error instanceof Error ? error.message : "Indisponivel" };
+      return { localDate: occurrence.localDate, start: occurrence.start.toISOString(), end: occurrence.end.toISOString(), available: false as const, reason: error instanceof Error ? error.message : "Indisponível" };
     }
   });
 }
 
 export async function cancelBookingSeries(input: { bookingId: string; scope: SeriesMutationScope; clientId?: string }) {
   const booking = await prisma.booking.findUnique({ where: { id: input.bookingId }, select: { id: true, clientId: true, seriesId: true, dateTimeStart: true, occurrenceIndex: true } });
-  if (!booking || (input.clientId && booking.clientId !== input.clientId)) throw new Error("Agendamento nao encontrado");
-  if (input.scope !== "SINGLE" && !booking.seriesId) throw new Error("Este agendamento nao pertence a uma serie");
+  if (!booking || (input.clientId && booking.clientId !== input.clientId)) throw new Error("Agendamento não encontrado");
+  if (input.scope !== "SINGLE" && !booking.seriesId) throw new Error("Este agendamento não pertence a uma série");
   const where = input.scope === "SINGLE"
     ? { id: booking.id }
     : input.scope === "FUTURE"
@@ -322,12 +322,12 @@ export async function updateBookingSeriesOccurrences(input: {
 }) {
   return prisma.$transaction(async (tx) => {
     const target = await tx.booking.findUnique({ where: { id: input.bookingId } });
-    if (!target) throw new Error("Agendamento nao encontrado");
-    if (input.scope !== "SINGLE" && !target.seriesId) throw new Error("Este agendamento nao pertence a uma serie");
+    if (!target) throw new Error("Agendamento não encontrado");
+    if (input.scope !== "SINGLE" && !target.seriesId) throw new Error("Este agendamento não pertence a uma série");
     const service = await tx.service.findFirst({ where: { id: input.serviceId, isActive: true } });
     const barber = await tx.barber.findFirst({ where: { id: input.barberId, isActive: true } });
-    if (!service) throw new Error("Servico nao encontrado ou inativo");
-    if (!barber) throw new Error("Barbeiro nao encontrado ou inativo");
+    if (!service) throw new Error("Serviço não encontrado ou inativo");
+    if (!barber) throw new Error("Barbeiro não encontrado ou inativo");
 
     const allSeriesBookings = input.scope === "SINGLE" ? [] : await tx.booking.findMany({
         where: {
@@ -340,9 +340,9 @@ export async function updateBookingSeriesOccurrences(input: {
       ? allSeriesBookings.filter((item) => item.dateTimeStart >= target.dateTimeStart)
       : allSeriesBookings;
     const effectiveScope: SeriesMutationScope = input.scope === "FUTURE" && selected.length === allSeriesBookings.length ? "ALL" : input.scope;
-    if (selected.length === 0) throw new Error("Nenhuma ocorrencia ativa encontrada");
+    if (selected.length === 0) throw new Error("Nenhuma ocorrência ativa encontrada");
     const requestedStart = new Date(input.start);
-    if (Number.isNaN(requestedStart.getTime())) throw new Error("Data/hora invalida");
+    if (Number.isNaN(requestedStart.getTime())) throw new Error("Data/hora inválida");
     const delta = requestedStart.getTime() - target.dateTimeStart.getTime();
     const occurrences = selected.map((booking, index) => {
       const start = new Date(booking.dateTimeStart.getTime() + delta);
@@ -375,13 +375,13 @@ export async function updateBookingSeriesOccurrences(input: {
         throw new Error(`Conflito com agendamento existente em ${occurrence.localDate}`);
       }
       const block = blocks.find((item) => overlaps(occurrence.start, occurrence.end, item.dateTimeStart, item.dateTimeEnd));
-      if (block) throw new Error(`Horario bloqueado em ${occurrence.localDate}: ${block.reason}`);
+      if (block) throw new Error(`Horário bloqueado em ${occurrence.localDate}: ${block.reason}`);
     }
 
     let destinationSeriesId = target.seriesId;
     if (target.seriesId && effectiveScope === "FUTURE") {
       const source = await tx.bookingSeries.findUnique({ where: { id: target.seriesId } });
-      if (!source) throw new Error("Serie nao encontrada");
+      if (!source) throw new Error("Série não encontrada");
       const first = occurrences[0]!.localDate;
       const last = occurrences[occurrences.length - 1]!.localDate;
       const destination = await tx.bookingSeries.create({

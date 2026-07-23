@@ -50,16 +50,16 @@ export function buildPasswordResetLink(rawToken: string): string {
 
 export function buildPasswordResetWhatsAppMessage(clientName: string, resetLink: string): string {
   return [
-    `Ola, ${clientName}!`,
+    `Olá, ${clientName}!`,
     "",
-    "Recebemos uma solicitacao para redefinir sua senha de acesso ao sistema Alfa Cabelos.",
+    "Recebemos uma solicitação para redefinir sua senha de acesso ao sistema Alfa Cabelos.",
     "",
     "Para criar uma nova senha, clique no link abaixo:",
     resetLink,
     "",
-    `Este link e valido por ${RESET_TOKEN_TTL_MINUTES} minutos.`,
+    `Este link é válido por ${RESET_TOKEN_TTL_MINUTES} minutos.`,
     "",
-    "Se voce nao solicitou essa alteracao, ignore esta mensagem.",
+    "Se você não solicitou essa alteração, ignore esta mensagem.",
   ].join("\n");
 }
 

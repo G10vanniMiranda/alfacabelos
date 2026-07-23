@@ -14,7 +14,7 @@ async function notifyOwnerSafely(bookingId: string) {
   try {
     const bookingWithRelations = await getBookingById(bookingId);
     if (!bookingWithRelations) {
-      console.warn(`[whatsapp] agendamento ${bookingId} nao encontrado para notificar dono`);
+      console.warn(`[whatsapp] agendamento ${bookingId} não encontrado para notificar dono`);
       return;
     }
 
@@ -27,14 +27,14 @@ async function notifyOwnerSafely(bookingId: string) {
 export async function POST(request: NextRequest) {
   try {
     if (!isSameOriginRequest(request)) {
-      return NextResponse.json({ message: "Origem invalida" }, { status: 403 });
+      return NextResponse.json({ message: "Origem inválida" }, { status: 403 });
     }
     const [client, staff] = await Promise.all([
       findClientBySessionToken(request.cookies.get("barber_client")?.value ?? ""),
       getAdminSessionPrincipal(request.cookies.get("barber_admin")?.value ?? ""),
     ]);
     if (!client && !staff) {
-      return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
+      return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
     }
     const payload = await request.json();
     const rateLimit = await registerRateLimitEvent({
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       idempotencyKey: payload.idempotencyKey ?? request.headers.get("idempotency-key") ?? undefined,
     });
     if (!parsed.success) {
-      return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados invalidos" }, { status: 400 });
+      return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
     }
     const linkedClient = client ?? await repository.upsertPendingClient({ name: parsed.data.customerName, phone: parsed.data.customerPhone });
     const creation = await createBookingSeriesAtomic({

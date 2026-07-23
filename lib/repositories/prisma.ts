@@ -748,7 +748,7 @@ export const prismaRepository: BookingRepository = {
         });
 
         if (conflict) {
-          throw new Error("Este horario acabou de ser reservado. Escolha outro horario.");
+          throw new Error("Este horário acabou de ser reservado. Escolha outro horário.");
         }
 
         return tx.booking.create({
@@ -805,7 +805,7 @@ export const prismaRepository: BookingRepository = {
         });
 
         if (conflict) {
-          throw new Error("Este horario acabou de ser reservado. Escolha outro horario.");
+          throw new Error("Este horário acabou de ser reservado. Escolha outro horário.");
         }
 
         return tx.booking.update({
@@ -888,7 +888,7 @@ export const prismaRepository: BookingRepository = {
   async updateBookingPaymentStatus(bookingId, paymentStatus) {
     const hasPaymentColumns = await ensureBookingPaymentColumnsExist();
     if (!hasPaymentColumns) {
-      throw new Error("Confirmacao de pagamento indisponivel. Execute a migration do banco.");
+      throw new Error("Confirmação de pagamento indisponível. Execute a migração do banco.");
     }
 
     const existing = await prisma.booking.findUnique({
@@ -985,7 +985,7 @@ export const prismaRepository: BookingRepository = {
   async listBarberAvailabilities(barberId) {
     const hasTable = await ensureBarberAvailabilityTableExists();
     if (!hasTable) {
-      throw new Error("Disponibilidade indisponível. Execute as migrations do banco.");
+      throw new Error("Disponibilidade indisponível. Execute as migrações do banco.");
     }
 
     const availability = getBarberAvailabilityDelegate();
@@ -1006,7 +1006,7 @@ export const prismaRepository: BookingRepository = {
     } catch (error) {
       if (isBarberAvailabilityTableMissing(error)) {
         availabilityTableExists = false;
-        throw new Error("Disponibilidade indisponível. Execute as migrations do banco.");
+        throw new Error("Disponibilidade indisponível. Execute as migrações do banco.");
       }
       throw error;
     }
@@ -1015,12 +1015,12 @@ export const prismaRepository: BookingRepository = {
   async replaceBarberDayAvailabilities(input) {
     const hasTable = await ensureBarberAvailabilityTableExists();
     if (!hasTable) {
-      throw new Error("Disponibilidade indisponivel. Execute a migration do banco (BarberAvailability).");
+      throw new Error("Disponibilidade indisponível. Execute a migração do banco (BarberAvailability).");
     }
 
     const availability = getBarberAvailabilityDelegate();
     if (!availability) {
-      throw new Error("Disponibilidade indisponivel. Execute a migration e regenere o Prisma Client.");
+      throw new Error("Disponibilidade indisponível. Execute a migração e gere novamente o Prisma Client.");
     }
 
     try {
@@ -1033,7 +1033,7 @@ export const prismaRepository: BookingRepository = {
         }).barberAvailability;
 
         if (!txAvailability) {
-          throw new Error("Disponibilidade indisponivel. Execute a migration e regenere o Prisma Client.");
+          throw new Error("Disponibilidade indisponível. Execute a migração e gere novamente o Prisma Client.");
         }
 
         await txAvailability.deleteMany({
@@ -1075,7 +1075,7 @@ export const prismaRepository: BookingRepository = {
     } catch (error) {
       if (isBarberAvailabilityTableMissing(error)) {
         availabilityTableExists = false;
-        throw new Error("Disponibilidade indisponivel. Execute a migration do banco (BarberAvailability).");
+        throw new Error("Disponibilidade indisponível. Execute a migração do banco (BarberAvailability).");
       }
       throw error;
     }
@@ -1084,7 +1084,7 @@ export const prismaRepository: BookingRepository = {
   async listGalleryImages() {
     const hasTable = await ensureGalleryTableExists();
     if (!hasTable) {
-      throw new Error("Galeria indisponível. Execute as migrations do banco.");
+      throw new Error("Galeria indisponível. Execute as migrações do banco.");
     }
 
     const gallery = getGalleryDelegate();
@@ -1100,7 +1100,7 @@ export const prismaRepository: BookingRepository = {
     } catch (error) {
       if (isGalleryTableMissing(error)) {
         galleryTableExists = false;
-        throw new Error("Galeria indisponível. Execute as migrations do banco.");
+        throw new Error("Galeria indisponível. Execute as migrações do banco.");
       }
       throw error;
     }
@@ -1109,12 +1109,12 @@ export const prismaRepository: BookingRepository = {
   async createGalleryImage(input: CreateGalleryImageInput) {
     const hasTable = await ensureGalleryTableExists();
     if (!hasTable) {
-      throw new Error("Galeria indisponível. Execute a migration do banco (GalleryImage).");
+      throw new Error("Galeria indisponível. Execute a migração do banco (GalleryImage).");
     }
 
     const gallery = getGalleryDelegate();
     if (!gallery) {
-      throw new Error("Galeria indisponível. Execute a migration e regenere o Prisma Client.");
+      throw new Error("Galeria indisponível. Execute a migração e gere novamente o Prisma Client.");
     }
 
     try {
@@ -1129,7 +1129,7 @@ export const prismaRepository: BookingRepository = {
     } catch (error) {
       if (isGalleryTableMissing(error)) {
         galleryTableExists = false;
-        throw new Error("Galeria indisponível. Execute a migration do banco (GalleryImage).");
+        throw new Error("Galeria indisponível. Execute a migração do banco (GalleryImage).");
       }
       throw error;
     }
@@ -1138,12 +1138,12 @@ export const prismaRepository: BookingRepository = {
   async deleteGalleryImage(galleryImageId) {
     const hasTable = await ensureGalleryTableExists();
     if (!hasTable) {
-      throw new Error("Galeria indisponível. Execute a migration do banco (GalleryImage).");
+      throw new Error("Galeria indisponível. Execute a migração do banco (GalleryImage).");
     }
 
     const gallery = getGalleryDelegate();
     if (!gallery) {
-      throw new Error("Galeria indisponível. Execute a migration e regenere o Prisma Client.");
+      throw new Error("Galeria indisponível. Execute a migração e gere novamente o Prisma Client.");
     }
 
     try {
@@ -1154,7 +1154,7 @@ export const prismaRepository: BookingRepository = {
     } catch (error) {
       if (isGalleryTableMissing(error)) {
         galleryTableExists = false;
-        throw new Error("Galeria indisponível. Execute a migration do banco (GalleryImage).");
+        throw new Error("Galeria indisponível. Execute a migração do banco (GalleryImage).");
       }
       throw error;
     }

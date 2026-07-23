@@ -7,12 +7,12 @@ import { createAdminBookingSchema } from "@/lib/validators/schemas";
 import { isSameOriginRequest } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
-  if (!isSameOriginRequest(request)) return NextResponse.json({ message: "Origem invalida" }, { status: 403 });
+  if (!isSameOriginRequest(request)) return NextResponse.json({ message: "Origem inválida" }, { status: 403 });
   const [client, staff] = await Promise.all([
     findClientBySessionToken(request.cookies.get("barber_client")?.value ?? ""),
     getAdminSessionPrincipal(request.cookies.get("barber_admin")?.value ?? ""),
   ]);
-  if (!client && !staff) return NextResponse.json({ message: "Nao autorizado" }, { status: 401 });
+  if (!client && !staff) return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
   try {
     const payload = await request.json();
     const parsed = createAdminBookingSchema.safeParse({
@@ -32,6 +32,6 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ occurrences, hasConflicts: occurrences.some((item) => !item.available) });
   } catch (error) {
-    return NextResponse.json({ message: error instanceof Error ? error.message : "Falha ao gerar previa" }, { status: 400 });
+    return NextResponse.json({ message: error instanceof Error ? error.message : "Falha ao gerar prévia" }, { status: 400 });
   }
 }

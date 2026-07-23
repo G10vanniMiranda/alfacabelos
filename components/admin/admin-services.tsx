@@ -77,10 +77,10 @@ export function AdminServices({ services }: AdminServicesProps) {
           isProcedure: newService.isProcedure,
         });
         setNewService({ name: "", price: "", durationMinutes: "45", isProcedure: false });
-        pushToast("Servico criado", "success");
+        pushToast("Serviço criado", "success");
         window.location.reload();
       } catch (error) {
-        pushToast(error instanceof Error ? error.message : "Erro ao criar servico", "error");
+        pushToast(error instanceof Error ? error.message : "Erro ao criar serviço", "error");
       }
     });
   }
@@ -107,18 +107,18 @@ export function AdminServices({ services }: AdminServicesProps) {
           durationMinutes,
           isProcedure: editForm.isProcedure,
         });
-        pushToast("Servico atualizado", "success");
+        pushToast("Serviço atualizado", "success");
         closeEditModal();
         window.location.reload();
       } catch (error) {
-        pushToast(error instanceof Error ? error.message : "Erro ao atualizar servico", "error");
+        pushToast(error instanceof Error ? error.message : "Erro ao atualizar serviço", "error");
       }
     });
   }
 
   function deleteService(serviceId: string) {
     const service = services.find((item) => item.id === serviceId);
-    const confirmed = window.confirm(`Remover ${service?.name ?? "este servico"} do catalogo?`);
+    const confirmed = window.confirm(`Remover ${service?.name ?? "este serviço"} do catálogo?`);
     if (!confirmed) {
       return;
     }
@@ -126,10 +126,10 @@ export function AdminServices({ services }: AdminServicesProps) {
     startTransition(async () => {
       try {
         await deleteServiceAction({ serviceId });
-        pushToast("Servico removido", "success");
+        pushToast("Serviço removido", "success");
         window.location.reload();
       } catch (error) {
-        pushToast(error instanceof Error ? error.message : "Erro ao remover servico", "error");
+        pushToast(error instanceof Error ? error.message : "Erro ao remover serviço", "error");
       }
     });
   }
@@ -139,15 +139,15 @@ export function AdminServices({ services }: AdminServicesProps) {
       <header className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-highlight">Catalogo</p>
-            <h2 className="mt-2 text-2xl font-bold text-zinc-100 sm:text-3xl">Servicos</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-highlight">Catálogo</p>
+            <h2 className="mt-2 text-2xl font-bold text-zinc-100 sm:text-3xl">Serviços</h2>
             <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Configure os servicos que aparecem para o cliente no agendamento online.
+              Configure os serviços que aparecem para o cliente no agendamento online.
             </p>
           </div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
             <p className="text-xs text-copy-muted">Maior ticket</p>
-            <p className="mt-1 text-sm font-semibold text-zinc-100">{highestPriceService?.name ?? "Sem servicos"}</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-100">{highestPriceService?.name ?? "Sem serviços"}</p>
             <p className="text-xs text-brand-soft">
               {highestPriceService ? formatBRLFromCents(highestPriceService.priceCents) : formatBRLFromCents(0)}
             </p>
@@ -159,12 +159,12 @@ export function AdminServices({ services }: AdminServicesProps) {
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-copy-muted">Ativos</p>
           <p className="mt-3 text-3xl font-black text-zinc-100">{services.length}</p>
-          <p className="mt-1 text-sm text-zinc-400">servicos no catalogo</p>
+          <p className="mt-1 text-sm text-zinc-400">serviços no catálogo</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-copy-muted">Preco medio</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-copy-muted">Preço medio</p>
           <p className="mt-3 text-3xl font-black text-brand-soft">{formatBRLFromCents(averagePriceCents)}</p>
-          <p className="mt-1 text-sm text-zinc-400">baseado nos servicos ativos</p>
+          <p className="mt-1 text-sm text-zinc-400">baseado nos serviços ativos</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-copy-muted">Duração média</p>
@@ -177,8 +177,8 @@ export function AdminServices({ services }: AdminServicesProps) {
 
       <div className="grid gap-6 xl:grid-cols-[390px_1fr]">
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
-          <h3 className="text-lg font-semibold text-zinc-100">Novo servico</h3>
-          <p className="mt-1 text-sm text-copy-muted">Informe nome e preco final exibido ao cliente.</p>
+          <h3 className="text-lg font-semibold text-zinc-100">Novo serviço</h3>
+          <p className="mt-1 text-sm text-copy-muted">Informe nome e preço final exibido ao cliente.</p>
 
           <div className="mt-5 space-y-4">
             <label className="block">
@@ -192,7 +192,7 @@ export function AdminServices({ services }: AdminServicesProps) {
               />
             </label>
             <label className="block">
-              <span className="text-sm font-medium text-zinc-300">Preco</span>
+              <span className="text-sm font-medium text-zinc-300">Preço</span>
               <input
                 type="text"
                 value={newService.price}
@@ -233,7 +233,7 @@ export function AdminServices({ services }: AdminServicesProps) {
               onClick={submitNewService}
               className="button-primary h-11 w-full px-4 disabled:opacity-70"
             >
-              Adicionar servico
+              Adicionar serviço
             </button>
           </div>
         </section>
@@ -241,8 +241,8 @@ export function AdminServices({ services }: AdminServicesProps) {
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-zinc-100">Servicos cadastrados</h3>
-              <p className="mt-1 text-sm text-copy-muted">Edite valores ou remova itens que nao devem aparecer.</p>
+              <h3 className="text-lg font-semibold text-zinc-100">Serviços cadastrados</h3>
+              <p className="mt-1 text-sm text-copy-muted">Edite valores ou remova itens que não devem aparecer.</p>
             </div>
             <span className="w-fit rounded-full border border-zinc-700 px-3 py-1 text-xs font-semibold text-zinc-300">
               {services.length} ativos
@@ -270,11 +270,11 @@ export function AdminServices({ services }: AdminServicesProps) {
                     </div>
                     <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
-                        <p className="text-xs text-copy-muted">Preco</p>
+                        <p className="text-xs text-copy-muted">Preço</p>
                         <p className="mt-1 font-semibold text-brand-soft">{formatBRLFromCents(service.priceCents)}</p>
                       </div>
                       <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
-                        <p className="text-xs text-copy-muted">Duracao</p>
+                        <p className="text-xs text-copy-muted">Duração</p>
                         <p className="mt-1 font-semibold text-zinc-100">{service.durationMinutes} min</p>
                       </div>
                     </div>
@@ -302,7 +302,7 @@ export function AdminServices({ services }: AdminServicesProps) {
             ))}
             {services.length === 0 ? (
               <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950/40 p-6 text-center text-sm text-copy-muted">
-                Nenhum servico cadastrado.
+                Nenhum serviço cadastrado.
               </div>
             ) : null}
           </div>
@@ -314,8 +314,8 @@ export function AdminServices({ services }: AdminServicesProps) {
           <div role="dialog" aria-modal="true" aria-labelledby="edit-service-title" className="ui-modal-panel max-h-[90vh] w-full max-w-lg overflow-y-auto p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 id="edit-service-title" className="text-lg font-semibold text-zinc-100">Editar servico</h3>
-                <p className="mt-1 text-sm text-zinc-400">Atualize nome e preco exibidos no agendamento.</p>
+                <h3 id="edit-service-title" className="text-lg font-semibold text-zinc-100">Editar serviço</h3>
+                <p className="mt-1 text-sm text-zinc-400">Atualize nome e preço exibidos no agendamento.</p>
               </div>
               <button
                 type="button"
@@ -337,7 +337,7 @@ export function AdminServices({ services }: AdminServicesProps) {
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-medium text-zinc-300">Preco</span>
+                <span className="text-sm font-medium text-zinc-300">Preço</span>
                 <input
                   type="text"
                   value={editForm.price}
@@ -388,7 +388,7 @@ export function AdminServices({ services }: AdminServicesProps) {
                 onClick={submitEditService}
                 className="button-primary h-10 w-full px-4 disabled:opacity-70 sm:w-auto"
               >
-                Salvar alteracoes
+                Salvar alterações
               </button>
             </div>
           </div>

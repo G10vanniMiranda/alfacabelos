@@ -35,7 +35,7 @@ export function InvalidPasswordResetToken({ status = "invalid" }: { status?: "va
   const message = status === "expired"
     ? "Este link expirou. Solicite novas instruções de recuperação."
     : status === "used"
-      ? "Este link já foi utilizado. Solicite outro caso ainda precise alterar sua senha."
+      ? "Este link já foi utilizado. Solicite outro caso você ainda precise alterar sua senha."
       : "Não foi possível validar este link de recuperação.";
 
   return (

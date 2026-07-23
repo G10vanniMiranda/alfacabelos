@@ -50,7 +50,7 @@ function formatFullDate(date?: string): string {
 
 function formatBookingTime(iso?: string): string {
   if (!iso) {
-    return "Horario pendente";
+    return "Horário pendente";
   }
 
   return getTimeLabelInTimeZone(iso, BUSINESS_CONFIG.timezone);
@@ -66,7 +66,7 @@ async function fetchAvailableSlots(date: string, serviceId: string, barberId: st
   );
   const data = (await response.json()) as AvailableSlot[] | { message: string };
   if (!response.ok || !Array.isArray(data)) {
-    throw new Error((data as { message: string }).message ?? "Falha ao carregar horarios");
+    throw new Error((data as { message: string }).message ?? "Falha ao carregar horários");
   }
 
   return data;
@@ -156,9 +156,9 @@ function getRecurrenceLabel(recurrence: RecurrenceOption, date?: string) {
     return `Toda semana, ${label}`;
   }
   if (recurrence === "MONTHLY") {
-    return `Todo mes${date ? `, dia ${parseDateParts(date).day}` : ""}`;
+    return `Todo mês${date ? `, dia ${parseDateParts(date).day}` : ""}`;
   }
-  return "Nao repetir";
+  return "Não repetir";
 }
 
 function buildOccurrenceStarts(draft: RecurrenceDraft) {
@@ -275,11 +275,11 @@ export function SchedulerWizard({
       setSlotsLoading(true);
 
       try {
-      if (!draft.barberId) {
-        setSlots([]);
-        return;
-      }
-      const data = await fetchAvailableSlots(date, serviceId, draft.barberId, controller.signal);
+        if (!draft.barberId) {
+          setSlots([]);
+          return;
+        }
+        const data = await fetchAvailableSlots(date, serviceId, draft.barberId, controller.signal);
 
         setSlots(data);
         setDraft((prev) => {
@@ -295,7 +295,7 @@ export function SchedulerWizard({
         }
 
         setSlots([]);
-        pushToast(error instanceof Error ? error.message : "Erro ao carregar horarios", "error");
+        pushToast(error instanceof Error ? error.message : "Erro ao carregar horários", "error");
       } finally {
         if (slotsRequestRef.current === controller) {
           slotsRequestRef.current = null;
@@ -383,12 +383,12 @@ export function SchedulerWizard({
     if (step === 3) {
       return Boolean(
         draft.date &&
-          draft.time &&
-          slots.some((slot) => slot.start === draft.time) &&
-          occurrenceStarts.length > 0 &&
-          !recurrenceHasLimitError &&
-          !previewLoading &&
-          !previewError,
+        draft.time &&
+        slots.some((slot) => slot.start === draft.time) &&
+        occurrenceStarts.length > 0 &&
+        !recurrenceHasLimitError &&
+        !previewLoading &&
+        !previewError,
       );
     }
     return Boolean(draft.customerName && draft.customerPhone);
@@ -443,7 +443,7 @@ export function SchedulerWizard({
       }
 
       if (starts.length === 0 || recurrenceHasLimitError) {
-        pushToast("Revise a frequencia do agendamento", "error");
+        pushToast("Revise a frequência do agendamento", "error");
         setStep(3);
         return;
       }
@@ -479,32 +479,31 @@ export function SchedulerWizard({
       {step === 1 && (
         <div className="mt-6">
           <div className="mb-4">
-            <p className="text-base font-semibold text-zinc-100">Escolha o servico</p>
-            <p className="mt-1 text-sm text-zinc-400">O tempo do servico define os horarios que ficam disponiveis.</p>
+            <p className="text-base font-semibold text-zinc-100">Escolha o serviço</p>
+            <p className="mt-1 text-sm text-zinc-400">O tempo do serviço define os horários que ficam disponíveis.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-          {services.map((service) => (
-            <button
-              type="button"
-              key={service.id}
-              onClick={() => setDraft((prev) => ({ ...prev, serviceId: service.id, time: undefined }))}
-              className={`rounded-xl border p-4 text-left transition ${
-                draft.serviceId === service.id
+            {services.map((service) => (
+              <button
+                type="button"
+                key={service.id}
+                onClick={() => setDraft((prev) => ({ ...prev, serviceId: service.id, time: undefined }))}
+                className={`rounded-xl border p-4 text-left transition ${draft.serviceId === service.id
                   ? "border-brand-highlight/70 bg-brand-highlight/10 shadow-lg shadow-black/20"
                   : "border-zinc-800 bg-zinc-950/50 hover:border-brand-highlight/40 hover:bg-zinc-950"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-zinc-50">{service.name}</p>
-                  <p className="mt-1 text-xs text-copy-muted">{service.durationMinutes} minutos</p>
+                  }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-zinc-50">{service.name}</p>
+                    <p className="mt-1 text-xs text-copy-muted">{service.durationMinutes} minutos</p>
+                  </div>
+                  <p className="rounded-full border border-zinc-700 px-3 py-1 text-xs font-semibold text-brand-soft">
+                    {formatBRLFromCents(service.priceCents)}
+                  </p>
                 </div>
-                <p className="rounded-full border border-zinc-700 px-3 py-1 text-xs font-semibold text-brand-soft">
-                  {formatBRLFromCents(service.priceCents)}
-                </p>
-              </div>
-            </button>
-          ))}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -578,7 +577,7 @@ export function SchedulerWizard({
                   <p className="mt-1 font-semibold capitalize text-zinc-100">{selectedDateLabel}</p>
                 </div>
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-                  <p className="text-xs text-copy-muted">Horario</p>
+                  <p className="text-xs text-copy-muted">Horário</p>
                   <p className="mt-1 font-semibold text-brand-soft">{selectedTimeLabel}</p>
                 </div>
               </div>
@@ -587,8 +586,8 @@ export function SchedulerWizard({
 
           <div className="space-y-4">
             <div>
-              <p className="text-base font-semibold text-zinc-100">Escolha o horario</p>
-              <p className="mt-1 text-sm text-zinc-400">Horarios ocupados nao aparecem para selecao.</p>
+              <p className="text-base font-semibold text-zinc-100">Escolha o horário</p>
+              <p className="mt-1 text-sm text-zinc-400">Horários ocupados não aparecem para seleção.</p>
             </div>
             <AvailableSlots
               slots={slots}
@@ -600,17 +599,16 @@ export function SchedulerWizard({
             <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-zinc-100">Frequencia</p>
-                  <p className="text-xs text-copy-muted">Repita esse mesmo horario se for um atendimento fixo.</p>
+                  <p className="text-sm font-semibold text-zinc-100">Frequência</p>
+                  <p className="text-xs text-copy-muted">Repita esse mesmo horário se for um atendimento fixo.</p>
                 </div>
                 <span
-                  className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                    recurrenceHasLimitError
-                      ? "border-danger/50 bg-danger/15 text-danger-soft"
-                      : "border-brand/30 bg-brand/10 text-brand-soft"
-                  }`}
+                  className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${recurrenceHasLimitError
+                    ? "border-danger/50 bg-danger/15 text-danger-soft"
+                    : "border-brand/30 bg-brand/10 text-brand-soft"
+                    }`}
                 >
-                  {recurrence === "NONE" ? "1 horario" : `${occurrenceStarts.length} horarios`}
+                  {recurrence === "NONE" ? "1 horário" : `${occurrenceStarts.length} horários`}
                 </span>
               </div>
 
@@ -629,14 +627,14 @@ export function SchedulerWizard({
                     }}
                     className="ui-control h-11 w-full px-3"
                   >
-                    <option value="NONE">Nao repetir</option>
+                    <option value="NONE">Não repetir</option>
                     <option value="WEEKLY">Toda semana no mesmo dia</option>
-                    <option value="MONTHLY">Uma vez por mes no mesmo dia</option>
+                    <option value="MONTHLY">Uma vez por mês no mesmo dia</option>
                   </select>
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm text-zinc-300">Repetir ate</span>
+                  <span className="text-sm text-zinc-300">Repetir até</span>
                   <input
                     type="date"
                     value={draft.repeatUntil ?? draft.date ?? minDate}
@@ -652,19 +650,19 @@ export function SchedulerWizard({
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm font-semibold text-zinc-100">{getRecurrenceLabel(recurrence, draft.date)}</p>
                   <p className="text-xs text-copy-muted">
-                    {recurrence === "NONE" ? "Sem repeticao" : `Ate ${formatFullDate(draft.repeatUntil)}`}
+                    {recurrence === "NONE" ? "Sem repetição" : `Até ${formatFullDate(draft.repeatUntil)}`}
                   </p>
                 </div>
                 {occurrencePreview.length > 0 ? (
                   <p className="mt-2 text-xs text-zinc-400">
-                    Previa: {occurrencePreview.map((item) => `${item.date} as ${item.time}`).join(", ")}
+                    Previa: {occurrencePreview.map((item) => `${item.date} às ${item.time}`).join(", ")}
                     {occurrenceStarts.length > occurrencePreview.length ? "..." : ""}
                   </p>
                 ) : (
-                  <p className="mt-2 text-xs text-brand-soft">Escolha data, horario e periodo para calcular a repeticao.</p>
+                  <p className="mt-2 text-xs text-brand-soft">Escolha data, horário e período para calcular a repetição.</p>
                 )}
                 {recurrenceHasLimitError ? (
-                  <p className="mt-2 text-xs text-danger-soft">Reduza o periodo para menos de 60 agendamentos.</p>
+                  <p className="mt-2 text-xs text-danger-soft">Reduza o período para menos de 60 agendamentos.</p>
                 ) : null}
                 {previewLoading ? (
                   <p className="mt-2 text-xs text-brand-soft">Validando todas as repetições...</p>
@@ -683,7 +681,7 @@ export function SchedulerWizard({
           <div className="space-y-4">
             <div>
               <p className="text-base font-semibold text-zinc-100">Confirme seus dados</p>
-              <p className="mt-1 text-sm text-zinc-400">Usaremos essas informacoes para identificar seu agendamento.</p>
+              <p className="mt-1 text-sm text-zinc-400">Usaremos essas informações para identificar seu agendamento.</p>
             </div>
 
             <div>
@@ -714,7 +712,7 @@ export function SchedulerWizard({
             <p className="text-xs font-semibold uppercase tracking-wide text-copy-muted">Agendamento</p>
             <div className="mt-4 space-y-3 text-sm">
               <div className="flex justify-between gap-4">
-                <span className="text-copy-muted">Servico</span>
+                <span className="text-copy-muted">Serviço</span>
                 <span className="font-semibold text-zinc-100">{selectedService?.name ?? "-"}</span>
               </div>
               <div className="flex justify-between gap-4">
@@ -726,13 +724,13 @@ export function SchedulerWizard({
                 <span className="text-right font-semibold capitalize text-zinc-100">{selectedDateLabel}</span>
               </div>
               <div className="flex justify-between gap-4">
-                <span className="text-copy-muted">Horario</span>
+                <span className="text-copy-muted">Horário</span>
                 <span className="font-semibold text-brand-soft">{selectedTimeLabel}</span>
               </div>
               <div className="flex justify-between gap-4">
-                <span className="text-copy-muted">Frequencia</span>
+                <span className="text-copy-muted">Frequência</span>
                 <span className="text-right font-semibold text-zinc-100">
-                  {recurrence === "NONE" ? "Nao repetir" : `${getRecurrenceLabel(recurrence, draft.date)} (${occurrenceStarts.length})`}
+                  {recurrence === "NONE" ? "Não repetir" : `${getRecurrenceLabel(recurrence, draft.date)} (${occurrenceStarts.length})`}
                 </span>
               </div>
               <div className="flex justify-between gap-4 border-t border-zinc-800 pt-3">
