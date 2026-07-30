@@ -82,9 +82,15 @@ export function isSameOriginRequest(request: NextRequest): boolean {
 }
 
 export function getClientIp(request: NextRequest): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown"
-  );
+  return getClientIpFromHeaders(request.headers);
+}
+
+export function getClientIpFromHeaders(headers: Pick<Headers, "get">): string {
+  const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const direct = headers.get("x-real-ip")?.trim();
+  const candidate = forwarded || direct;
+  if (!candidate || candidate.length > 64 || /[\r\n]/.test(candidate)) {
+    return "unknown";
+  }
+  return candidate;
 }

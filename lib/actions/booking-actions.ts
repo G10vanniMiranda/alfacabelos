@@ -1,10 +1,13 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath, updateTag } from "next/cache";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { createWriteStream } from "node:fs";
+import { mkdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   createGalleryImage,
   createService,
@@ -15,6 +18,7 @@ import {
   replaceBarberDayAvailability,
   rescheduleClientBooking,
   getBookingById,
+  getGalleryImageById,
   confirmBookingByToken,
   updateBookingPaymentStatus,
   updateService,
@@ -30,7 +34,12 @@ import { findClientBySessionToken } from "@/lib/auth/client-store";
 import { prisma } from "@/lib/prisma";
 import { cancelBookingSeries, createBookingSeriesAtomic, updateBookingSeriesOccurrences } from "@/lib/booking-series-service";
 import { repository } from "@/lib/repositories";
-import { clearRateLimitEvents, registerRateLimitEvent } from "@/lib/security";
+import { clearRateLimitEvents, getClientIpFromHeaders, registerRateLimitEvent } from "@/lib/security";
+import {
+  deleteLocalGalleryFile,
+  extractSafeSupabaseObjectPath,
+  validateGalleryUpload,
+} from "@/lib/media-security";
 
 const ADMIN_COOKIE = "barber_admin";
 const CLIENT_COOKIE = "barber_client";
@@ -109,7 +118,6 @@ async function uploadToSupabase(objectPath: string, file: File): Promise<string>
   }
 
   const endpoint = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${objectPath}`;
-  const body = Buffer.from(await file.arrayBuffer());
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -118,7 +126,7 @@ async function uploadToSupabase(objectPath: string, file: File): Promise<string>
       "content-type": file.type,
       "x-upsert": "false",
     },
-    body,
+    body: file,
   });
 
   if (!response.ok) {
@@ -130,28 +138,15 @@ async function uploadToSupabase(objectPath: string, file: File): Promise<string>
   return getSupabasePublicUrl(objectPath);
 }
 
-function extractSupabaseObjectPath(publicUrl: string): string | null {
-  if (!SUPABASE_URL) {
-    return null;
-  }
-
-  try {
-    const parsed = new URL(publicUrl);
-    const expectedPrefix = `/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}/`;
-    if (!parsed.pathname.startsWith(expectedPrefix)) {
-      return null;
-    }
-    return decodeURIComponent(parsed.pathname.slice(expectedPrefix.length));
-  } catch {
-    return null;
-  }
-}
-
 async function deleteFromSupabase(publicUrl: string) {
-  const objectPath = extractSupabaseObjectPath(publicUrl);
-  if (!objectPath || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Configuração do storage ausente");
   }
+  const objectPath = extractSafeSupabaseObjectPath({
+    publicUrl,
+    supabaseUrl: SUPABASE_URL,
+    bucket: SUPABASE_STORAGE_BUCKET,
+  });
 
   const endpoint = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${objectPath}`;
   const response = await fetch(endpoint, {
@@ -162,23 +157,38 @@ async function deleteFromSupabase(publicUrl: string) {
     },
   });
   if (!response.ok && response.status !== 404) {
-    console.warn(`[storage] falha ao remover objeto (${response.status})`);
+    throw new Error(`Falha ao remover mídia do storage (${response.status})`);
   }
 }
 
 export async function confirmBookingByTokenAction(payload: { token: string }): Promise<ActionState> {
+  const genericFailure = "Não foi possível confirmar este agendamento. O link pode não estar mais disponível.";
   try {
-    await confirmBookingByToken(payload.token);
+    const token = payload.token.trim();
+    if (token.length < 32 || token.length > 256) {
+      return { success: false, message: genericFailure };
+    }
+    const requestHeaders = await headers();
+    const ipLimit = await registerRateLimitEvent({
+      scope: "booking-confirmation-ip",
+      identifier: getClientIpFromHeaders(requestHeaders),
+      windowSeconds: 15 * 60,
+      maxAttempts: 20,
+    });
+    if (ipLimit.blocked) {
+      return { success: false, message: genericFailure };
+    }
+    await confirmBookingByToken(token);
     revalidatePath("/confirmacao");
     revalidatePath("/confirmar-agendamento");
     revalidatePath("/admin/agenda");
     revalidatePath("/admin/dashboard");
     revalidatePath("/cliente");
     return { success: true, message: "Agendamento confirmado com sucesso." };
-  } catch (error) {
+  } catch {
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Não foi possível confirmar o agendamento",
+      message: genericFailure,
     };
   }
 }
@@ -596,21 +606,6 @@ export async function deleteServiceAction(payload: { serviceId: string }) {
   updateTag("services");
 }
 
-const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
-const ACCEPTED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
-
-function extensionFromMime(mime: string): string {
-  if (mime === "image/png") return "png";
-  if (mime === "image/webp") return "webp";
-  if (mime === "image/avif") return "avif";
-  if (mime === "video/mp4") return "mp4";
-  if (mime === "video/webm") return "webm";
-  if (mime === "video/quicktime") return "mov";
-  return "jpg";
-}
-
 export async function uploadGalleryImageAction(formData: FormData): Promise<ActionState> {
   try {
     await assertAdminSession();
@@ -621,25 +616,9 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
     if (!(fileValue instanceof File)) {
       return { success: false, message: "Selecione uma foto ou vídeo para envio" };
     }
-    const isImage = ACCEPTED_IMAGE_TYPES.has(fileValue.type);
-    const isVideo = ACCEPTED_VIDEO_TYPES.has(fileValue.type);
-    if (!isImage && !isVideo) {
-      return { success: false, message: "Formato inválido. Use JPG, PNG, WEBP, AVIF, MP4, WEBM ou MOV" };
-    }
-    if (fileValue.size === 0) {
-      return { success: false, message: "Arquivo vazio" };
-    }
-    if (isImage && fileValue.size > MAX_IMAGE_BYTES) {
-      return { success: false, message: "Imagem deve ter até 5 MB" };
-    }
-    if (isVideo && fileValue.size > MAX_VIDEO_BYTES) {
-      return { success: false, message: "Vídeo deve ter até 50 MB" };
-    }
-
-    const ext = extensionFromMime(fileValue.type);
-    const filename = `${Date.now()}-${randomUUID()}.${ext}`;
+    const validated = await validateGalleryUpload(fileValue);
+    const filename = `${Date.now()}-${randomUUID()}.${validated.extension}`;
     const objectPath = `galeria/${filename}`;
-    const mediaType = isVideo ? "VIDEO" : "IMAGE";
 
     let imageUrl = "";
     if (canUseSupabaseStorage()) {
@@ -649,8 +628,10 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
       const uploadDir = path.join(process.cwd(), "public", "uploads", "galeria");
       const absolutePath = path.join(uploadDir, filename);
       await mkdir(uploadDir, { recursive: true });
-      const buffer = Buffer.from(await fileValue.arrayBuffer());
-      await writeFile(absolutePath, buffer);
+      await pipeline(
+        Readable.from(fileValue.stream() as unknown as AsyncIterable<Uint8Array>),
+        createWriteStream(absolutePath, { flags: "wx" }),
+      );
       imageUrl = relativePath;
     } else {
       return {
@@ -659,11 +640,14 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
       };
     }
 
-    await createGalleryImage({ imageUrl, altText, mediaType });
+    await createGalleryImage({ imageUrl, altText, mediaType: validated.mediaType });
     revalidatePath("/admin/galeria");
     revalidatePath("/");
     updateTag("gallery-images");
-    return { success: true, message: isVideo ? "Vídeo adicionado à galeria" : "Foto adicionada à galeria" };
+    return {
+      success: true,
+      message: validated.mediaType === "VIDEO" ? "Vídeo adicionado à galeria" : "Foto adicionada à galeria",
+    };
   } catch (error) {
     return {
       success: false,
@@ -672,18 +656,19 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
   }
 }
 
-export async function deleteGalleryImageAction(payload: { galleryImageId: string; imageUrl?: string }) {
+export async function deleteGalleryImageAction(payload: { galleryImageId: string }) {
   await assertAdminSession();
+  const persisted = await getGalleryImageById(payload.galleryImageId);
+  if (!persisted) {
+    throw new Error("Mídia não encontrada");
+  }
+
+  if (persisted.imageUrl.startsWith("/")) {
+    await deleteLocalGalleryFile(persisted.imageUrl, { unlinkFile: unlink });
+  } else {
+    await deleteFromSupabase(persisted.imageUrl);
+  }
   await deleteGalleryImage(payload);
-
-  if (payload.imageUrl?.startsWith("/uploads/galeria/")) {
-    const absolutePath = path.join(process.cwd(), "public", payload.imageUrl);
-    await unlink(absolutePath).catch(() => undefined);
-  }
-
-  if (payload.imageUrl?.startsWith("http")) {
-    await deleteFromSupabase(payload.imageUrl);
-  }
 
   revalidatePath("/admin/galeria");
   revalidatePath("/");

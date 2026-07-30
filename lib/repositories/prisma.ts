@@ -4,6 +4,7 @@ import { BUSINESS_CONFIG } from "@/lib/config";
 import { CLOSED_DAY_TIME } from "@/lib/constants/availability";
 import { getDayRangeIso } from "@/lib/utils";
 import { sha256 } from "@/lib/security";
+import { decideConfirmationTransition } from "@/lib/confirmation-security";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import { Barber, BarberAvailability, Booking, BookingWithRelations, BlockedSlot, GalleryImage } from "@/types/domain";
 import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput, UpdateBookingInput } from "./types";
@@ -209,6 +210,13 @@ function getGalleryDelegate() {
       findMany: (args: unknown) => Promise<
         Array<{ id: string; imageUrl: string; altText: string | null; mediaType?: string | null; createdAt: Date }>
       >;
+      findUnique: (args: unknown) => Promise<{
+        id: string;
+        imageUrl: string;
+        altText: string | null;
+        mediaType?: string | null;
+        createdAt: Date;
+      } | null>;
       create: (args: unknown) => Promise<{
         id: string;
         imageUrl: string;
@@ -859,13 +867,17 @@ export const prismaRepository: BookingRepository = {
             { confirmationTokenHash: tokenHash },
             { confirmationToken: token },
           ],
-          confirmationTokenUsedAt: null,
-          confirmationTokenExpiresAt: { gt: now },
-          status: "PENDENTE",
         },
       });
 
       if (!booking) {
+        return undefined;
+      }
+      const decision = decideConfirmationTransition(booking, now);
+      if (decision === "idempotent-success") {
+        return booking;
+      }
+      if (decision === "reject") {
         return undefined;
       }
 
@@ -1097,6 +1109,27 @@ export const prismaRepository: BookingRepository = {
         orderBy: { createdAt: "desc" },
       });
       return rows.map(toGalleryImage);
+    } catch (error) {
+      if (isGalleryTableMissing(error)) {
+        galleryTableExists = false;
+        throw new Error("Galeria indisponível. Execute as migrações do banco.");
+      }
+      throw error;
+    }
+  },
+
+  async getGalleryImageById(galleryImageId) {
+    const hasTable = await ensureGalleryTableExists();
+    if (!hasTable) {
+      throw new Error("Galeria indisponível. Execute as migrações do banco.");
+    }
+    const gallery = getGalleryDelegate();
+    if (!gallery) {
+      throw new Error("Galeria indisponível. Atualize o Prisma Client.");
+    }
+    try {
+      const row = await gallery.findUnique({ where: { id: galleryImageId } });
+      return row ? toGalleryImage(row) : undefined;
     } catch (error) {
       if (isGalleryTableMissing(error)) {
         galleryTableExists = false;

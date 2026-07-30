@@ -66,11 +66,7 @@ export function AdminGallery({ images }: AdminGalleryProps) {
   function deleteMedia(galleryImageId: string) {
     startTransition(async () => {
       try {
-        const image = images.find((item) => item.id === galleryImageId);
-        await deleteGalleryImageAction({
-          galleryImageId,
-          imageUrl: image?.imageUrl,
-        });
+        await deleteGalleryImageAction({ galleryImageId });
         pushToast("Mídia removida", "success");
         window.location.reload();
       } catch (error) {

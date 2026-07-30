@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ConfirmBookingForm } from "@/components/scheduler/confirm-booking-form";
 import {
   getBookingByConfirmationToken,
@@ -6,34 +7,33 @@ import {
 } from "@/lib/booking-service";
 import { BUSINESS_CONFIG } from "@/lib/config";
 import { formatDateTimeInTimeZone } from "@/lib/utils";
+import { getClientIpFromHeaders, registerRateLimitEvent } from "@/lib/security";
 
 export const metadata = {
   title: "Confirmar Agendamento | ALFA Barber",
 };
 
-function getUnavailableMessage(reason: "invalid" | "used" | "expired" | "not_pending") {
-  if (reason === "used") {
-    return "Este link já foi usado. Se você precisa alterar algo, fale com a barbearia pelo WhatsApp.";
-  }
-
-  if (reason === "expired") {
-    return "Este link expirou. Fale com a barbearia pelo WhatsApp para receber uma nova confirmação.";
-  }
-
-  if (reason === "not_pending") {
-    return "Este agendamento não está mais pendente. Fale com a barbearia pelo WhatsApp se precisar de ajuda.";
-  }
-
-  return "Não foi possível validar este link. Verifique a mensagem recebida ou fale com a barbearia pelo WhatsApp.";
-}
+const UNAVAILABLE_MESSAGE =
+  "Não foi possível validar este link. Verifique a mensagem recebida ou fale com a barbearia pelo WhatsApp.";
 
 export default async function ConfirmarAgendamentoPage({
   searchParams,
 }: {
   searchParams: Promise<{ token?: string }>;
 }) {
-  const { token = "" } = await searchParams;
-  const booking = token ? await getBookingByConfirmationToken(token) : undefined;
+  const { token: rawToken = "" } = await searchParams;
+  const token = rawToken.trim();
+  const requestHeaders = await headers();
+  const rateLimit = await registerRateLimitEvent({
+    scope: "booking-confirmation-page-ip",
+    identifier: getClientIpFromHeaders(requestHeaders),
+    windowSeconds: 15 * 60,
+    maxAttempts: 30,
+  });
+  const booking =
+    !rateLimit.blocked && token.length >= 32 && token.length <= 256
+      ? await getBookingByConfirmationToken(token)
+      : undefined;
   const state = getPublicConfirmationState(booking);
 
   return (
@@ -43,7 +43,7 @@ export default async function ConfirmarAgendamentoPage({
 
         {!state.valid ? (
           <section className="mt-6 rounded-xl border border-brand/40 bg-brand/10 p-5 text-brand-soft">
-            {getUnavailableMessage(state.reason)}
+            {UNAVAILABLE_MESSAGE}
           </section>
         ) : (
           <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/70 p-5 sm:p-6">

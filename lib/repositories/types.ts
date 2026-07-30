@@ -86,6 +86,7 @@ export interface BookingRepository {
   listBarberAvailabilities(barberId: string): Promise<BarberAvailability[]>;
   replaceBarberDayAvailabilities(input: UpsertBarberAvailabilityInput): Promise<BarberAvailability[]>;
   listGalleryImages(): Promise<GalleryImage[]>;
+  getGalleryImageById(galleryImageId: string): Promise<GalleryImage | undefined>;
   createGalleryImage(input: CreateGalleryImageInput): Promise<GalleryImage>;
   deleteGalleryImage(galleryImageId: string): Promise<boolean>;
 }

@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --test tests/*.test.ts",
+    "check:sensitive-files": "node scripts/check-sensitive-files.mjs",
+    "check:migrations": "node scripts/check-migrations.mjs",
     "validate:production": "tsx scripts/validate-production.ts",
     "test:integration": "tsx scripts/validate-production.ts --write-tests",
     "test:api": "tsx scripts/test-api-concurrency.ts",
@@ -23,7 +25,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
-    "next": "16.2.6",
+    "next": "16.2.12",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "zod": "^3.24.1"
@@ -35,13 +37,20 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19",
     "eslint": "^9.39.4",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.2.12",
     "prisma": "^6.19.3",
     "tailwindcss": "^4.3.0",
     "tsx": "^4.22.0",
     "typescript": "^5"
   },
   "overrides": {
-    "postcss": "^8.5.10"
+    "postcss": "8.5.25",
+    "sharp": "0.35.3",
+    "minimatch@3.1.5": {
+      "brace-expansion": "1.1.18"
+    },
+    "minimatch@9.0.9": {
+      "brace-expansion": "2.1.4"
+    }
   }
 }

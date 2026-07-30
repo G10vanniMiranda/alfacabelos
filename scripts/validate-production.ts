@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { prismaRepository } from "@/lib/repositories/prisma";
 import { authenticateClient, createClient, createClientSession, findClientBySessionToken, revokeClientSession } from "@/lib/auth/client-store";
 import { createPasswordResetForIdentifier, resetClientPasswordWithToken } from "@/lib/auth/client-password-reset-store";
-import { authenticateAdminAccess, createAdminAccess, deleteAdminAccess } from "@/lib/auth/admin-access-store";
+import { authenticateAdminAccess, createAdminAccess, deleteAdminAccess, updateAdminAccess } from "@/lib/auth/admin-access-store";
 import { createAdminSession, getAdminSessionPrincipal, isAdminSessionTokenValid, revokeAdminSession } from "@/lib/auth/admin-session-store";
 import { cancelClientBooking, rescheduleClientBooking } from "@/lib/booking-service";
 import { zonedDateTimeToUtcIso } from "@/lib/utils";
@@ -184,8 +184,18 @@ async function validateAdminAuthentication(runId: string) {
     const session = await createAdminSession({ email, adminAccessId: access.id });
     assert.equal(await isAdminSessionTokenValid(session.token), true);
     assert.equal((await getAdminSessionPrincipal(session.token))?.role, "ADMIN");
-    await revokeAdminSession(session.token);
+    await updateAdminAccess({
+      accessId: access.id,
+      email,
+      password: "AdminNovo#2026",
+      role: "ADMIN",
+    });
     assert.equal(await isAdminSessionTokenValid(session.token), false);
+    assert.equal(await authenticateAdminAccess(email, "AdminTeste#2026"), null);
+    assert.equal((await authenticateAdminAccess(email, "AdminNovo#2026"))?.id, access.id);
+    const newSession = await createAdminSession({ email, adminAccessId: access.id });
+    assert.equal(await isAdminSessionTokenValid(newSession.token), true);
+    await revokeAdminSession(newSession.token);
     record("auth:admin", "PASS", "login inválido/válido, sessão persistida e logout validados no banco real");
   } finally {
     await deleteAdminAccess(access.id);

@@ -110,6 +110,11 @@ export async function createGalleryImage(input: unknown) {
   });
 }
 
+export async function getGalleryImageById(galleryImageId: string) {
+  if (!galleryImageId.trim()) return undefined;
+  return repository.getGalleryImageById(galleryImageId);
+}
+
 export async function deleteGalleryImage(input: unknown) {
   const parsed = deleteGalleryImageSchema.safeParse(input);
   if (!parsed.success) {

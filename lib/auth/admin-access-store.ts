@@ -4,6 +4,7 @@ import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } fr
 import { promisify } from "node:util";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import { Prisma } from "@prisma/client";
+import { revokeAllAdminSessions } from "@/lib/auth/admin-session-revocation";
 
 const scrypt = promisify(scryptCallback);
 const ADMIN_ACCESS_TABLE_ERROR = "Acesso administrativo indisponível. Execute as migrações do banco.";
@@ -292,6 +293,7 @@ export async function updateAdminAccess(input: {
             "role" = CAST(${role} AS "AccessRole"), "barberId" = ${barberId}, "updatedAt" = ${now}
           WHERE "id" = ${input.accessId} AND "isActive" = true
         `;
+        await revokeAllAdminSessions(tx.adminSession, input.accessId);
       } else {
         await tx.$executeRaw`
           UPDATE "AdminAccess" SET "email" = ${email}, "role" = CAST(${role} AS "AccessRole"),
