@@ -26,7 +26,7 @@ import { detachOccurrenceFromSeries } from "./booking-series-service";
 const HOME_REVALIDATE_SECONDS = 60 * 15;
 
 export function isBookingConflictError(error: unknown): boolean {
-  return error instanceof Error && /reservado|conflito|ocupado|dispon[ií]vel/i.test(error.message);
+  return error instanceof Error && /reservado|conflito|ocupado|dispon[ií]vel|agenda mudou/i.test(error.message);
 }
 
 const getCachedServices = unstable_cache(async () => repository.getServices(), ["services"], {
@@ -435,6 +435,7 @@ export async function rescheduleClientBooking(input: {
   serviceId: string;
   barberId: string;
   start: string;
+  requestId?: string;
 }) {
   const parsed = createBookingSchema.safeParse({
     serviceId: input.serviceId,
@@ -497,6 +498,7 @@ export async function rescheduleClientBooking(input: {
     observations: booking.observations,
     dateTimeStart: input.start,
     dateTimeEnd: computedEnd,
+    notification: { event: "BOOKING_RESCHEDULED", audience: "OWNER", requestId: input.requestId },
   });
   if (!updated) {
     throw new Error("Não foi possível concluir o reagendamento");

@@ -15,10 +15,12 @@ export function PasswordResetForm({ token }: { token: string }) {
   const hasError = Boolean(state.message && !state.success);
 
   useEffect(() => {
+    if (!state.message) return;
+    document.getElementById("auth-feedback")?.focus();
     if (!state.success) return;
     const timer = window.setTimeout(() => router.replace("/cliente/login?senha=redefinida"), 650);
     return () => window.clearTimeout(timer);
-  }, [state.success, router]);
+  }, [state.message, state.success, router]);
 
   return (
     <form action={formAction} className="auth-form" aria-busy={isPending}>

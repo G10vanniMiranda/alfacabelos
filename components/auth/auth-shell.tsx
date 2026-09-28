@@ -74,7 +74,7 @@ export function AuthShell({ children, context, title, description, highlights = 
 export function AuthFeedback({ message, success = false, id = "auth-feedback" }: { message: string; success?: boolean; id?: string }) {
   if (!message) return null;
   return (
-    <div id={id} role={success ? "status" : "alert"} aria-live="polite" className={`auth-feedback ${success ? "auth-feedback-success" : "auth-feedback-error"}`}>
+    <div id={id} role={success ? "status" : "alert"} aria-live="polite" tabIndex={-1} className={`auth-feedback ${success ? "auth-feedback-success" : "auth-feedback-error"}`}>
       <span aria-hidden="true">{success ? "✓" : "!"}</span>
       <p>{message}</p>
     </div>

@@ -1,33 +1,28 @@
-import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { hashClientPassword, normalizeClientPhone } from "@/lib/auth/client-store";
+import { hashClientPassword } from "@/lib/auth/client-store";
 import { registerRateLimitEvent, sha256 } from "@/lib/security";
 import { buildAppUrl } from "@/lib/app-url";
+import { enqueueWhatsAppNotification } from "@/lib/notifications/service";
+import { logger } from "@/lib/observability/logger";
+import { getBrazilPhoneLookupCandidates, normalizeBrazilPhoneNational } from "@/lib/phone";
+import {
+  createPasswordResetToken,
+  evaluatePasswordResetToken,
+  hashPasswordResetToken,
+  PASSWORD_RESET_TOKEN_TTL_MINUTES,
+  type PasswordResetTokenStatus,
+} from "@/lib/auth/password-reset-security";
 
-const RESET_TOKEN_TTL_MINUTES = 30;
 const RESET_RATE_LIMIT_WINDOW_MINUTES = 60;
 const RESET_RATE_LIMIT_MAX_ATTEMPTS = 5;
+export const PASSWORD_RESET_RESEND_COOLDOWN_SECONDS = 60;
 
 export const PASSWORD_RESET_GENERIC_MESSAGE =
   "Se existir uma conta vinculada aos dados informados, enviaremos as instruções de recuperação.";
 
-export type PasswordResetTokenStatus = "valid" | "invalid" | "expired" | "used";
-
 function logPasswordResetEvent(event: string, details: Record<string, string | number | boolean | null | undefined> = {}) {
-  console.info("[password-reset]", JSON.stringify({ event, ...details }));
-}
-
-function createRawResetToken(): string {
-  return randomBytes(32).toString("base64url");
-}
-
-function normalizePhoneForLookup(identifier: string): string {
-  const digits = normalizeClientPhone(identifier);
-  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
-    return digits.slice(2);
-  }
-  return digits;
+  logger.info(`password_reset.${event}`, details);
 }
 
 function normalizeIdentifier(identifier: string): { type: "phone" | "invalid"; value: string } {
@@ -36,8 +31,8 @@ function normalizeIdentifier(identifier: string): { type: "phone" | "invalid"; v
     return { type: "invalid", value: "" };
   }
 
-  const phone = normalizePhoneForLookup(trimmed);
-  if (phone.length >= 10 && phone.length <= 11) {
+  const phone = normalizeBrazilPhoneNational(trimmed);
+  if (phone) {
     return { type: "phone", value: phone };
   }
 
@@ -45,7 +40,9 @@ function normalizeIdentifier(identifier: string): { type: "phone" | "invalid"; v
 }
 
 export function buildPasswordResetLink(rawToken: string): string {
-  return buildAppUrl(`/redefinir-senha?token=${encodeURIComponent(rawToken)}`) ?? `/redefinir-senha?token=${encodeURIComponent(rawToken)}`;
+  const link = buildAppUrl(`/redefinir-senha?token=${encodeURIComponent(rawToken)}`);
+  if (!link) throw new Error("Password reset application URL is not configured");
+  return link;
 }
 
 export function buildPasswordResetWhatsAppMessage(clientName: string, resetLink: string): string {
@@ -57,7 +54,7 @@ export function buildPasswordResetWhatsAppMessage(clientName: string, resetLink:
     "Para criar uma nova senha, clique no link abaixo:",
     resetLink,
     "",
-    `Este link é válido por ${RESET_TOKEN_TTL_MINUTES} minutos.`,
+    `Este link é válido por ${PASSWORD_RESET_TOKEN_TTL_MINUTES} minutos.`,
     "",
     "Se você não solicitou essa alteração, ignore esta mensagem.",
   ].join("\n");
@@ -69,39 +66,58 @@ async function cleanupOldResetRows() {
   await prisma.passwordResetToken.deleteMany({
     where: {
       expiresAt: { lt: tokenCutoff },
-      usedAt: { not: null },
     },
   });
 }
 
-export async function registerPasswordResetAttempt(identifier: string): Promise<{ blocked: boolean }> {
+export async function registerPasswordResetAttempt(
+  identifier: string,
+  clientIp = "unknown",
+  requestId?: string,
+): Promise<{ blocked: boolean; retryAfterSeconds: number }> {
   const normalized = normalizeIdentifier(identifier);
+  const subject = `${normalized.type}:${normalized.value}`;
 
   await cleanupOldResetRows();
 
   logPasswordResetEvent("request_received", {
-    identifierHash: sha256(`${normalized.type}:${normalized.value}`),
+    requestId,
+    identifierHash: sha256(subject),
     identifierType: normalized.type,
   });
 
-  const result = await registerRateLimitEvent({
-    scope: "client-password-reset",
-    identifier: `${normalized.type}:${normalized.value}`,
+  const cooldown = await registerRateLimitEvent({
+    scope: "client-password-reset-cooldown",
+    identifier: subject,
+    windowSeconds: PASSWORD_RESET_RESEND_COOLDOWN_SECONDS,
+    maxAttempts: 1,
+  });
+  const pairLimit = cooldown.blocked ? cooldown : await registerRateLimitEvent({
+    scope: "client-password-reset-pair",
+    identifier: `${clientIp}:${subject}`,
     windowSeconds: RESET_RATE_LIMIT_WINDOW_MINUTES * 60,
     maxAttempts: RESET_RATE_LIMIT_MAX_ATTEMPTS,
   });
+  const ipLimit = pairLimit.blocked || clientIp === "unknown" ? pairLimit : await registerRateLimitEvent({
+    scope: "client-password-reset-ip",
+    identifier: clientIp,
+    windowSeconds: RESET_RATE_LIMIT_WINDOW_MINUTES * 60,
+    maxAttempts: 20,
+  });
+  const result = cooldown.blocked ? cooldown : pairLimit.blocked ? pairLimit : ipLimit;
 
   if (result.blocked) {
     logPasswordResetEvent("request_rate_limited", {
-      identifierHash: sha256(`${normalized.type}:${normalized.value}`),
+      requestId,
+      identifierHash: sha256(subject),
       retryAfterSeconds: result.retryAfterSeconds,
     });
   }
 
-  return { blocked: result.blocked };
+  return result;
 }
 
-export async function createPasswordResetForIdentifier(identifier: string): Promise<
+export async function createPasswordResetForIdentifier(identifier: string, requestId?: string): Promise<
   | {
       clientName: string;
       clientPhone: string;
@@ -111,32 +127,37 @@ export async function createPasswordResetForIdentifier(identifier: string): Prom
 > {
   const normalized = normalizeIdentifier(identifier);
   if (normalized.type !== "phone") {
-    logPasswordResetEvent("request_identifier_invalid");
+    logPasswordResetEvent("request_identifier_invalid", { requestId });
     return undefined;
   }
 
-  const client = await prisma.client.findUnique({
-    where: { phoneNormalized: normalized.value },
-    select: { id: true, name: true, phone: true },
-  });
+  let client = null;
+  for (const candidate of getBrazilPhoneLookupCandidates(normalized.value)) {
+    client = await prisma.client.findUnique({
+      where: { phoneNormalized: candidate },
+      select: { id: true, name: true, phone: true },
+    });
+    if (client) break;
+  }
 
   if (!client) {
     logPasswordResetEvent("client_not_found", {
+      requestId,
       identifierHash: sha256(`phone:${normalized.value}`),
     });
     return undefined;
   }
 
   logPasswordResetEvent("client_found", {
+    requestId,
     clientId: client.id,
     identifierHash: sha256(`phone:${normalized.value}`),
   });
 
-  const rawToken = createRawResetToken();
-  const tokenHash = sha256(rawToken);
-  const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
+  const { rawToken, tokenHash, expiresAt } = createPasswordResetToken();
+  const resetLink = buildPasswordResetLink(rawToken);
 
-  await prisma.$transaction(async (tx) => {
+  const delivery = await prisma.$transaction(async (tx) => {
     await tx.passwordResetToken.updateMany({
       where: {
         clientId: client.id,
@@ -152,70 +173,72 @@ export async function createPasswordResetForIdentifier(identifier: string): Prom
         expiresAt,
       },
     });
+    return enqueueWhatsAppNotification(tx, {
+      event: "PASSWORD_RESET",
+      to: client.phone,
+      message: buildPasswordResetWhatsAppMessage(client.name, resetLink),
+      context: "recuperacao-senha-cliente",
+      idempotencyKey: `password-reset:${tokenHash}`,
+      requestId,
+    });
   });
 
   logPasswordResetEvent("token_saved", {
+    requestId,
     clientId: client.id,
-    expiresInMinutes: RESET_TOKEN_TTL_MINUTES,
+    expiresInMinutes: PASSWORD_RESET_TOKEN_TTL_MINUTES,
+  });
+  logPasswordResetEvent("delivery_requested", {
+    requestId,
+    clientId: client.id,
+    notificationId: delivery.deliveryId,
+    deliveryStatus: delivery.status,
   });
 
   return {
     clientName: client.name,
     clientPhone: client.phone,
-    resetLink: buildPasswordResetLink(rawToken),
+    resetLink,
   };
 }
 
-export async function validatePasswordResetToken(rawToken: string): Promise<{ valid: boolean; status: PasswordResetTokenStatus }> {
+export async function validatePasswordResetToken(rawToken: string, requestId?: string): Promise<{ valid: boolean; status: PasswordResetTokenStatus }> {
   if (!rawToken || rawToken.length > 256) {
-    logPasswordResetEvent("token_validation_invalid");
+    logPasswordResetEvent("token_validation_invalid", { requestId });
     return { valid: false, status: "invalid" };
   }
 
-  const tokenHash = sha256(rawToken);
+  const tokenHash = hashPasswordResetToken(rawToken);
   const token = await prisma.passwordResetToken.findUnique({
     where: { tokenHash },
     select: { expiresAt: true, usedAt: true },
   });
 
-  if (!token) {
-    logPasswordResetEvent("token_validation_invalid");
-    return { valid: false, status: "invalid" };
-  }
-
-  if (token.usedAt) {
-    logPasswordResetEvent("token_validation_used");
-    return { valid: false, status: "used" };
-  }
-
-  if (token.expiresAt <= new Date()) {
-    logPasswordResetEvent("token_validation_expired");
-    return { valid: false, status: "expired" };
-  }
-
-  logPasswordResetEvent("token_validation_valid");
-  return { valid: true, status: "valid" };
+  const status = evaluatePasswordResetToken(token);
+  logPasswordResetEvent(`token_validation_${status}`, { requestId });
+  return { valid: status === "valid", status };
 }
 
-export async function resetClientPasswordWithToken(rawToken: string, password: string): Promise<boolean> {
+export async function resetClientPasswordWithToken(rawToken: string, password: string, requestId?: string): Promise<boolean> {
   if (!rawToken || rawToken.length > 256) {
     return false;
   }
 
-  const tokenHash = sha256(rawToken);
+  const tokenHash = hashPasswordResetToken(rawToken);
   const passwordHash = await hashClientPassword(password);
   const now = new Date();
 
-  const updated = await prisma.$transaction(
-    async (tx) => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const updatedClientId = await prisma.$transaction(
+        async (tx) => {
       const token = await tx.passwordResetToken.findUnique({
         where: { tokenHash },
         select: { id: true, clientId: true, expiresAt: true, usedAt: true },
       });
 
-      if (!token || token.usedAt || token.expiresAt <= now) {
-        logPasswordResetEvent("reset_rejected");
-        return false;
+      if (evaluatePasswordResetToken(token, now) !== "valid" || !token) {
+        return null;
       }
 
       await tx.client.update({
@@ -245,14 +268,19 @@ export async function resetClientPasswordWithToken(rawToken: string, password: s
         data: { usedAt: now },
       });
 
-      logPasswordResetEvent("password_reset_completed", {
-        clientId: token.clientId,
-      });
-
+      return token.clientId;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+      if (!updatedClientId) {
+        logPasswordResetEvent("reset_rejected", { requestId });
+        return false;
+      }
+      logPasswordResetEvent("password_reset_completed", { requestId, clientId: updatedClientId });
       return true;
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
-
-  return updated;
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") || attempt === 1) throw error;
+    }
+  }
+  return false;
 }

@@ -38,6 +38,11 @@ export type UpdateBookingInput = {
   observations?: string;
   dateTimeStart: string;
   dateTimeEnd: string;
+  notification?: {
+    event: "BOOKING_RESCHEDULED";
+    audience: "OWNER" | "CLIENT";
+    requestId?: string;
+  };
 };
 
 export type CreateBlockedSlotInput = {

@@ -2,17 +2,22 @@ import { ClientUser } from "@/types/domain";
 import { prisma } from "@/lib/prisma";
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+import { getBrazilPhoneLookupCandidates, normalizeBrazilPhoneNational } from "@/lib/phone";
 
 const scrypt = promisify(scryptCallback);
 const CLIENT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 const CLIENT_SESSION_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 export function normalizeClientPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
-    return digits.slice(2);
+  return normalizeBrazilPhoneNational(phone) ?? phone.replace(/\D/g, "");
+}
+
+async function findClientRecordByPhone(phone: string) {
+  for (const candidate of getBrazilPhoneLookupCandidates(phone)) {
+    const client = await prisma.client.findUnique({ where: { phoneNormalized: candidate } });
+    if (client) return client;
   }
-  return digits;
+  return null;
 }
 
 function hashSessionToken(token: string): string {
@@ -65,11 +70,7 @@ function toClientUser(row: {
 }
 
 export async function findClientByPhone(phone: string): Promise<ClientUser | undefined> {
-  const normalized = normalizeClientPhone(phone);
-  const client = await prisma.client.findUnique({
-    where: { phoneNormalized: normalized },
-    select: { id: true, name: true, phone: true, hasPassword: true, status: true, createdBy: true, createdAt: true },
-  });
+  const client = await findClientRecordByPhone(phone);
   return client ? toClientUser(client) : undefined;
 }
 
@@ -154,9 +155,7 @@ export async function createClient(input: {
   const passwordHash = await hashClientPassword(input.password);
 
   try {
-    const existing = await prisma.client.findUnique({
-      where: { phoneNormalized: normalizedPhone },
-    });
+    const existing = await findClientRecordByPhone(input.phone);
 
     if (existing?.hasPassword) {
       throw new Error("Já existe cadastro com este telefone");
@@ -199,10 +198,7 @@ export async function createClient(input: {
 }
 
 export async function authenticateClient(phone: string, password: string): Promise<ClientUser | null> {
-  const normalized = normalizeClientPhone(phone);
-  const client = await prisma.client.findUnique({
-    where: { phoneNormalized: normalized },
-  });
+  const client = await findClientRecordByPhone(phone);
   if (!client) {
     return null;
   }

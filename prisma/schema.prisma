@@ -22,11 +22,11 @@ enum AccessRole {
 }
 
 enum NotificationStatus {
-  NOT_CONFIGURED
   PENDING
-  SENDING
+  PROCESSING
   SENT
-  FAILED
+  RETRY
+  DEAD
 }
 
 enum NotificationEvent {
@@ -162,6 +162,7 @@ model BookingSeries {
   service  Service   @relation(fields: [serviceId], references: [id])
   client   Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
   bookings Booking[]
+  notifications NotificationDelivery[]
 
   @@index([barberId, startsOn, endsOn])
   @@index([clientId])
@@ -180,16 +181,64 @@ model NotificationDelivery {
   status          NotificationStatus @default(PENDING)
   attempts        Int                @default(0)
   lastError       String?
+  eligibleAt      DateTime?
   nextRetryAt     DateTime?
   sentAt          DateTime?
   bookingId       String?
+  seriesId        String?
+  lockedAt        DateTime?
+  lockedBy        String?
+  processedAt     DateTime?
+  providerMessageId String?
+  errorCategory   String?
+  requestId       String?
+  replayCount     Int                @default(0)
+  lastReplayedAt  DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  series  BookingSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
-  @@index([status, nextRetryAt])
+  @@index([status, eligibleAt, nextRetryAt, createdAt])
+  @@index([lockedAt])
   @@index([bookingId, event])
+  @@index([seriesId, event])
+  @@index([requestId])
+}
+
+model OperationalHeartbeat {
+  worker         String   @id
+  status         String
+  lastRunAt      DateTime
+  lastSuccessAt  DateTime?
+  lastFailureAt  DateTime?
+  durationMs     Int?
+  processedCount Int      @default(0)
+  lastErrorCode  String?
+  metadata       Json?
+  updatedAt      DateTime @updatedAt
+
+  @@index([lastSuccessAt])
+  @@index([status, lastRunAt])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorType    String
+  actorId      String?
+  action       String
+  resourceType String
+  resourceId   String?
+  metadata     Json?
+  requestId    String
+  createdAt    DateTime @default(now())
+
+  @@index([resourceType, resourceId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([requestId])
+  @@index([createdAt])
 }
 
 model BlockedSlot {

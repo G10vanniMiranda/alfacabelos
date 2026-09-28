@@ -1,12 +1,15 @@
 import { AuthShell } from "@/components/auth/auth-shell";
 import { InvalidPasswordResetToken, PasswordResetForm } from "@/components/client/password-reset-form";
 import { validatePasswordResetToken } from "@/lib/auth/client-password-reset-store";
+import { headers } from "next/headers";
+import { requestIdFromHeaders } from "@/lib/observability/context";
 
 export const metadata = { title: "Redefinir senha" };
 
 export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
   const { token = "" } = await searchParams;
-  const validation = await validatePasswordResetToken(token);
+  const requestId = requestIdFromHeaders(await headers());
+  const validation = await validatePasswordResetToken(token, requestId);
   const valid = validation.valid;
 
   return (

@@ -21,4 +21,6 @@ export type ActionState = {
   message: string;
   bookingId?: string;
   code?: "PASSWORD_SETUP_REQUIRED";
+  retryAfterSeconds?: number;
+  cooldownStartedAt?: number;
 };

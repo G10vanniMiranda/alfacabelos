@@ -18,25 +18,21 @@ import {
   revokeClientSession,
 } from "@/lib/auth/client-store";
 import {
-  buildPasswordResetWhatsAppMessage,
   createPasswordResetForIdentifier,
   PASSWORD_RESET_GENERIC_MESSAGE,
+  PASSWORD_RESET_RESEND_COOLDOWN_SECONDS,
   registerPasswordResetAttempt,
   resetClientPasswordWithToken,
 } from "@/lib/auth/client-password-reset-store";
-import { confirmClientBooking, getBookingById } from "@/lib/booking-service";
-import { notifyOwnerAboutBookingEvent } from "@/lib/whatsapp";
+import { confirmClientBooking } from "@/lib/booking-service";
 import { cancelBookingSeries } from "@/lib/booking-series-service";
-import { sendWhatsAppMessage } from "@/lib/whatsapp";
-import { clearRateLimitEvents, registerRateLimitEvent } from "@/lib/security";
+import { clearRateLimitEvents, getClientIpFromHeaders, registerRateLimitEvent } from "@/lib/security";
 import { ActionState } from "@/types/scheduler";
 import { prisma } from "@/lib/prisma";
+import { requestIdFromHeaders } from "@/lib/observability/context";
+import { logger } from "@/lib/observability/logger";
 
 const CLIENT_COOKIE = "barber_client";
-
-function logPasswordResetAction(event: string, details: Record<string, string | number | boolean | null | undefined> = {}) {
-  console.info("[password-reset]", JSON.stringify({ event, ...details }));
-}
 
 async function setClientCookie(clientId: string) {
   const session = await createClientSession(clientId);
@@ -171,34 +167,41 @@ export async function requestClientPasswordResetAction(
   }
 
   try {
-    const rateLimit = await registerPasswordResetAttempt(parsed.data.identifier);
+    const requestHeaders = await headers();
+    const requestId = requestIdFromHeaders(requestHeaders);
+    const clientIp = getClientIpFromHeaders(requestHeaders);
+    const rateLimit = await registerPasswordResetAttempt(parsed.data.identifier, clientIp, requestId);
     if (rateLimit.blocked) {
       return {
         success: true,
         message: PASSWORD_RESET_GENERIC_MESSAGE,
+        retryAfterSeconds: Math.max(PASSWORD_RESET_RESEND_COOLDOWN_SECONDS, rateLimit.retryAfterSeconds),
+        cooldownStartedAt: Date.now(),
       };
     }
 
-    const reset = await createPasswordResetForIdentifier(parsed.data.identifier);
-    if (reset) {
-      logPasswordResetAction("notification_attempt");
-      const sent = await sendWhatsAppMessage({
-        to: reset.clientPhone,
-        message: buildPasswordResetWhatsAppMessage(reset.clientName, reset.resetLink),
-        context: "recuperacao-senha-cliente",
-      });
-      logPasswordResetAction(sent ? "notification_sent" : "notification_skipped");
-    }
+    await createPasswordResetForIdentifier(parsed.data.identifier, requestId);
+    return {
+      success: true,
+      message: PASSWORD_RESET_GENERIC_MESSAGE,
+      retryAfterSeconds: PASSWORD_RESET_RESEND_COOLDOWN_SECONDS,
+      cooldownStartedAt: Date.now(),
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("Can't reach database server")) {
       return { success: false, message: "Não foi possível acessar sua conta agora. Tente novamente em alguns instantes." };
     }
 
-    console.error("[password-reset] falha ao processar solicitacao");
+    logger.error("password_reset.request_failed", { error });
   }
 
-  return { success: true, message: PASSWORD_RESET_GENERIC_MESSAGE };
+  return {
+    success: true,
+    message: PASSWORD_RESET_GENERIC_MESSAGE,
+    retryAfterSeconds: PASSWORD_RESET_RESEND_COOLDOWN_SECONDS,
+    cooldownStartedAt: Date.now(),
+  };
 }
 
 export async function resetClientPasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -213,7 +216,8 @@ export async function resetClientPasswordAction(_prev: ActionState, formData: Fo
   }
 
   try {
-    const updated = await resetClientPasswordWithToken(parsed.data.token, parsed.data.password);
+    const requestId = requestIdFromHeaders(await headers());
+    const updated = await resetClientPasswordWithToken(parsed.data.token, parsed.data.password, requestId);
     if (!updated) {
       return { success: false, message: "Este link de recuperação é inválido, expirou ou já foi utilizado." };
     }
@@ -250,6 +254,7 @@ export async function updateMyProfileAction(formData: FormData) {
 }
 
 export async function cancelMyBookingAction(formData: FormData) {
+  const requestId = requestIdFromHeaders(await headers());
   const bookingId = String(formData.get("bookingId") ?? "");
   const requestedScope = String(formData.get("scope") ?? "SINGLE");
   const scope = requestedScope === "FUTURE" || requestedScope === "ALL" ? requestedScope : "SINGLE";
@@ -262,11 +267,7 @@ export async function cancelMyBookingAction(formData: FormData) {
     return;
   }
 
-  const result = await cancelBookingSeries({ bookingId, clientId: client.id, scope });
-  await Promise.all(result.bookingIds.map(async (id) => {
-    const cancelled = await getBookingById(id);
-    if (cancelled) await notifyOwnerAboutBookingEvent(cancelled, "BOOKING_CANCELLED").catch(() => undefined);
-  }));
+  await cancelBookingSeries({ bookingId, clientId: client.id, scope, notificationAudience: "OWNER", requestId });
   revalidatePath("/cliente");
   revalidatePath("/admin/agenda");
 }

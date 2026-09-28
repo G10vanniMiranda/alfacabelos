@@ -178,7 +178,10 @@ test("sessao expirada e recuperacao de senha preservam privacidade", async ({ pa
   await page.goto("/esqueci-minha-senha");
   await page.getByLabel("Telefone cadastrado").fill(recoveryPhone);
   await page.getByRole("button", { name: "Enviar instruções" }).click();
-  await expect(page.getByRole("status")).toContainText(/se existir uma conta vinculada/i);
+  const status = page.getByRole("status");
+  await expect(status).toContainText(/se existir uma conta vinculada/i);
+  await expect(status).toBeFocused();
+  await expect(page.getByRole("button", { name: /solicitar novamente em \d+s/i })).toBeDisabled();
 });
 
 test("cliente autenticado nao retorna ao login e open redirect e bloqueado", async ({ page }) => {

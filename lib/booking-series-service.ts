@@ -8,6 +8,8 @@ import { getBookingOccupiedMinutes, mergeOperatingWindows } from "@/lib/scheduli
 import { getLocalDateInput, getTimeLabelInTimeZone, overlaps, zonedDateTimeToUtcIso } from "@/lib/utils";
 import type { BookingCreatedBy, RecurrenceFrequency, SeriesMutationScope } from "@/types/domain";
 import { sha256 } from "@/lib/security";
+import { buildBookingNotificationIntent, enqueueBookingNotification } from "@/lib/notifications/booking-intents";
+import { enqueueWhatsAppNotifications, type NotificationIntentInput } from "@/lib/notifications/service";
 
 export type CreateBookingSeriesInput = {
   serviceId: string;
@@ -24,6 +26,7 @@ export type CreateBookingSeriesInput = {
   idempotencyKey?: string;
   createdBy: BookingCreatedBy;
   requireConfirmation?: boolean;
+  requestId?: string;
 };
 
 export type BookingSeriesCreationResult = {
@@ -68,7 +71,11 @@ function makeOccurrences(
   });
 }
 
-async function existingResult(idempotencyKey: string, requestHash: string, requireConfirmation = false): Promise<BookingSeriesCreationResult | null> {
+async function existingResult(
+  idempotencyKey: string,
+  requestHash: string,
+  input: Pick<CreateBookingSeriesInput, "requireConfirmation" | "createdBy" | "requestId">,
+): Promise<BookingSeriesCreationResult | null> {
   const existing = await prisma.bookingSeries.findUnique({
     where: { idempotencyKey },
     include: { bookings: { orderBy: { occurrenceIndex: "asc" }, select: { id: true, status: true } } },
@@ -76,18 +83,32 @@ async function existingResult(idempotencyKey: string, requestHash: string, requi
   if (!existing) return null;
   if (existing.requestHash !== requestHash) throw new Error("Chave de idempotência reutilizada com dados diferentes");
   const rawConfirmationTokens = new Map<string, string>();
-  if (requireConfirmation) {
+  await prisma.$transaction(async (tx) => {
     for (const booking of existing.bookings) {
-      if (booking.status !== "PENDENTE") continue;
-      const delivery = await prisma.notificationDelivery.findUnique({ where: { idempotencyKey: `booking:${booking.id}:client-created` }, select: { id: true } });
-      if (delivery) continue;
-      const rawToken = randomBytes(32).toString("base64url");
-      await prisma.booking.update({ where: { id: booking.id }, data: {
-        confirmationTokenHash: sha256(rawToken), confirmationTokenExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
-      } });
-      rawConfirmationTokens.set(booking.id, rawToken);
+      let rawToken: string | undefined;
+      if (input.requireConfirmation && booking.status === "PENDENTE") {
+        const delivery = await tx.notificationDelivery.findUnique({
+          where: { idempotencyKey: `booking:${booking.id}:client:booking_created_by_staff` },
+          select: { id: true },
+        });
+        if (!delivery) {
+          rawToken = randomBytes(32).toString("base64url");
+          await tx.booking.update({ where: { id: booking.id }, data: {
+            confirmationTokenHash: sha256(rawToken),
+            confirmationTokenExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          } });
+          rawConfirmationTokens.set(booking.id, rawToken);
+        }
+      }
+      await enqueueBookingNotification(tx, {
+        bookingId: booking.id,
+        event: input.createdBy === "CLIENT" ? "BOOKING_CREATED_BY_CLIENT" : "BOOKING_CREATED_BY_STAFF",
+        audience: input.createdBy === "CLIENT" ? "OWNER" : "CLIENT",
+        confirmationToken: rawToken,
+        requestId: input.requestId,
+      });
     }
-  }
+  });
   return { seriesId: existing.id, bookingIds: existing.bookings.map((item) => item.id), rawConfirmationTokens, duplicate: true };
 }
 
@@ -126,7 +147,7 @@ export async function createBookingSeriesAtomic(input: CreateBookingSeriesInput)
     recurrence: input.recurrence, repeatUntil: input.repeatUntil ?? null, interval: input.interval ?? 1,
     weekdays: [...(input.weekdays ?? [])].sort((a, b) => a - b), createdBy: input.createdBy,
   }));
-  const duplicate = await existingResult(idempotencyKey, requestHash, input.requireConfirmation);
+  const duplicate = await existingResult(idempotencyKey, requestHash, input);
   if (duplicate) return duplicate;
 
   try {
@@ -200,32 +221,43 @@ export async function createBookingSeriesAtomic(input: CreateBookingSeriesInput)
 
       const rawConfirmationTokens = new Map<string, string>();
       const bookingIds: string[] = [];
-      for (const occurrence of occurrences) {
+      const tokenExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      const rows = occurrences.map((occurrence) => {
         const id = randomUUID();
         bookingIds.push(id);
         const rawToken = input.requireConfirmation ? randomBytes(32).toString("base64url") : undefined;
         if (rawToken) rawConfirmationTokens.set(id, rawToken);
-        await tx.booking.create({
+        return {
+          id, rawToken, occurrence,
           data: {
-            id,
-            barberId: input.barberId,
-            serviceId: input.serviceId,
-            clientId: input.clientId,
-            customerName: input.customerName,
-            customerPhone: input.customerPhone,
+            id, barberId: input.barberId, serviceId: input.serviceId, clientId: input.clientId,
+            customerName: input.customerName, customerPhone: input.customerPhone,
             observations: input.observations?.trim() || null,
-            dateTimeStart: occurrence.start,
-            dateTimeEnd: occurrence.end,
-            status: "PENDENTE",
-            createdBy: input.createdBy,
+            dateTimeStart: occurrence.start, dateTimeEnd: occurrence.end,
+            status: "PENDENTE" as const, createdBy: input.createdBy,
             confirmationTokenHash: rawToken ? sha256(rawToken) : null,
-            confirmationTokenExpiresAt: rawToken ? new Date(Date.now() + 48 * 60 * 60 * 1000) : null,
-            seriesId: series?.id,
-            occurrenceIndex: series ? occurrence.index : null,
+            confirmationTokenExpiresAt: rawToken ? tokenExpiresAt : null,
+            seriesId: series?.id, occurrenceIndex: series ? occurrence.index : null,
             occurrenceLocalDate: series ? toDateOnly(occurrence.localDate) : null,
           },
-        });
-      }
+        };
+      });
+      await tx.booking.createMany({ data: rows.map((row) => row.data) });
+      const intents = rows.map((row) => buildBookingNotificationIntent({
+        snapshot: {
+          id: row.id, customerName: input.customerName, customerPhone: input.customerPhone,
+          observations: input.observations?.trim() || null,
+          dateTimeStart: row.occurrence.start.toISOString(), status: "PENDENTE",
+          confirmationToken: row.rawToken,
+          service: { name: service.name, priceCents: service.priceCents },
+          barber: { name: barber.name },
+        },
+        event: input.createdBy === "CLIENT" ? "BOOKING_CREATED_BY_CLIENT" : "BOOKING_CREATED_BY_STAFF",
+        audience: input.createdBy === "CLIENT" ? "OWNER" : "CLIENT",
+        seriesId: series?.id,
+        requestId: input.requestId,
+      })).filter((intent): intent is NotificationIntentInput => intent !== null);
+      await enqueueWhatsAppNotifications(tx, intents);
       return { seriesId: series?.id, bookingIds, rawConfirmationTokens, duplicate: false };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
@@ -233,7 +265,7 @@ export async function createBookingSeriesAtomic(input: CreateBookingSeriesInput)
       (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === "P2002" || error.code === "P2034")) ||
       (error instanceof Error && error.message === "SERIES_IDEMPOTENCY_RACE")
     ) {
-      const found = await existingResult(idempotencyKey, requestHash, input.requireConfirmation);
+      const found = await existingResult(idempotencyKey, requestHash, input);
       if (found) return found;
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
         throw new Error("A agenda mudou durante a reserva. Tente novamente.");
@@ -282,7 +314,13 @@ export async function previewBookingSeries(input: CreateBookingSeriesInput) {
   });
 }
 
-export async function cancelBookingSeries(input: { bookingId: string; scope: SeriesMutationScope; clientId?: string }) {
+export async function cancelBookingSeries(input: {
+  bookingId: string;
+  scope: SeriesMutationScope;
+  clientId?: string;
+  notificationAudience?: "OWNER" | "CLIENT";
+  requestId?: string;
+}) {
   const booking = await prisma.booking.findUnique({ where: { id: input.bookingId }, select: { id: true, clientId: true, seriesId: true, dateTimeStart: true, occurrenceIndex: true } });
   if (!booking || (input.clientId && booking.clientId !== input.clientId)) throw new Error("Agendamento não encontrado");
   if (input.scope !== "SINGLE" && !booking.seriesId) throw new Error("Este agendamento não pertence a uma série");
@@ -306,6 +344,16 @@ export async function cancelBookingSeries(input: { bookingId: string; scope: Ser
         await tx.bookingSeries.update({ where: { id: booking.seriesId }, data: { endsOn: toDateOnly(getLocalDateInput(previous.toISOString(), BUSINESS_CONFIG.timezone)) } });
       }
     }
+    if (input.notificationAudience) {
+      for (const item of affected) {
+        await enqueueBookingNotification(tx, {
+          bookingId: item.id,
+          event: "BOOKING_CANCELLED",
+          audience: input.notificationAudience,
+          requestId: input.requestId,
+        });
+      }
+    }
     return { count: result.count, bookingIds: affected.map((item) => item.id), seriesId: booking.seriesId ?? undefined };
   });
 }
@@ -319,6 +367,7 @@ export async function updateBookingSeriesOccurrences(input: {
   customerPhone: string;
   observations?: string;
   start: string;
+  requestId?: string;
 }) {
   return prisma.$transaction(async (tx) => {
     const target = await tx.booking.findUnique({ where: { id: input.bookingId } });
@@ -431,6 +480,14 @@ export async function updateBookingSeriesOccurrences(input: {
           startsOn: toDateOnly(occurrences[0]!.localDate), endsOn: toDateOnly(occurrences[occurrences.length - 1]!.localDate),
           weekdays: [...new Set(occurrences.map((item) => weekdayForDate(item.localDate)))],
         },
+      });
+    }
+    for (const bookingId of selectedIds) {
+      await enqueueBookingNotification(tx, {
+        bookingId,
+        event: "BOOKING_RESCHEDULED",
+        audience: "CLIENT",
+        requestId: input.requestId,
       });
     }
     return { bookingIds: selectedIds, seriesId: destinationSeriesId ?? undefined };

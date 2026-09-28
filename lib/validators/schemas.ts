@@ -1,17 +1,12 @@
 import { z } from "zod";
 import { STANDARD_SERVICE_MAX_MINUTES } from "@/lib/scheduling-rules";
+import { normalizeBrazilPhone } from "@/lib/phone";
 
 export const phoneSchema = z
   .string()
   .trim()
   .min(1, "Telefone é obrigatório")
-  .refine((value) => {
-    const digits = value.replace(/\D/g, "");
-    const localDigits = digits.startsWith("55") && (digits.length === 12 || digits.length === 13)
-      ? digits.slice(2)
-      : digits;
-    return localDigits.length === 10 || localDigits.length === 11;
-  }, {
+  .refine((value) => Boolean(normalizeBrazilPhone(value)), {
     message: "Telefone inválido. Informe DDD e número",
   });
 
@@ -27,13 +22,7 @@ const passwordResetIdentifierSchema = z
   .trim()
   .min(1, "Informe o telefone cadastrado")
   .max(32, "Telefone inválido")
-  .refine((value) => {
-    const digits = value.replace(/\D/g, "");
-    const localDigits = digits.startsWith("55") && (digits.length === 12 || digits.length === 13)
-      ? digits.slice(2)
-      : digits;
-    return localDigits.length >= 10 && localDigits.length <= 11;
-  }, {
+  .refine((value) => Boolean(normalizeBrazilPhone(value)), {
     message: "Telefone inválido. Use DDD + número",
   });
 

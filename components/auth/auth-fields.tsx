@@ -94,9 +94,9 @@ export function PhoneField({ id, name = "phone", label = "Telefone", error = fal
   );
 }
 
-export function AuthSubmitButton({ pending, idleLabel = "Entrar", pendingLabel = "Entrando..." }: { pending: boolean; idleLabel?: string; pendingLabel?: string }) {
+export function AuthSubmitButton({ pending, disabled = false, idleLabel = "Entrar", pendingLabel = "Entrando..." }: { pending: boolean; disabled?: boolean; idleLabel?: string; pendingLabel?: string }) {
   return (
-    <button type="submit" disabled={pending} className="button-primary auth-submit" aria-disabled={pending}>
+    <button type="submit" disabled={pending || disabled} className="button-primary auth-submit" aria-disabled={pending || disabled}>
       {pending ? <span className="auth-spinner" aria-hidden="true" /> : null}
       {pending ? pendingLabel : idleLabel}
     </button>

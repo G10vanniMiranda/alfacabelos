@@ -8,6 +8,8 @@ import { decideConfirmationTransition } from "@/lib/confirmation-security";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import { Barber, BarberAvailability, Booking, BookingWithRelations, BlockedSlot, GalleryImage } from "@/types/domain";
 import { BookingRepository, CreateBlockedSlotInput, CreateBookingInput, CreateGalleryImageInput, UpdateBookingInput } from "./types";
+import { enqueueBookingNotification } from "@/lib/notifications/booking-intents";
+import { getBrazilPhoneLookupCandidates, normalizeBrazilPhoneNational } from "@/lib/phone";
 
 type BookingRow = {
   id: string;
@@ -172,7 +174,7 @@ function defaultAvailabilitiesForMissingDays(barberId: string, savedDays: Set<nu
 }
 
 function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, "");
+  return normalizeBrazilPhoneNational(phone) ?? phone.replace(/\D/g, "");
 }
 
 function toClientUser(row: {
@@ -816,7 +818,7 @@ export const prismaRepository: BookingRepository = {
           throw new Error("Este horário acabou de ser reservado. Escolha outro horário.");
         }
 
-        return tx.booking.update({
+        const booking = await tx.booking.update({
           where: { id: input.bookingId },
           data: {
             barberId: input.barberId,
@@ -828,6 +830,15 @@ export const prismaRepository: BookingRepository = {
             dateTimeEnd: new Date(input.dateTimeEnd),
           },
         });
+        if (input.notification) {
+          await enqueueBookingNotification(tx, {
+            bookingId: booking.id,
+            event: input.notification.event,
+            audience: input.notification.audience,
+            requestId: input.notification.requestId,
+          });
+        }
+        return booking;
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
@@ -923,10 +934,7 @@ export const prismaRepository: BookingRepository = {
   },
 
   async findClientByPhone(phone) {
-    const normalized = normalizePhone(phone);
-    const client = await prisma.client.findUnique({
-      where: { phoneNormalized: normalized },
-      select: {
+    const select = {
         id: true,
         name: true,
         phone: true,
@@ -934,8 +942,12 @@ export const prismaRepository: BookingRepository = {
         status: true,
         createdBy: true,
         createdAt: true,
-      },
-    });
+      } as const;
+    let client = null;
+    for (const candidate of getBrazilPhoneLookupCandidates(phone)) {
+      client = await prisma.client.findUnique({ where: { phoneNormalized: candidate }, select });
+      if (client) break;
+    }
 
     return client ? toClientUser(client) : undefined;
   },
@@ -946,7 +958,11 @@ export const prismaRepository: BookingRepository = {
       id: true, name: true, phone: true, hasPassword: true, status: true,
       createdBy: true, createdAt: true,
     } as const;
-    const existing = await prisma.client.findUnique({ where: { phoneNormalized: normalized }, select });
+    let existing = null;
+    for (const candidate of getBrazilPhoneLookupCandidates(input.phone)) {
+      existing = await prisma.client.findUnique({ where: { phoneNormalized: candidate }, select });
+      if (existing) break;
+    }
     if (existing) {
       return toClientUser(existing);
     }
@@ -967,7 +983,11 @@ export const prismaRepository: BookingRepository = {
       return toClientUser(client);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        const raced = await prisma.client.findUnique({ where: { phoneNormalized: normalized }, select });
+        let raced = null;
+        for (const candidate of getBrazilPhoneLookupCandidates(input.phone)) {
+          raced = await prisma.client.findUnique({ where: { phoneNormalized: candidate }, select });
+          if (raced) break;
+        }
         if (raced) return toClientUser(raced);
       }
       throw error;

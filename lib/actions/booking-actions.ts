@@ -17,7 +17,6 @@ import {
   deleteBlockedSlot,
   replaceBarberDayAvailability,
   rescheduleClientBooking,
-  getBookingById,
   getGalleryImageById,
   confirmBookingByToken,
   updateBookingPaymentStatus,
@@ -29,7 +28,6 @@ import { ActionState } from "@/types/scheduler";
 import { authenticateAdminAccess, registerAdminLogin } from "@/lib/auth/admin-access-store";
 import { createAdminSession, revokeAdminSession } from "@/lib/auth/admin-session-store";
 import { assertBlockedSlotScope, assertBookingScope, getCurrentStaff, requireStaff, scopeBarber } from "@/lib/auth/staff-auth";
-import { notifyClientAboutAdminBooking, notifyClientAboutBookingCancellation, notifyClientAboutBookingRescheduled, notifyOwnerAboutBookingEvent, notifyOwnerAboutClientBooking } from "@/lib/whatsapp";
 import { findClientBySessionToken } from "@/lib/auth/client-store";
 import { prisma } from "@/lib/prisma";
 import { cancelBookingSeries, createBookingSeriesAtomic, updateBookingSeriesOccurrences } from "@/lib/booking-series-service";
@@ -40,6 +38,10 @@ import {
   extractSafeSupabaseObjectPath,
   validateGalleryUpload,
 } from "@/lib/media-security";
+import { requestIdFromHeaders } from "@/lib/observability/context";
+import { logger } from "@/lib/observability/logger";
+import { recordAuditEvent } from "@/lib/observability/audit";
+import type { StaffPrincipal } from "@/lib/auth/admin-session-store";
 
 const ADMIN_COOKIE = "barber_admin";
 const CLIENT_COOKIE = "barber_client";
@@ -53,9 +55,20 @@ function logBookingDiagnostic(event: string, details: Record<string, string | nu
     return;
   }
 
-  console.info("[booking-flow]", {
-    event,
-    ...details,
+  logger.info(`booking.${event}`, details);
+}
+
+async function auditStaffAction(
+  principal: StaffPrincipal,
+  requestId: string,
+  action: string,
+  resourceType: string,
+  resourceId?: string,
+  metadata?: Record<string, unknown>,
+) {
+  await recordAuditEvent(prisma, {
+    actorType: principal.role, actorId: principal.accessId,
+    action, resourceType, resourceId, requestId, metadata,
   });
 }
 
@@ -71,37 +84,6 @@ async function getAuthenticatedClient() {
   }
 
   return findClientBySessionToken(token);
-}
-
-async function notifyOwnerSafely(bookingId: string) {
-  try {
-    const booking = await getBookingById(bookingId);
-    if (!booking) {
-      console.warn(`[whatsapp] agendamento ${bookingId} não encontrado para notificar dono`);
-      return;
-    }
-
-    await notifyOwnerAboutClientBooking(booking);
-  } catch (error) {
-    console.error(`[whatsapp] falha ao notificar dono sobre agendamento ${bookingId}`, error);
-  }
-}
-
-async function notifyClientSafely(bookingId: string, rawConfirmationToken?: string) {
-  try {
-    const booking = await getBookingById(bookingId);
-    if (!booking) {
-      console.warn(`[whatsapp] agendamento ${bookingId} não encontrado para notificar cliente`);
-      return;
-    }
-
-    await notifyClientAboutAdminBooking({
-      ...booking,
-      confirmationToken: rawConfirmationToken ?? booking.confirmationToken,
-    });
-  } catch (error) {
-    console.error(`[whatsapp] falha ao notificar cliente sobre agendamento ${bookingId}`, error);
-  }
 }
 
 function canUseSupabaseStorage() {
@@ -217,6 +199,7 @@ export async function createClientBookingsAction(payload: {
   idempotencyKey?: string;
   rescheduleBookingId?: string;
 }): Promise<ActionState> {
+  const requestId = requestIdFromHeaders(await headers());
   const client = await getAuthenticatedClient();
   if (!client) {
     logBookingDiagnostic("client_session_missing", {
@@ -272,9 +255,8 @@ export async function createClientBookingsAction(payload: {
         serviceId: parsed.data.serviceId,
         barberId: parsed.data.barberId,
         start: starts[0],
+        requestId,
       });
-      const updatedWithRelations = await getBookingById(updated.id);
-      if (updatedWithRelations) await notifyOwnerAboutBookingEvent(updatedWithRelations, "BOOKING_RESCHEDULED").catch(() => undefined);
       revalidatePath("/cliente");
       revalidatePath("/agendar");
       revalidatePath("/admin/agenda");
@@ -296,11 +278,10 @@ export async function createClientBookingsAction(payload: {
       weekdays: parsed.data.weekdays,
       idempotencyKey: parsed.data.idempotencyKey,
       createdBy: "CLIENT",
+      requestId,
     });
     const createdBookingIds = creation.bookingIds;
     const firstBookingId = createdBookingIds[0];
-
-    await Promise.all(createdBookingIds.map((bookingId) => notifyOwnerSafely(bookingId)));
 
     revalidatePath("/cliente");
     revalidatePath("/agendar");
@@ -342,6 +323,7 @@ export async function createAdminBookingsAction(payload: {
   weekdays?: number[];
   idempotencyKey?: string;
 }): Promise<ActionState> {
+  const requestId = requestIdFromHeaders(await headers());
   const principal = await requireStaff(["ADMIN", "BARBER"]);
 
   const parsed = createAdminBookingSchema.safeParse(payload);
@@ -381,13 +363,11 @@ export async function createAdminBookingsAction(payload: {
       idempotencyKey: parsed.data.idempotencyKey,
       createdBy: "BARBER",
       requireConfirmation: true,
+      requestId,
     });
     const createdBookingIds = creation.bookingIds;
     const firstBookingId = createdBookingIds[0];
-
-    await Promise.all(createdBookingIds.map((bookingId) =>
-      notifyClientSafely(bookingId, creation.rawConfirmationTokens.get(bookingId)),
-    ));
+    await auditStaffAction(principal, requestId, "booking.created", creation.seriesId ? "BookingSeries" : "Booking", creation.seriesId ?? firstBookingId, { occurrenceCount: createdBookingIds.length });
 
     revalidatePath("/admin/agenda");
     revalidatePath("/admin/dashboard");
@@ -467,21 +447,20 @@ export async function adminLogoutAction() {
 }
 
 export async function updateBookingStatusAction(payload: { bookingId: string; status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "CONCLUIDO" | "AUSENTE"; scope?: "SINGLE" | "FUTURE" | "ALL" }) {
+  const requestId = requestIdFromHeaders(await headers());
   const principal = await requireStaff(["ADMIN", "BARBER"]);
   await assertBookingScope(principal, payload.bookingId);
-  let affectedIds = [payload.bookingId];
-  if (payload.status === "CANCELADO" && payload.scope && payload.scope !== "SINGLE") {
-    const result = await cancelBookingSeries({ bookingId: payload.bookingId, scope: payload.scope });
-    affectedIds = result.bookingIds;
+  if (payload.status === "CANCELADO") {
+    await cancelBookingSeries({
+      bookingId: payload.bookingId,
+      scope: payload.scope ?? "SINGLE",
+      notificationAudience: "CLIENT",
+      requestId,
+    });
   } else {
     await updateBookingStatus({ bookingId: payload.bookingId, status: payload.status });
   }
-  if (payload.status === "CANCELADO") {
-    await Promise.all(affectedIds.map(async (bookingId) => {
-      const booking = await getBookingById(bookingId);
-      if (booking) await notifyClientAboutBookingCancellation(booking).catch(() => undefined);
-    }));
-  }
+  await auditStaffAction(principal, requestId, payload.status === "CANCELADO" ? "booking.cancelled" : "booking.status_changed", "Booking", payload.bookingId, { status: payload.status, scope: payload.scope ?? "SINGLE" });
   revalidatePath("/admin/agenda");
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/ganhos");
@@ -508,19 +487,18 @@ export async function updateAdminBookingAction(payload: {
   start: string;
   scope?: "SINGLE" | "FUTURE" | "ALL";
 }): Promise<ActionState> {
+  const requestId = requestIdFromHeaders(await headers());
   const principal = await requireStaff(["ADMIN", "BARBER"]);
   await assertBookingScope(principal, payload.bookingId);
 
   try {
-    const result = await updateBookingSeriesOccurrences({
+    await updateBookingSeriesOccurrences({
       ...payload,
       scope: payload.scope ?? "SINGLE",
       barberId: scopeBarber(principal, payload.barberId)!,
+      requestId,
     });
-    await Promise.all(result.bookingIds.map(async (bookingId) => {
-      const booking = await getBookingById(bookingId);
-      if (booking) await notifyClientAboutBookingRescheduled(booking).catch(() => undefined);
-    }));
+    await auditStaffAction(principal, requestId, "booking.rescheduled", "Booking", payload.bookingId, { scope: payload.scope ?? "SINGLE", serviceId: payload.serviceId, barberId: scopeBarber(principal, payload.barberId) });
     revalidatePath("/admin/agenda");
     revalidatePath("/admin/dashboard");
     revalidatePath("/cliente");

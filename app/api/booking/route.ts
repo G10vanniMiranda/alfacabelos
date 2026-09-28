@@ -2,29 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBookingById, isBookingConflictError } from "@/lib/booking-service";
 import { createBookingSeriesAtomic } from "@/lib/booking-series-service";
 import { createAdminBookingSchema } from "@/lib/validators/schemas";
-import { notifyClientAboutAdminBooking, notifyOwnerAboutClientBooking } from "@/lib/whatsapp";
 import { getClientIp, isSameOriginRequest, registerRateLimitEvent } from "@/lib/security";
 import { isDatabaseUnavailableError } from "@/lib/errors";
 import { findClientBySessionToken } from "@/lib/auth/client-store";
 import { getAdminSessionPrincipal } from "@/lib/auth/admin-session-store";
 import { scopeBarber } from "@/lib/auth/staff-auth";
 import { repository } from "@/lib/repositories";
-
-async function notifyOwnerSafely(bookingId: string) {
-  try {
-    const bookingWithRelations = await getBookingById(bookingId);
-    if (!bookingWithRelations) {
-      console.warn(`[whatsapp] agendamento ${bookingId} não encontrado para notificar dono`);
-      return;
-    }
-
-    await notifyOwnerAboutClientBooking(bookingWithRelations);
-  } catch (error) {
-    console.error(`[whatsapp] falha ao notificar dono sobre agendamento ${bookingId}`, error);
-  }
-}
+import { requestIdFromHeaders } from "@/lib/observability/context";
+import { logger } from "@/lib/observability/logger";
+import { recordAuditEvent } from "@/lib/observability/audit";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
+  const requestId = requestIdFromHeaders(request.headers);
   try {
     if (!isSameOriginRequest(request)) {
       return NextResponse.json({ message: "Origem inválida" }, { status: 403 });
@@ -74,23 +65,28 @@ export async function POST(request: NextRequest) {
       idempotencyKey: parsed.data.idempotencyKey,
       createdBy: client ? "CLIENT" : "BARBER",
       requireConfirmation: Boolean(staff),
+      requestId,
     });
-    if (client) {
-      await Promise.all(creation.bookingIds.map(notifyOwnerSafely));
-    } else {
-      await Promise.all(creation.bookingIds.map(async (bookingId) => {
-        const booking = await getBookingById(bookingId);
-        if (booking) await notifyClientAboutAdminBooking({ ...booking, confirmationToken: creation.rawConfirmationTokens.get(bookingId) });
-      }));
-    }
     const bookings = (await Promise.all(creation.bookingIds.map(getBookingById))).filter(Boolean);
     const booking = bookings[0];
+    if (staff && booking) {
+      await recordAuditEvent(prisma, {
+        actorType: staff.role,
+        actorId: staff.accessId,
+        action: "booking.created",
+        resourceType: creation.seriesId ? "BookingSeries" : "Booking",
+        resourceId: creation.seriesId ?? booking.id,
+        requestId,
+        metadata: { occurrences: creation.bookingIds.length, duplicate: creation.duplicate },
+      });
+    }
+    logger.info("booking.request.completed", { requestId, bookingId: booking?.id, seriesId: creation.seriesId, occurrences: creation.bookingIds.length, durationMs: Date.now() - startedAt });
     return NextResponse.json(
       parsed.data.recurrence === "NONE" ? booking : { seriesId: creation.seriesId, occurrenceCount: bookings.length, bookings },
       { status: creation.duplicate ? 200 : 201 },
     );
   } catch (error) {
-    console.error("POST /api/booking failed", error);
+    logger.error("booking.request.failed", { requestId, route: "/api/booking", durationMs: Date.now() - startedAt, error });
     if (isBookingConflictError(error)) {
       return NextResponse.json({ message: "Este horário não está mais disponível." }, { status: 409 });
     }
