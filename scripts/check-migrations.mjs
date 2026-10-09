@@ -92,6 +92,11 @@ if (notificationService && !claimPredicate) {
 if (claimPredicate && !/\$\{eligibility\}/.test(claimPredicate)) {
   errors.push("worker do outbox: claim deve reutilizar a politica canonica de elegibilidade");
 }
+const validateIndex = notificationService.search(/await\s+validate\(item,/);
+const sendIndex = notificationService.search(/await\s+send\(\{/);
+if (notificationService && (validateIndex < 0 || sendIndex < 0 || validateIndex > sendIndex)) {
+  errors.push("worker do outbox: validade de negocio deve ser verificada antes de chamar o provider");
+}
 
 const claimPolicyPath = path.resolve("lib", "notifications", "claim-policy.ts");
 let claimPolicy = "";

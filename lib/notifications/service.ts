@@ -10,6 +10,12 @@ import {
   notificationStaleBefore,
   type DeliveryClaimState,
 } from "@/lib/notifications/claim-policy";
+import {
+  checkNotificationValidity,
+  LIFECYCLE_ERROR_CATEGORY,
+  notificationValidityUpperBound,
+  type NotificationValidity,
+} from "@/lib/notifications/validity-policy";
 
 export { isDeliveryEligibleForClaim } from "@/lib/notifications/claim-policy";
 
@@ -49,6 +55,8 @@ export type WorkerSummary = {
   sent: number;
   retry: number;
   dead: number;
+  /** Claimed deliveries retired by the lifecycle policy without calling the provider. */
+  expired: number;
   durationMs: number;
   metrics: OutboxMetrics;
 };
@@ -66,7 +74,10 @@ export type WorkerOptions = {
   now?: Date;
   random?: () => number;
   send?: (input: { to: string; message: string; context: string; idempotencyKey: string }) => Promise<WhatsAppSendResult>;
+  validate?: (item: ClaimedDelivery, now: Date) => Promise<NotificationValidity>;
 };
+
+type DeliveryOutcome = "sent" | "retry" | "dead" | "expired";
 
 const DEFAULT_BATCH_SIZE = 25;
 const DEFAULT_CONCURRENCY = 5;
@@ -218,13 +229,80 @@ export async function claimNotificationBatch(input: {
   });
 }
 
+async function retireInvalidDelivery(
+  item: ClaimedDelivery,
+  workerId: string,
+  retirement: { errorCategory: string; reason: string },
+  now: Date,
+): Promise<"expired"> {
+  // Same lease guard as settleDelivery: only the worker holding the lock may
+  // retire the row. DEAD + eligibleAt NULL keeps it out of every claim path;
+  // only an explicit audited replay can revive it, and replay revalidates.
+  await prisma.notificationDelivery.updateMany({
+    where: { id: item.id, status: "PROCESSING", lockedBy: workerId },
+    data: {
+      status: "DEAD",
+      lastError: `Notification no longer valid: ${retirement.reason}`.slice(0, 500),
+      errorCategory: retirement.errorCategory,
+      eligibleAt: null,
+      nextRetryAt: null,
+      processedAt: now,
+      lockedAt: null,
+      lockedBy: null,
+    },
+  });
+  return "expired";
+}
+
+/**
+ * The references could not be read (database hiccup, timeout). Nothing was
+ * sent. The row goes back to RETRY with the regular backoff, consuming the
+ * attempt taken at claim time, so the attempt limit bounds the loop. It is
+ * retired instead when the row's own maximum validity would be exceeded.
+ */
+async function deferUnverifiableDelivery(
+  item: ClaimedDelivery,
+  workerId: string,
+  reason: string,
+  now: Date,
+  random: () => number,
+): Promise<"retry" | "expired"> {
+  const upperBound = notificationValidityUpperBound(item);
+  const nextRetryAt = new Date(now.getTime() + computeRetryDelayMs(item.attempts, random));
+  if (upperBound && nextRetryAt >= upperBound) {
+    return retireInvalidDelivery(item, workerId, {
+      errorCategory: LIFECYCLE_ERROR_CATEGORY.EXPIRED, reason: `unverifiable_until_expiry:${reason}`,
+    }, now);
+  }
+  if (item.attempts >= notificationMaxAttempts()) {
+    return retireInvalidDelivery(item, workerId, {
+      errorCategory: LIFECYCLE_ERROR_CATEGORY.UNVERIFIABLE_EXHAUSTED, reason: `unverifiable_attempts_exhausted:${reason}`,
+    }, now);
+  }
+  await prisma.notificationDelivery.updateMany({
+    where: { id: item.id, status: "PROCESSING", lockedBy: workerId },
+    data: {
+      status: "RETRY",
+      lastError: `Notification validity temporarily unverifiable: ${reason}`.slice(0, 500),
+      errorCategory: LIFECYCLE_ERROR_CATEGORY.TEMPORARILY_UNVERIFIABLE,
+      eligibleAt: item.eligibleAt,
+      nextRetryAt,
+      processedAt: null,
+      lockedAt: null,
+      lockedBy: null,
+    },
+  });
+  return "retry";
+}
+
 async function settleDelivery(
   item: ClaimedDelivery,
   workerId: string,
   result: WhatsAppSendResult,
   now: Date,
   random: () => number,
-): Promise<"sent" | "retry" | "dead"> {
+  validUntil: Date | null = null,
+): Promise<DeliveryOutcome> {
   if (result.ok) {
     await prisma.notificationDelivery.updateMany({
       where: { id: item.id, status: "PROCESSING", lockedBy: workerId },
@@ -237,6 +315,13 @@ async function settleDelivery(
   }
 
   const maxAttempts = notificationMaxAttempts();
+  const nextRetryAt = new Date(now.getTime() + computeRetryDelayMs(item.attempts, random));
+  if (result.retryable && item.attempts < maxAttempts && validUntil && nextRetryAt >= validUntil) {
+    // The backoff would land after the notification stops being valid.
+    return retireInvalidDelivery(item, workerId, {
+      errorCategory: LIFECYCLE_ERROR_CATEGORY.EXPIRED, reason: `retry_after_expiry:${result.category}`.slice(0, 120),
+    }, now);
+  }
   const shouldRetry = result.retryable && item.attempts < maxAttempts;
   await prisma.notificationDelivery.updateMany({
     where: { id: item.id, status: "PROCESSING", lockedBy: workerId },
@@ -245,7 +330,7 @@ async function settleDelivery(
       lastError: result.error.slice(0, 500),
       errorCategory: result.category,
       eligibleAt: shouldRetry ? item.eligibleAt : null,
-      nextRetryAt: shouldRetry ? new Date(now.getTime() + computeRetryDelayMs(item.attempts, random)) : null,
+      nextRetryAt: shouldRetry ? nextRetryAt : null,
       processedAt: shouldRetry ? null : now,
       lockedAt: null,
       lockedBy: null,
@@ -311,13 +396,14 @@ export async function processNotificationBatch(options: WorkerOptions = {}): Pro
   const now = options.now ?? new Date();
   const random = options.random ?? Math.random;
   const send = options.send ?? sendWhatsAppOnce;
+  const validate = options.validate ?? ((item: ClaimedDelivery, at: Date) => checkNotificationValidity(prisma, item, at));
   const heartbeat = async (input: Parameters<typeof recordWorkerHeartbeat>[0]) => {
     await recordWorkerHeartbeat(input).catch((error) => logger.error("notification.worker.heartbeat_failed", { workerId, error }));
   };
   await heartbeat({ worker: "notification-outbox", status: "running", metadata: { workerId, batchSize, concurrency } });
   try {
     if (process.env.WHATSAPP_ENABLED !== "true") {
-      const summary = { workerId, claimed: 0, sent: 0, retry: 0, dead: 0, durationMs: Date.now() - startedAt, metrics: await getOutboxMetrics() };
+      const summary = { workerId, claimed: 0, sent: 0, retry: 0, dead: 0, expired: 0, durationMs: Date.now() - startedAt, metrics: await getOutboxMetrics() };
       await heartbeat({ worker: "notification-outbox", status: "success", durationMs: summary.durationMs, processedCount: 0, metadata: { disabled: true } });
       return summary;
     }
@@ -325,13 +411,36 @@ export async function processNotificationBatch(options: WorkerOptions = {}): Pro
     const claimed = await claimNotificationBatch({ workerId, batchSize, now });
     const outcomes = await mapWithConcurrency(claimed, concurrency, async (item) => {
       const deliveryStartedAt = Date.now();
+      // Revalidate business validity as late as possible: the booking or token may
+      // have changed between enqueue, claim and now. Only VALID reaches the provider.
+      const validity = await validate(item, new Date()).catch((): NotificationValidity => ({
+        outcome: "TEMPORARILY_UNVERIFIABLE", reason: "validity_check_failed",
+      }));
+      if (validity.outcome !== "VALID") {
+        const at = new Date();
+        const outcome = validity.outcome === "TEMPORARILY_UNVERIFIABLE"
+          ? await deferUnverifiableDelivery(item, workerId, validity.reason, at, random)
+          : await retireInvalidDelivery(item, workerId, {
+            errorCategory: validity.outcome === "INVALID"
+              ? LIFECYCLE_ERROR_CATEGORY[validity.classification]
+              : LIFECYCLE_ERROR_CATEGORY.UNSUPPORTED_EVENT,
+            reason: validity.reason,
+          }, at);
+        logger.warn(validity.outcome === "TEMPORARILY_UNVERIFIABLE" ? "notification.unverifiable" : "notification.expired", {
+          requestId: item.requestId, workerId, notificationId: item.id, eventType: item.event,
+          bookingId: item.bookingId, attempt: item.attempts, status: outcome,
+          validity: validity.outcome, classification: validity.outcome === "INVALID" ? validity.classification : undefined,
+          reason: validity.reason, durationMs: Date.now() - deliveryStartedAt,
+        });
+        return outcome;
+      }
       const result = await send({
         to: item.recipient, message: item.message, context: item.context, idempotencyKey: item.idempotencyKey,
       }).catch((error): WhatsAppSendResult => ({
         ok: false, retryable: true, category: "unexpected",
         error: error instanceof Error ? error.message : "Unexpected provider error",
       }));
-      const outcome = await settleDelivery(item, workerId, result, new Date(), random);
+      const outcome = await settleDelivery(item, workerId, result, new Date(), random, validity.validUntil);
       const fields = {
         requestId: item.requestId, workerId, notificationId: item.id, eventType: item.event,
         bookingId: item.bookingId, attempt: item.attempts, status: outcome,
@@ -347,10 +456,11 @@ export async function processNotificationBatch(options: WorkerOptions = {}): Pro
       sent: outcomes.filter((item) => item === "sent").length,
       retry: outcomes.filter((item) => item === "retry").length,
       dead: outcomes.filter((item) => item === "dead").length,
+      expired: outcomes.filter((item) => item === "expired").length,
       durationMs: Date.now() - startedAt,
       metrics: await getOutboxMetrics(),
     };
-    await heartbeat({ worker: "notification-outbox", status: "success", durationMs: summary.durationMs, processedCount: summary.claimed, metadata: { sent: summary.sent, retry: summary.retry, dead: summary.dead } });
+    await heartbeat({ worker: "notification-outbox", status: "success", durationMs: summary.durationMs, processedCount: summary.claimed, metadata: { sent: summary.sent, retry: summary.retry, dead: summary.dead, expired: summary.expired } });
     return summary;
   } catch (error) {
     await heartbeat({ worker: "notification-outbox", status: "failure", durationMs: Date.now() - startedAt, errorCode: "worker_failed" });

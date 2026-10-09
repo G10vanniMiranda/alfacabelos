@@ -8,6 +8,7 @@ import {
   type BookingNotificationSnapshot,
 } from "@/lib/whatsapp";
 import { logger } from "@/lib/observability/logger";
+import { reminderSchedule } from "@/lib/notifications/validity-policy";
 
 type Audience = "OWNER" | "CLIENT";
 
@@ -92,10 +93,11 @@ export function buildBookingNotificationIntent(input: {
 }
 
 export async function enqueueDueBookingReminders(now = new Date(), requestId?: string): Promise<number> {
-  const configuredLead = Number(process.env.NOTIFICATION_REMINDER_LEAD_MINUTES ?? 24 * 60);
-  const configuredWindow = Number(process.env.NOTIFICATION_REMINDER_WINDOW_MINUTES ?? 10);
-  const leadMinutes = Number.isFinite(configuredLead) ? Math.min(7 * 24 * 60, Math.max(15, configuredLead)) : 24 * 60;
-  const windowMinutes = Number.isFinite(configuredWindow) ? Math.min(60, Math.max(5, configuredWindow)) : 10;
+  // Reminders are time-bound by nature. While WhatsApp is disabled nothing can
+  // deliver them, so creating rows would only accumulate intents that expire
+  // before delivery is ever turned on.
+  if (process.env.WHATSAPP_ENABLED !== "true") return 0;
+  const { leadMinutes, windowMinutes } = reminderSchedule();
   const start = new Date(now.getTime() + (leadMinutes - windowMinutes) * 60_000);
   const end = new Date(now.getTime() + (leadMinutes + windowMinutes) * 60_000);
   return prisma.$transaction(async (tx) => {

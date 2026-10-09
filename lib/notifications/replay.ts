@@ -1,10 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/observability/audit";
+import { checkNotificationValidity } from "@/lib/notifications/validity-policy";
 
 export type ReplayResult =
   | { ok: true; notificationId: string; replayCount: number }
-  | { ok: false; reason: "not_found" | "not_dead" | "already_replayed" };
+  | { ok: false; reason: "not_found" | "not_dead" | "already_replayed" | "no_longer_valid" | "temporarily_unverifiable" };
 
 export async function replayDeadNotification(input: {
   notificationId: string;
@@ -17,11 +18,19 @@ export async function replayDeadNotification(input: {
       return await prisma.$transaction(async (tx) => {
         const delivery = await tx.notificationDelivery.findUnique({
           where: { id: input.notificationId },
-          select: { id: true, status: true, attempts: true, replayCount: true, errorCategory: true, bookingId: true },
+          select: {
+            id: true, status: true, attempts: true, replayCount: true, errorCategory: true, bookingId: true,
+            event: true, idempotencyKey: true, createdAt: true,
+          },
         });
         if (!delivery) return { ok: false, reason: "not_found" };
         if (delivery.status !== "DEAD") return { ok: false, reason: delivery.replayCount > 0 ? "already_replayed" : "not_dead" };
         const now = new Date();
+        // A replay must not resurrect an expired reset link, a reminder for a past
+        // booking or any other notification the lifecycle policy rejects.
+        const validity = await checkNotificationValidity(tx, delivery, now);
+        if (validity.outcome === "TEMPORARILY_UNVERIFIABLE") return { ok: false, reason: "temporarily_unverifiable" };
+        if (validity.outcome !== "VALID") return { ok: false, reason: "no_longer_valid" };
         const updated = await tx.notificationDelivery.updateMany({
           where: { id: delivery.id, status: "DEAD", replayCount: delivery.replayCount },
           data: {
