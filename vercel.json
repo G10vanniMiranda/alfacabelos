@@ -7,7 +7,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "hotfix/deps-security-2026-10-16": false
+      "hotfix/deps-security-2026-10-16": false,
+      "integration/alfa-wip-2026-10-16": false
     }
   }
 }
