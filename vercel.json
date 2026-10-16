@@ -4,5 +4,10 @@
       "path": "/api/internal/notifications/process",
       "schedule": "*/5 * * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "recovery/wip-2026-10-16": false
+    }
+  }
 }
