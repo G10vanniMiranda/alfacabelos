@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1200" role="img" aria-labelledby="title desc">
+  <title id="title">Corte com acabamento moderno</title>
+  <desc id="desc">Ilustração abstrata de uma cadeira de barbearia</desc>
+  <rect width="960" height="1200" fill="#18181b"/>
+  <circle cx="480" cy="340" r="210" fill="#27272a" stroke="#d6aa4c" stroke-width="20"/>
+  <path d="M250 650h460v270H250zM420 920h120v150H420zM310 1070h340" fill="#27272a" stroke="#d6aa4c" stroke-width="26" stroke-linecap="round"/>
+  <path d="M375 230c70-80 175-77 226 9-90-26-155 18-226-9z" fill="#d6aa4c"/>
+</svg>

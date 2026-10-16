@@ -33,6 +33,15 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/alfa_cabelos_ci
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/alfa_cabelos_ci
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      APP_URL: http://localhost:3000
+      APP_ENV: test
+      ALLOW_DESTRUCTIVE_TESTS: "true"
+      RUN_DATABASE_TESTS: "true"
+      CRON_SECRET: ci-only-notification-secret
+      WHATSAPP_ENABLED: "false"
+      SUPABASE_URL: https://ci-placeholder.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role
+      SUPABASE_STORAGE_BUCKET: ci-placeholder
 
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +55,9 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run prisma:generate
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
@@ -74,8 +86,23 @@ jobs:
       - name: Apply migrations to ephemeral PostgreSQL
         run: npm run prisma:migrate:deploy
 
+      - name: Confirm disposable test environment
+        run: npm run environment:guard
+
+      - name: Seed disposable database
+        run: npm run prisma:seed
+
       - name: Unit tests
         run: npm test
+
+      - name: Integration and production validation
+        run: npm run test:integration
+
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: End-to-end tests (desktop and mobile)
+        run: npm run test:e2e -- --workers=2
 
       - name: Production build
         run: npm run build
