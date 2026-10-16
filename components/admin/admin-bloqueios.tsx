@@ -9,6 +9,7 @@ import { Barber, BlockedSlot } from "@/types/domain";
 
 type AdminBloqueiosProps = {
   blockedSlots: BlockedSlot[];
+  expiredBlockedSlotsCount?: number;
   barbers: Barber[];
 };
 
@@ -31,7 +32,7 @@ function formatDuration(startIso: string, endIso: string) {
   return `${hours}h ${minutes}min`;
 }
 
-export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
+export function AdminBloqueios({ blockedSlots, expiredBlockedSlotsCount, barbers }: AdminBloqueiosProps) {
   const [isPending, startTransition] = useTransition();
   const { pushToast } = useToast();
 
@@ -51,7 +52,7 @@ export function AdminBloqueios({ blockedSlots, barbers }: AdminBloqueiosProps) {
     },
     [blockedSlots],
   );
-  const expiredBlockedSlots = blockedSlots.length - activeBlockedSlots.length;
+  const expiredBlockedSlots = expiredBlockedSlotsCount ?? (blockedSlots.length - activeBlockedSlots.length);
   const globalBlocks = activeBlockedSlots.filter((slot) => !slot.barberId).length;
   const selectedBarber = barbers.find((barber) => barber.id === blockForm.barberId);
 

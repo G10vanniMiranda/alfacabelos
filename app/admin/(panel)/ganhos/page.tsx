@@ -1,8 +1,9 @@
 import { AdminEarnings } from "@/components/admin/admin-earnings";
-import { listAdminBookings, listBarbers } from "@/lib/booking-service";
+import { connection } from "next/server";
+import { listBarbers } from "@/lib/booking-service";
+import { getEarningsData } from "@/lib/booking-query-service";
 import { BUSINESS_CONFIG } from "@/lib/config";
-import { getLocalDateInput, pad2 } from "@/lib/utils";
-import { BookingWithRelations } from "@/types/domain";
+import { getDayRangeIso, getLocalDateInput, pad2 } from "@/lib/utils";
 
 export const metadata = {
   title: "Ganhos | Admin",
@@ -19,49 +20,35 @@ function getDefaultRange() {
   };
 }
 
-function isBookingInRange(booking: BookingWithRelations, from: string, to: string): boolean {
-  const date = getLocalDateInput(booking.dateTimeStart, BUSINESS_CONFIG.timezone);
-  return date >= from && date <= to;
-}
-
 export default async function AdminGanhosPage({
   searchParams,
 }: {
   searchParams: Promise<{ from?: string; to?: string; barberId?: string }>;
 }) {
+  await connection();
   const params = await searchParams;
   const defaults = getDefaultRange();
   const from = params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from) ? params.from : defaults.from;
   const to = params.to && /^\d{4}-\d{2}-\d{2}$/.test(params.to) ? params.to : defaults.to;
   const barberId = params.barberId ?? "TODOS";
+  const safeRange = from <= to && (new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) <= 366 * 86_400_000
+    ? { from, to }
+    : defaults;
+  const start = getDayRangeIso(safeRange.from, BUSINESS_CONFIG.timezone).start;
+  const end = getDayRangeIso(safeRange.to, BUSINESS_CONFIG.timezone).end;
 
-  const [bookings, barbers] = await Promise.all([listAdminBookings({}), listBarbers()]);
-
-  const filtered = bookings.filter((booking) => {
-    if (!isBookingInRange(booking, from, to)) {
-      return false;
-    }
-    if (barberId !== "TODOS" && booking.barberId !== barberId) {
-      return false;
-    }
-    return true;
-  });
-
-  const confirmed = filtered.filter(
-    (booking) => booking.status !== "CANCELADO" && booking.paymentStatus === "CONFIRMADO",
-  );
-  const pending = filtered.filter(
-    (booking) => booking.status !== "CANCELADO" && booking.paymentStatus === "PENDENTE",
-  );
+  const [earnings, barbers] = await Promise.all([
+    getEarningsData({ start, end, barberId: barberId === "TODOS" ? undefined : barberId }),
+    listBarbers(),
+  ]);
 
   return (
     <AdminEarnings
-      from={from}
-      to={to}
+      from={safeRange.from}
+      to={safeRange.to}
       barberId={barberId}
       barbers={barbers}
-      confirmedBookings={confirmed}
-      pendingBookings={pending}
+      earnings={earnings}
     />
   );
 }

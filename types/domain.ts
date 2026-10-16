@@ -43,6 +43,7 @@ export type Booking = {
   confirmationTokenUsedAt?: string;
   createdBy: BookingCreatedBy;
   createdAt: string;
+  updatedAt?: string;
   seriesId?: string;
   occurrenceIndex?: number;
   occurrenceLocalDate?: string;
@@ -132,7 +133,25 @@ export type DailyOperatingConfig = {
 
 export type BookingFilters = {
   date?: string;
+  start?: string;
+  end?: string;
+  updatedAfter?: string;
   barberId?: string;
   clientId?: string;
   status?: BookingStatus | "TODOS";
+  limit?: number;
+};
+
+export type PaginatedResponse<T> = {
+  data: T[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export type DateRangeResponse<T> = PaginatedResponse<T> & {
+  range: {
+    start: string;
+    end: string;
+  };
+  lastUpdatedAt: string;
 };
