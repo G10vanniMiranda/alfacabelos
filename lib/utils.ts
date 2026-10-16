@@ -89,12 +89,12 @@ export function getDayRangeIso(date: string, timeZone?: string): { start: string
   if (timeZone) {
     return {
       start: zonedDateTimeToUtcIso(date, "00:00:00", timeZone),
-      end: zonedDateTimeToUtcIso(date, "23:59:59", timeZone),
+      end: new Date(new Date(zonedDateTimeToUtcIso(date, "23:59:59", timeZone)).getTime() + 999).toISOString(),
     };
   }
 
   const startDate = new Date(`${date}T00:00:00`);
-  const endDate = new Date(`${date}T23:59:59`);
+  const endDate = new Date(`${date}T23:59:59.999`);
   return { start: startDate.toISOString(), end: endDate.toISOString() };
 }
 

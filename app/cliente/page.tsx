@@ -1,62 +1,24 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
-import { ClientBookingActions } from "@/components/client/client-booking-actions";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { ClientBookingCard } from "@/components/client/client-booking-card";
+import { ClientBookingHistory } from "@/components/client/client-booking-history";
 import { getCurrentClient, logoutClientAction, updateMyProfileAction } from "@/lib/actions/client-auth-actions";
-import { listClientBookings } from "@/lib/booking-service";
-import { BUSINESS_CONFIG } from "@/lib/config";
-import { formatBRLFromCents, formatDateTimeInTimeZone } from "@/lib/utils";
-import { buildBookingWhatsAppUrl } from "@/lib/whatsapp";
-import type { BookingWithRelations } from "@/types/domain";
+import { listClientBookingHistory, listUpcomingClientBookings } from "@/lib/booking-query-service";
+import { CLIENT_HISTORY_PAGE_SIZE } from "@/lib/query-contracts";
 
 export const metadata = { title: "Minha área" };
 
-function formatDateTime(iso: string) {
-  return formatDateTimeInTimeZone(iso, BUSINESS_CONFIG.timezone);
-}
-
-function getCurrentTimestamp() {
-  return Date.now();
-}
-
-function rebookHref(booking: BookingWithRelations) {
-  return `/agendar?bookingId=${encodeURIComponent(booking.id)}&serviceId=${encodeURIComponent(booking.serviceId)}&barberId=${encodeURIComponent(booking.barberId)}`;
-}
-
-function BookingCard({ booking, featured = false, canManage = true }: { booking: BookingWithRelations; featured?: boolean; canManage?: boolean }) {
-  return (
-    <article className={`rounded-2xl border p-5 ${featured ? "border-brand-highlight/30 bg-brand-highlight/[0.06]" : "border-white/[0.08] bg-white/[0.025]"}`}>
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-stone-100">{booking.service.name}</h3>
-            <StatusBadge status={booking.status} />
-          </div>
-          <p className="mt-3 text-base font-semibold capitalize text-brand-soft">{formatDateTime(booking.dateTimeStart)}</p>
-          <p className="mt-1 text-sm text-stone-400">com {booking.barber.name} • {booking.service.durationMinutes} min • {formatBRLFromCents(booking.service.priceCents)}</p>
-        </div>
-        {featured ? <span className="w-fit rounded-full border border-brand-highlight/25 bg-brand-highlight/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-brand-soft">Próximo</span> : null}
-      </div>
-      <div className="mt-5 border-t border-white/[0.08] pt-4">
-        <ClientBookingActions bookingId={booking.id} status={booking.status} rebookHref={rebookHref(booking)} whatsappHref={buildBookingWhatsAppUrl(booking)} canManage={canManage} isRecurring={Boolean(booking.seriesId)} />
-      </div>
-    </article>
-  );
-}
-
 export default async function ClientAreaPage() {
+  await connection();
   const client = await getCurrentClient();
   if (!client) redirect("/cliente/login?next=/cliente&reason=session-expired");
 
-  const bookings = await listClientBookings(client.id);
-  const now = getCurrentTimestamp();
-  const upcoming = bookings
-    .filter((booking) => booking.status !== "CANCELADO" && new Date(booking.dateTimeStart).getTime() >= now)
-    .sort((a, b) => new Date(a.dateTimeStart).getTime() - new Date(b.dateTimeStart).getTime());
-  const history = bookings
-    .filter((booking) => booking.status === "CANCELADO" || new Date(booking.dateTimeStart).getTime() < now)
-    .sort((a, b) => new Date(b.dateTimeStart).getTime() - new Date(a.dateTimeStart).getTime());
-  const nextBooking = upcoming[0];
+  const [upcoming, history] = await Promise.all([
+    listUpcomingClientBookings(client.id),
+    listClientBookingHistory(client.id, { limit: CLIENT_HISTORY_PAGE_SIZE }),
+  ]);
+  const nextBooking = upcoming.data[0];
 
   return (
     <main id="conteudo" className="shell py-8 sm:py-12">
@@ -77,10 +39,10 @@ export default async function ClientAreaPage() {
           <section aria-labelledby="proximo-agendamento">
             <div className="flex items-end justify-between gap-3">
               <div><p className="eyebrow">Sua agenda</p><h2 id="proximo-agendamento" className="mt-2 text-2xl font-semibold text-stone-100">Próximo agendamento</h2></div>
-              <span className="text-sm text-copy-muted">{upcoming.length} futuro{upcoming.length === 1 ? "" : "s"}</span>
+              <span className="text-sm text-copy-muted">{upcoming.total} futuro{upcoming.total === 1 ? "" : "s"}</span>
             </div>
             <div className="mt-4">
-              {nextBooking ? <BookingCard booking={nextBooking} featured /> : (
+              {nextBooking ? <ClientBookingCard booking={nextBooking} featured /> : (
                 <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-7 text-center">
                   <span className="mx-auto grid size-12 place-items-center rounded-full bg-brand-highlight/10 text-xl text-brand-highlight" aria-hidden="true">✦</span>
                   <h3 className="mt-4 text-lg font-semibold text-stone-100">Sua agenda está livre.</h3>
@@ -89,15 +51,13 @@ export default async function ClientAreaPage() {
                 </div>
               )}
             </div>
-            {upcoming.length > 1 ? <div className="mt-3 grid gap-3">{upcoming.slice(1).map((booking) => <BookingCard key={booking.id} booking={booking} />)}</div> : null}
+            {upcoming.data.length > 1 ? <div className="mt-3 grid gap-3">{upcoming.data.slice(1).map((booking) => <ClientBookingCard key={booking.id} booking={booking} />)}</div> : null}
           </section>
 
           <section className="mt-10" aria-labelledby="historico">
             <h2 id="historico" className="text-2xl font-semibold text-stone-100">Histórico</h2>
             <p className="mt-1 text-sm text-copy-muted">Atendimentos anteriores e cancelamentos.</p>
-            {history.length ? <div className="mt-4 grid gap-3">{history.map((booking) => <BookingCard key={booking.id} booking={booking} canManage={false} />)}</div> : (
-              <p className="mt-4 rounded-2xl border border-dashed border-white/15 p-5 text-sm text-stone-400">Seu histórico aparecerá aqui após o primeiro atendimento.</p>
-            )}
+            <ClientBookingHistory initialPage={history} />
           </section>
         </div>
 

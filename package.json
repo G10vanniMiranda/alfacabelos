@@ -11,6 +11,8 @@
     "check:sensitive-files": "node scripts/check-sensitive-files.mjs",
     "check:migrations": "node scripts/check-migrations.mjs",
     "validate:production": "tsx scripts/validate-production.ts",
+    "environment:guard": "tsx scripts/assert-safe-test-environment.ts",
+    "homologation:guard": "tsx scripts/assert-isolated-homologation.ts",
     "test:integration": "tsx scripts/validate-production.ts --write-tests",
     "test:api": "tsx scripts/test-api-concurrency.ts",
     "test:e2e": "playwright test",

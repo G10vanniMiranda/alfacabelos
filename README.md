@@ -184,6 +184,10 @@ npm run prisma:seed
 - `GET /api/admin/blocked-slots` -> lista bloqueios
 - `POST /api/admin/blocked-slots` -> cria bloqueio
 - `DELETE /api/admin/blocked-slots?blockedSlotId=...` -> remove bloqueio
+- `GET /api/health` -> liveness e conectividade básica, sem detalhes internos
+- `GET /api/ready` -> readiness de banco, schema e configuração crítica
+- `GET /api/admin/operations/status` -> métricas e alertas para sessão `ADMIN`
+- `POST /api/admin/notifications/replay` -> replay individual, confirmado e auditado de entrega `DEAD`
 
 ### Server Actions
 
@@ -213,6 +217,7 @@ WHATSAPP_API_URL=https://sua-api-de-whatsapp/send
 WHATSAPP_API_TOKEN=seu_token
 WHATSAPP_OWNER_PHONE=5569999999999
 WHATSAPP_INSTANCE_ID=sua_instancia
+CRON_SECRET=um_segredo_aleatorio_com_pelo_menos_16_caracteres
 BARBERSHOP_ADDRESS=Endereco da barbearia
 APP_URL=https://seu-dominio.com
 NEXT_PUBLIC_APP_URL=https://seu-dominio.com
@@ -221,6 +226,7 @@ NEXT_PUBLIC_APP_URL=https://seu-dominio.com
 Regras tecnicas:
 
 - Se `WHATSAPP_ENABLED=false` ou ausente, o agendamento e salvo e nenhuma mensagem e enviada.
+- As notificações são persistidas na mesma transação do agendamento e processadas fora da requisição pelo cron protegido. Veja [docs/notification-outbox-phase-3.md](docs/notification-outbox-phase-3.md).
 - Se telefone, token ou URL estiverem ausentes/invalidos, o erro e registrado no console e o agendamento continua salvo.
 - Se a API do WhatsApp falhar, o erro e registrado no console e o agendamento continua salvo.
 - O telefone e normalizado para formato internacional do Brasil (`55 + DDD + numero`).
@@ -248,5 +254,6 @@ Troca futura de API:
 ## Observacoes Tecnicas
 
 - O repositorio padrao esta em `lib/repositories/prisma.ts`.
+- Logs estruturados, health checks, métricas, alertas, auditoria e runbooks estão em [docs/observability-phase-4.md](docs/observability-phase-4.md).
 - Cadastro/login de cliente persiste no banco com hash de senha.
 - Conflitos sao barrados por sobreposicao de intervalo (`start/end`) considerando buffer.

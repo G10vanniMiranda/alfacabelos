@@ -115,6 +115,7 @@ model Booking {
   confirmationTokenUsedAt    DateTime?
   createdBy                  BookingCreatedBy     @default(CLIENT)
   createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
   seriesId                   String?
   occurrenceIndex            Int?
   occurrenceLocalDate        DateTime?            @db.Date
@@ -126,10 +127,12 @@ model Booking {
   series        BookingSeries?         @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
   @@unique([seriesId, occurrenceLocalDate])
+  @@index([dateTimeStart])
   @@index([barberId, dateTimeStart])
-  @@index([clientId])
-  @@index([status])
-  @@index([paymentStatus])
+  @@index([clientId, dateTimeStart])
+  @@index([status, dateTimeStart])
+  @@index([paymentStatus, dateTimeStart])
+  @@index([updatedAt])
   @@index([confirmationToken])
   @@index([confirmationTokenHash])
   @@index([seriesId])
@@ -252,6 +255,7 @@ model BlockedSlot {
   barber Barber? @relation(fields: [barberId], references: [id])
 
   @@index([dateTimeStart])
+  @@index([barberId, dateTimeStart, dateTimeEnd])
 }
 
 model Client {

@@ -30,6 +30,7 @@ type BookingRow = {
   confirmationTokenUsedAt?: Date | null;
   createdBy?: "BARBER" | "CLIENT" | null;
   createdAt: Date;
+  updatedAt?: Date | null;
   seriesId?: string | null;
   occurrenceIndex?: number | null;
   occurrenceLocalDate?: Date | null;
@@ -65,6 +66,7 @@ function toBooking(row: BookingRow): Booking {
     confirmationTokenUsedAt: row.confirmationTokenUsedAt?.toISOString(),
     createdBy: row.createdBy ?? "CLIENT",
     createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt?.toISOString() ?? row.createdAt.toISOString(),
     seriesId: row.seriesId ?? undefined,
     occurrenceIndex: row.occurrenceIndex ?? undefined,
     occurrenceLocalDate: row.occurrenceLocalDate?.toISOString().slice(0, 10),
@@ -469,6 +471,7 @@ export const prismaRepository: BookingRepository = {
     return prisma.service.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
+      take: 100,
     });
   },
 
@@ -522,6 +525,7 @@ export const prismaRepository: BookingRepository = {
     const rows = await prisma.barber.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
+      take: 100,
     });
     return rows.map(toBarber);
   },
@@ -631,6 +635,10 @@ export const prismaRepository: BookingRepository = {
     const dateFilter = dayRange
       ? Prisma.sql`AND b."dateTimeStart" >= ${new Date(dayRange.start)} AND b."dateTimeStart" <= ${new Date(dayRange.end)}`
       : Prisma.empty;
+    const explicitRangeFilter = filters?.start && filters?.end
+      ? Prisma.sql`AND b."dateTimeStart" >= ${new Date(filters.start)} AND b."dateTimeStart" <= ${new Date(filters.end)}`
+      : Prisma.empty;
+    const boundedLimit = Math.min(500, Math.max(1, filters?.limit ?? 500));
 
     const rows = hasPaymentColumns
       ? await prisma.$queryRaw<BookingWithRelationsRow[]>`
@@ -670,7 +678,9 @@ export const prismaRepository: BookingRepository = {
           ${clientFilter}
           ${statusFilter}
           ${dateFilter}
+          ${explicitRangeFilter}
           ORDER BY b."dateTimeStart" ASC
+          LIMIT ${boundedLimit}
         `
       : await prisma.$queryRaw<BookingWithRelationsRow[]>`
           SELECT
@@ -709,7 +719,9 @@ export const prismaRepository: BookingRepository = {
           ${clientFilter}
           ${statusFilter}
           ${dateFilter}
+          ${explicitRangeFilter}
           ORDER BY b."dateTimeStart" ASC
+          LIMIT ${boundedLimit}
         `;
 
     return rows.map(toBookingWithRelations);
@@ -725,6 +737,7 @@ export const prismaRepository: BookingRepository = {
         }
         : undefined,
       orderBy: { dateTimeStart: "asc" },
+      take: 500,
     });
 
     return rows.map(toBlockedSlot);
@@ -1029,6 +1042,7 @@ export const prismaRepository: BookingRepository = {
       const rows = await availability.findMany({
         where: { barberId },
         orderBy: [{ dayOfWeek: "asc" }, { openTime: "asc" }],
+        take: 100,
       });
 
       const savedDays = new Set(rows.map((row) => row.dayOfWeek));
@@ -1101,6 +1115,7 @@ export const prismaRepository: BookingRepository = {
           dayOfWeek: input.dayOfWeek,
         },
         orderBy: { openTime: "asc" },
+        take: 100,
       });
 
       return rows.map(toBarberAvailability);
@@ -1127,6 +1142,7 @@ export const prismaRepository: BookingRepository = {
     try {
       const rows = await gallery.findMany({
         orderBy: { createdAt: "desc" },
+        take: 100,
       });
       return rows.map(toGalleryImage);
     } catch (error) {

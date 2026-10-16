@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Avatar ilustrado do barbeiro</title>
+  <desc id="desc">Silhueta dourada sobre fundo escuro</desc>
+  <rect width="400" height="400" rx="48" fill="#18181b"/>
+  <circle cx="200" cy="145" r="72" fill="#d6aa4c"/>
+  <path d="M72 370c8-94 56-142 128-142s120 48 128 142" fill="#d6aa4c"/>
+</svg>

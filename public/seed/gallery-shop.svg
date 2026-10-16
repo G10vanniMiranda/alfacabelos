@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1200" role="img" aria-labelledby="title desc">
+  <title id="title">Ambiente da barbearia</title>
+  <desc id="desc">Ilustração abstrata de espelho e bancada profissional</desc>
+  <rect width="960" height="1200" fill="#18181b"/>
+  <rect x="180" y="120" width="600" height="650" rx="300" fill="#27272a" stroke="#d6aa4c" stroke-width="18"/>
+  <path d="M90 840h780v90H90zM150 930h70v180h-70zM740 930h70v180h-70z" fill="#d6aa4c"/>
+  <circle cx="350" cy="875" r="26" fill="#18181b"/>
+  <rect x="570" y="815" width="90" height="70" rx="12" fill="#18181b"/>
+</svg>

@@ -10,6 +10,7 @@ import { createAdminSession, getAdminSessionPrincipal, isAdminSessionTokenValid,
 import { cancelClientBooking, rescheduleClientBooking } from "@/lib/booking-service";
 import { zonedDateTimeToUtcIso } from "@/lib/utils";
 import { dispatchWhatsAppNotification } from "@/lib/notifications/service";
+import { assertSafeTestEnvironment } from "@/scripts/assert-safe-test-environment";
 
 type Check = { name: string; status: "PASS" | "WARN" | "FAIL"; detail: string };
 const checks: Check[] = [];
@@ -33,7 +34,8 @@ async function validateDatabase() {
 
   const expectedTables = [
     "AdminAccess", "AdminLoginAttempt", "AdminSession", "Barber", "BarberAvailability", "BlockedSlot",
-    "Booking", "BookingSeries", "Client", "ClientSession", "GalleryImage", "NotificationDelivery", "PasswordResetToken", "SecurityRateLimitEvent", "Service",
+    "AuditLog", "Booking", "BookingSeries", "Client", "ClientSession", "GalleryImage", "NotificationDelivery",
+    "OperationalHeartbeat", "PasswordResetToken", "SecurityRateLimitEvent", "Service",
   ];
   const tables = await prisma.$queryRaw<Array<{ tableName: string }>>`
     SELECT table_name AS "tableName"
@@ -124,6 +126,10 @@ async function validateDatabase() {
 }
 
 async function validateStorage() {
+  if (process.env.HOMOLOGATION_EXTERNAL_TESTS !== "true") {
+    record("supabase:storage", "WARN", "teste externo desabilitado; requer homologação confirmada e HOMOLOGATION_EXTERNAL_TESTS=true");
+    return;
+  }
   const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
   const bucket = process.env.SUPABASE_STORAGE_BUCKET;
@@ -176,7 +182,9 @@ async function validateAuthentication(runId: string) {
 
 async function validateAdminAuthentication(runId: string) {
   const email = `qa-${runId}@example.invalid`;
+  const keeper = await createAdminAccess({ email: `qa-keeper-${runId}@example.invalid`, password: "KeeperTeste#2026" });
   const access = await createAdminAccess({ email, password: "AdminTeste#2026" });
+  let testedAccessDeleted = false;
   try {
     assert.equal(await authenticateAdminAccess(email, "incorreta"), null);
     assert.equal((await authenticateAdminAccess(email, "AdminTeste#2026"))?.id, access.id);
@@ -196,9 +204,13 @@ async function validateAdminAuthentication(runId: string) {
     const newSession = await createAdminSession({ email, adminAccessId: access.id });
     assert.equal(await isAdminSessionTokenValid(newSession.token), true);
     await revokeAdminSession(newSession.token);
-    record("auth:admin", "PASS", "login inválido/válido, sessão persistida e logout validados no banco real");
+    assert.equal(await deleteAdminAccess(access.id), true);
+    testedAccessDeleted = true;
+    record("auth:admin", "PASS", "login inválido/válido, sessão, logout e exclusão protegida validados no banco descartável");
   } finally {
-    await deleteAdminAccess(access.id);
+    await prisma.adminSession.deleteMany({ where: { adminAccessId: { in: [access.id, keeper.id] } } });
+    if (!testedAccessDeleted) await prisma.adminAccess.deleteMany({ where: { id: access.id } });
+    await prisma.adminAccess.deleteMany({ where: { id: keeper.id } });
   }
 }
 
@@ -220,14 +232,14 @@ async function validateBarberAuthentication(runId: string) {
 }
 
 async function validateNotificationOutbox(runId: string) {
-  const key = `qa:${runId}:not-configured`;
+  const key = `qa:${runId}:pending`;
   try {
     const first = await dispatchWhatsAppNotification({ event: "PASSWORD_RESET", to: "(69) 99999-9999", message: "QA", context: "qa", idempotencyKey: key });
     const second = await dispatchWhatsAppNotification({ event: "PASSWORD_RESET", to: "(69) 99999-9999", message: "QA", context: "qa", idempotencyKey: key });
-    assert.equal(first.status, "not_configured");
+    assert.equal(first.status, "pending");
     assert.equal(second.deliveryId, first.deliveryId);
     assert.equal(await prisma.notificationDelivery.count({ where: { idempotencyKey: key } }), 1);
-    record("whatsapp:outbox", "PASS", "sem credenciais retorna not_configured e idempotência impede duplicidade");
+    record("whatsapp:outbox", "PASS", "intent permanece pendente sem chamar provedor e idempotência impede duplicidade");
   } finally {
     await prisma.notificationDelivery.deleteMany({ where: { idempotencyKey: key } });
   }
@@ -318,6 +330,10 @@ async function validateFixtureCleanup() {
 }
 
 async function main() {
+  if (writeTests) {
+    const safe = assertSafeTestEnvironment();
+    record("environment:destructive-guard", "PASS", `banco descartável confirmado em ${safe.host}/${safe.database}`);
+  }
   configurationCheck("DATABASE_URL", true);
   configurationCheck("DIRECT_URL", true);
   configurationCheck("APP_URL", false);
