@@ -392,6 +392,7 @@ export async function adminLoginAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const requestId = requestIdFromHeaders(await headers());
   const parsed = adminLoginSchema.safeParse({
     email: String(formData.get("email") ?? ""),
     password: String(formData.get("password") ?? ""),
@@ -425,6 +426,14 @@ export async function adminLoginAction(
     await clearRateLimitEvents("admin-login", normalizedEmail);
     await registerAdminLogin(staff.id);
     const session = await createAdminSession({ email: normalizedEmail, adminAccessId: staff.id });
+    await recordAuditEvent(prisma, {
+      actorType: staff.role,
+      actorId: staff.id,
+      action: "admin_session.login",
+      resourceType: "AdminAccess",
+      resourceId: staff.id,
+      requestId,
+    });
     const cookieStore = await cookies();
     cookieStore.set(ADMIN_COOKIE, session.token, {
       httpOnly: true,
@@ -440,10 +449,19 @@ export async function adminLoginAction(
 }
 
 export async function adminLogoutAction() {
+  const requestId = requestIdFromHeaders(await headers());
+  const principal = await getCurrentStaff();
   const cookieStore = await cookies();
   const token = cookieStore.get(ADMIN_COOKIE)?.value ?? "";
   await revokeAdminSession(token);
   cookieStore.delete(ADMIN_COOKIE);
+  if (principal) {
+    try {
+      await auditStaffAction(principal, requestId, "admin_session.logout", "AdminAccess", principal.accessId);
+    } catch (error) {
+      logger.error("admin_session.logout_audit_failed", { requestId, actorId: principal.accessId, error });
+    }
+  }
 }
 
 export async function updateBookingStatusAction(payload: { bookingId: string; status: "PENDENTE" | "CONFIRMADO" | "CANCELADO" | "CONCLUIDO" | "AUSENTE"; scope?: "SINGLE" | "FUTURE" | "ALL" }) {
@@ -470,8 +488,10 @@ export async function updateBookingPaymentStatusAction(payload: {
   bookingId: string;
   paymentStatus: "PENDENTE" | "CONFIRMADO";
 }) {
-  await assertAdminSession();
+  const requestId = requestIdFromHeaders(await headers());
+  const principal = await assertAdminSession();
   await updateBookingPaymentStatus(payload);
+  await auditStaffAction(principal, requestId, "booking.payment_status_changed", "Booking", payload.bookingId, { paymentStatus: payload.paymentStatus });
   revalidatePath("/admin/agenda");
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/ganhos");
@@ -517,16 +537,20 @@ export async function createBlockedSlotAction(payload: {
   dateTimeEnd: string;
   reason: string;
 }) {
+  const requestId = requestIdFromHeaders(await headers());
   const principal = await requireStaff(["ADMIN", "BARBER"]);
-  await createBlockedSlot({ ...payload, barberId: scopeBarber(principal, payload.barberId) });
+  const created = await createBlockedSlot({ ...payload, barberId: scopeBarber(principal, payload.barberId) });
+  await auditStaffAction(principal, requestId, "blocked_slot.created", "BlockedSlot", created.id, { barberId: created.barberId });
   revalidatePath("/admin/bloqueios");
   revalidatePath("/admin/agenda");
 }
 
 export async function deleteBlockedSlotAction(payload: { blockedSlotId: string }) {
+  const requestId = requestIdFromHeaders(await headers());
   const principal = await requireStaff(["ADMIN", "BARBER"]);
   await assertBlockedSlotScope(principal, payload.blockedSlotId);
   await deleteBlockedSlot(payload.blockedSlotId);
+  await auditStaffAction(principal, requestId, "blocked_slot.deleted", "BlockedSlot", payload.blockedSlotId);
   revalidatePath("/admin/bloqueios");
   revalidatePath("/admin/agenda");
 }
@@ -539,8 +563,10 @@ export async function replaceBarberDayAvailabilityAction(payload: {
     closeTime: string;
   }>;
 }) {
-  await assertAdminSession();
+  const requestId = requestIdFromHeaders(await headers());
+  const principal = await assertAdminSession();
   await replaceBarberDayAvailability(payload);
+  await auditStaffAction(principal, requestId, "barber.availability_changed", "Barber", payload.barberId, { dayOfWeek: payload.dayOfWeek, rangeCount: payload.ranges.length });
   revalidatePath("/admin/horarios");
   revalidatePath("/agendar");
   updateTag("barbers");
@@ -553,8 +579,10 @@ export async function updateServiceAction(payload: {
   durationMinutes: number;
   isProcedure: boolean;
 }) {
-  await assertAdminSession();
+  const requestId = requestIdFromHeaders(await headers());
+  const principal = await assertAdminSession();
   await updateService(payload);
+  await auditStaffAction(principal, requestId, "service.updated", "Service", payload.serviceId, { changedFields: ["name", "priceCents", "durationMinutes", "isProcedure"] });
   revalidatePath("/admin/servicos");
   revalidatePath("/");
   revalidatePath("/agendar");
@@ -567,8 +595,10 @@ export async function createServiceAction(payload: {
   durationMinutes: number;
   isProcedure: boolean;
 }) {
-  await assertAdminSession();
-  await createService(payload);
+  const requestId = requestIdFromHeaders(await headers());
+  const principal = await assertAdminSession();
+  const created = await createService(payload);
+  await auditStaffAction(principal, requestId, "service.created", "Service", created.id, { durationMinutes: payload.durationMinutes, isProcedure: payload.isProcedure });
   revalidatePath("/admin/servicos");
   revalidatePath("/");
   revalidatePath("/agendar");
@@ -576,8 +606,10 @@ export async function createServiceAction(payload: {
 }
 
 export async function deleteServiceAction(payload: { serviceId: string }) {
-  await assertAdminSession();
+  const requestId = requestIdFromHeaders(await headers());
+  const principal = await assertAdminSession();
   await deleteService(payload.serviceId);
+  await auditStaffAction(principal, requestId, "service.deleted", "Service", payload.serviceId);
   revalidatePath("/admin/servicos");
   revalidatePath("/");
   revalidatePath("/agendar");
@@ -586,7 +618,8 @@ export async function deleteServiceAction(payload: { serviceId: string }) {
 
 export async function uploadGalleryImageAction(formData: FormData): Promise<ActionState> {
   try {
-    await assertAdminSession();
+    const requestId = requestIdFromHeaders(await headers());
+    const principal = await assertAdminSession();
     const fileValue = formData.get("file");
     const altRaw = String(formData.get("altText") ?? "").trim();
     const altText = altRaw.length > 0 ? altRaw : undefined;
@@ -618,7 +651,8 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
       };
     }
 
-    await createGalleryImage({ imageUrl, altText, mediaType: validated.mediaType });
+    const created = await createGalleryImage({ imageUrl, altText, mediaType: validated.mediaType });
+    await auditStaffAction(principal, requestId, "gallery_media.created", "GalleryImage", created.id, { mediaType: validated.mediaType });
     revalidatePath("/admin/galeria");
     revalidatePath("/");
     updateTag("gallery-images");
@@ -635,7 +669,8 @@ export async function uploadGalleryImageAction(formData: FormData): Promise<Acti
 }
 
 export async function deleteGalleryImageAction(payload: { galleryImageId: string }) {
-  await assertAdminSession();
+  const requestId = requestIdFromHeaders(await headers());
+  const principal = await assertAdminSession();
   const persisted = await getGalleryImageById(payload.galleryImageId);
   if (!persisted) {
     throw new Error("Mídia não encontrada");
@@ -647,6 +682,7 @@ export async function deleteGalleryImageAction(payload: { galleryImageId: string
     await deleteFromSupabase(persisted.imageUrl);
   }
   await deleteGalleryImage(payload);
+  await auditStaffAction(principal, requestId, "gallery_media.deleted", "GalleryImage", payload.galleryImageId, { storage: persisted.imageUrl.startsWith("/") ? "local" : "supabase" });
 
   revalidatePath("/admin/galeria");
   revalidatePath("/");
@@ -662,20 +698,24 @@ export async function getStaffAuthentication() {
 }
 
 export async function createBarberAction(_state: ActionState, formData: FormData): Promise<ActionState> {
-  await assertAdminSession();
+  const requestId = requestIdFromHeaders(await headers());
+  const principal = await assertAdminSession();
   const name = String(formData.get("name") ?? "").trim();
   if (name.length < 2) return { success: false, message: "Informe o nome do barbeiro" };
-  await prisma.barber.create({ data: { name, isActive: true } });
+  const created = await prisma.barber.create({ data: { name, isActive: true } });
+  await auditStaffAction(principal, requestId, "barber.created", "Barber", created.id);
   revalidatePath("/admin/barbeiros");
   updateTag("barbers");
   return { success: true, message: "Barbeiro criado" };
 }
 
 export async function updateBarberAction(input: { barberId: string; name: string; isActive: boolean }): Promise<ActionState> {
-  await assertAdminSession();
+  const requestId = requestIdFromHeaders(await headers());
+  const principal = await assertAdminSession();
   const name = input.name.trim();
   if (!input.barberId || name.length < 2) return { success: false, message: "Dados inválidos" };
   await prisma.barber.update({ where: { id: input.barberId }, data: { name, isActive: input.isActive } });
+  await auditStaffAction(principal, requestId, "barber.updated", "Barber", input.barberId, { isActive: input.isActive, changedFields: ["name", "isActive"] });
   revalidatePath("/admin/barbeiros");
   updateTag("barbers");
   return { success: true, message: "Barbeiro atualizado" };

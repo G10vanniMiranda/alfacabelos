@@ -5,16 +5,21 @@ import { createAdminAccessSchema, updateAdminAccessSchema } from "@/lib/validato
 import { createAdminAccess, deleteAdminAccess, updateAdminAccess } from "@/lib/auth/admin-access-store";
 import { requireStaff } from "@/lib/auth/staff-auth";
 import { ActionState } from "@/types/scheduler";
+import { headers } from "next/headers";
+import { requestIdFromHeaders } from "@/lib/observability/context";
+import { recordAuditEvent } from "@/lib/observability/audit";
+import { prisma } from "@/lib/prisma";
 
 async function assertAdminSession() {
-  await requireStaff(["ADMIN"]);
+  return requireStaff(["ADMIN"]);
 }
 
 export async function createAdminAccessAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  await assertAdminSession();
+  const principal = await assertAdminSession();
+  const requestId = requestIdFromHeaders(await headers());
 
   const parsed = createAdminAccessSchema.safeParse({
     email: String(formData.get("email") ?? ""),
@@ -29,11 +34,16 @@ export async function createAdminAccessAction(
   }
 
   try {
-    await createAdminAccess({
+    const created = await createAdminAccess({
       email: parsed.data.email,
       password: parsed.data.password,
       role: parsed.data.role,
       barberId: parsed.data.barberId,
+    });
+    await recordAuditEvent(prisma, {
+      actorType: "ADMIN", actorId: principal.accessId, action: "admin_access.created",
+      resourceType: "AdminAccess", resourceId: created.id, requestId,
+      metadata: { role: created.role, barberId: created.barberId },
     });
     revalidatePath("/admin/acessos");
     return { success: true, message: "Acesso administrativo criado com sucesso" };
@@ -46,7 +56,8 @@ export async function createAdminAccessAction(
 }
 
 export async function deleteAdminAccessAction(accessId: string): Promise<ActionState> {
-  await assertAdminSession();
+  const principal = await assertAdminSession();
+  const requestId = requestIdFromHeaders(await headers());
 
   if (!accessId) {
     return { success: false, message: "Acesso inválido" };
@@ -57,6 +68,10 @@ export async function deleteAdminAccessAction(accessId: string): Promise<ActionS
     if (!deleted) {
       return { success: false, message: "Acesso não encontrado" };
     }
+    await recordAuditEvent(prisma, {
+      actorType: "ADMIN", actorId: principal.accessId, action: "admin_access.deleted",
+      resourceType: "AdminAccess", resourceId: accessId, requestId,
+    });
 
     revalidatePath("/admin/acessos");
     return { success: true, message: "Acesso removido" };
@@ -76,7 +91,8 @@ export async function updateAdminAccessAction(input: {
   role?: "ADMIN" | "BARBER";
   barberId?: string;
 }): Promise<ActionState> {
-  await assertAdminSession();
+  const principal = await assertAdminSession();
+  const requestId = requestIdFromHeaders(await headers());
 
   const parsed = updateAdminAccessSchema.safeParse({
     accessId: input.accessId,
@@ -103,6 +119,12 @@ export async function updateAdminAccessAction(input: {
     if (!updated) {
       return { success: false, message: "Acesso não encontrado" };
     }
+    await recordAuditEvent(prisma, {
+      actorType: "ADMIN", actorId: principal.accessId,
+      action: parsed.data.password.trim() ? "admin_access.password_and_profile_updated" : "admin_access.updated",
+      resourceType: "AdminAccess", resourceId: updated.id, requestId,
+      metadata: { role: updated.role, barberId: updated.barberId, passwordChanged: Boolean(parsed.data.password.trim()) },
+    });
 
     revalidatePath("/admin/acessos");
     return { success: true, message: "Acesso atualizado com sucesso" };
