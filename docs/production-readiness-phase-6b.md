@@ -210,7 +210,7 @@ Ambientes production/homologation agora exigem em runtime: `APP_ENV` explícito,
 | `WHATSAPP_API_TOKEN`/`WHATSAPP_WEBHOOK_SECRET` | se habilitado | homolog/produção | sim | sim | presença, escopo e rotação |
 | `WHATSAPP_OWNER_PHONE` | conforme evento | homolog/produção | sim | PII | único número de teste autorizado em homologação |
 | `CRON_SECRET` | sim | homolog/produção | sim | sim | mínimo 16 caracteres; Bearer |
-| `ALERT_WEBHOOK_URL` | sim | homolog/produção | sim | sim | HTTPS público, sem userinfo/rede privada |
+| `ALERT_WEBHOOK_URL` | opcional | homolog/produção | sim | sim | Opcional para readiness (ausente = alertas externos desativados); se definido, HTTPS público, sem userinfo/rede privada |
 | `ALERT_WEBHOOK_TOKEN` | opcional | homolog/produção | sim | sim | somente header Bearer |
 | `ALERT_COOLDOWN_SECONDS` | opcional | homolog/produção | sim | não | inteiro 60–86400 |
 | `ALERT_WEBHOOK_TIMEOUT_MS` | opcional | homolog/produção | sim | não | inteiro 1000–15000 |
