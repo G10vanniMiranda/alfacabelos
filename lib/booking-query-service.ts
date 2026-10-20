@@ -325,8 +325,8 @@ export async function getEarningsData(input: { start: string; end: string; barbe
     `,
     prisma.$queryRaw<RevenueSqlRow[]>`
       SELECT
-        TO_CHAR(b."dateTimeStart" AT TIME ZONE ${BUSINESS_CONFIG.timezone}, 'YYYY-MM-DD') AS key,
-        TO_CHAR(b."dateTimeStart" AT TIME ZONE ${BUSINESS_CONFIG.timezone}, 'DD/MM/YYYY') AS label,
+        TO_CHAR((b."dateTimeStart" AT TIME ZONE 'UTC') AT TIME ZONE ${BUSINESS_CONFIG.timezone}, 'YYYY-MM-DD') AS key,
+        TO_CHAR((b."dateTimeStart" AT TIME ZONE 'UTC') AT TIME ZONE ${BUSINESS_CONFIG.timezone}, 'DD/MM/YYYY') AS label,
         SUM(s."priceCents")::bigint AS "totalCents",
         COUNT(*)::bigint AS "bookingsCount"
       FROM "Booking" b INNER JOIN "Service" s ON s.id = b."serviceId"

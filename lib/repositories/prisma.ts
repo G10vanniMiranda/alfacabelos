@@ -938,7 +938,8 @@ export const prismaRepository: BookingRepository = {
       UPDATE "Booking"
       SET
         "paymentStatus" = CAST(${paymentStatus} AS "BookingPaymentStatus"),
-        "paymentConfirmedAt" = ${paymentStatus === "CONFIRMADO" ? new Date() : null}
+        "paymentConfirmedAt" = ${paymentStatus === "CONFIRMADO" ? new Date() : null},
+        "updatedAt" = ${new Date()}
       WHERE id = ${bookingId}
     `;
 
