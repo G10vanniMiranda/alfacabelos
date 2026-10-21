@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { BUSINESS_CONFIG } from "@/lib/config";
-import { Barber, BlockedSlot, BookingWithRelations, Service } from "@/types/domain";
-import { formatBRLFromCents, formatDateTimeInTimeZone, getLocalDateInput, getTimeLabelInTimeZone } from "@/lib/utils";
+import type { DashboardData } from "@/lib/booking-query-service";
+import { Barber, Service } from "@/types/domain";
+import { formatBRLFromCents, formatDateTimeInTimeZone, getTimeLabelInTimeZone } from "@/lib/utils";
 
 type AdminOverviewProps = {
-  bookings: BookingWithRelations[];
-  blockedSlots: BlockedSlot[];
+  dashboard: DashboardData;
   services: Service[];
   barbers: Barber[];
 };
@@ -33,43 +33,20 @@ function percent(value: number, total: number) {
   return Math.round((value / total) * 100);
 }
 
-export function AdminOverview({ bookings, blockedSlots, services, barbers }: AdminOverviewProps) {
-  const now = new Date();
-  const today = getLocalDateInput(now.toISOString(), BUSINESS_CONFIG.timezone);
-
-  const activeBookings = bookings.filter((booking) => booking.status !== "CANCELADO");
-  const todayBookings = bookings.filter(
-    (booking) => getLocalDateInput(booking.dateTimeStart, BUSINESS_CONFIG.timezone) === today,
-  );
-  const todayConfirmed = todayBookings.filter((booking) => booking.status === "CONFIRMADO");
-  const todayPending = todayBookings.filter((booking) => booking.status === "PENDENTE");
-  const todayRevenueCents = todayBookings
-    .filter((booking) => booking.paymentStatus === "CONFIRMADO" && booking.status !== "CANCELADO")
-    .reduce((sum, booking) => sum + booking.service.priceCents, 0);
-
-  const futureBookings = activeBookings
-    .filter((booking) => new Date(booking.dateTimeStart).getTime() >= now.getTime())
-    .sort((a, b) => new Date(a.dateTimeStart).getTime() - new Date(b.dateTimeStart).getTime());
-
-  const recentBookings = bookings
-    .slice()
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 7);
-
-  const activeBlocked = blockedSlots.filter((slot) => new Date(slot.dateTimeEnd).getTime() >= now.getTime());
-  const confirmationRate = percent(todayConfirmed.length, todayBookings.length);
-  const nextBooking = futureBookings[0];
+export function AdminOverview({ dashboard, services, barbers }: AdminOverviewProps) {
+  const confirmationRate = percent(dashboard.todayConfirmed, dashboard.todayTotal);
+  const nextBooking = dashboard.upcomingBookings[0];
 
   const metrics = [
     {
       label: "Hoje",
-      value: String(todayBookings.length),
-      helper: `${todayConfirmed.length} confirmados, ${todayPending.length} pendentes`,
+      value: String(dashboard.todayTotal),
+      helper: `${dashboard.todayConfirmed} confirmados, ${dashboard.todayPending} pendentes`,
       tone: "text-zinc-100",
     },
     {
       label: "Receita confirmada",
-      value: formatBRLFromCents(todayRevenueCents),
+      value: formatBRLFromCents(dashboard.todayRevenueCents),
       helper: "pagamentos confirmados hoje",
       tone: "text-success-soft",
     },
@@ -81,7 +58,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
     },
     {
       label: "Bloqueios ativos",
-      value: String(activeBlocked.length),
+      value: String(dashboard.activeBlockedTotal),
       helper: `${services.length} serviços e ${barbers.length} profissional(is)`,
       tone: "text-brand-highlight",
     },
@@ -138,7 +115,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
           </div>
 
           <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800">
-            {futureBookings.slice(0, 8).map((booking) => (
+            {dashboard.upcomingBookings.map((booking) => (
               <article
                 key={booking.id}
                 className="grid gap-3 border-b border-zinc-800 bg-zinc-950/40 px-4 py-3 last:border-b-0 sm:grid-cols-[92px_1fr_auto]"
@@ -161,7 +138,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
                 </div>
               </article>
             ))}
-            {futureBookings.length === 0 ? (
+            {dashboard.upcomingBookings.length === 0 ? (
               <p className="bg-zinc-950/40 px-4 py-6 text-center text-sm text-copy-muted">Sem atendimentos futuros.</p>
             ) : null}
           </div>
@@ -203,14 +180,23 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
                   {confirmationRate}%
                 </progress>
               </div>
+              <div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-400">Ocupação</span>
+                  <span className="font-semibold text-zinc-100">{dashboard.occupancyRate}%</span>
+                </div>
+                <progress className="ui-progress mt-2 block" value={dashboard.occupancyRate} max={100}>
+                  {dashboard.occupancyRate}%
+                </progress>
+              </div>
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
                   <dt className="text-copy-muted">Ativos</dt>
-                  <dd className="mt-1 font-semibold text-zinc-100">{activeBookings.length}</dd>
+                  <dd className="mt-1 font-semibold text-zinc-100">{dashboard.futureActiveTotal}</dd>
                 </div>
                 <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
                   <dt className="text-copy-muted">Recentes</dt>
-                  <dd className="mt-1 font-semibold text-zinc-100">{recentBookings.length}</dd>
+                  <dd className="mt-1 font-semibold text-zinc-100">{dashboard.recentBookings.length}</dd>
                 </div>
               </dl>
             </div>
@@ -225,7 +211,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
             <p className="mt-1 text-sm text-copy-muted">Últimos agendamentos criados no sistema.</p>
           </div>
           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-copy-muted">
-            {bookings.length} registros
+            {dashboard.allBookingsTotal} registros
           </span>
         </div>
 
@@ -241,7 +227,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
               </tr>
             </thead>
             <tbody>
-              {recentBookings.map((booking) => (
+              {dashboard.recentBookings.map((booking) => (
                 <tr key={booking.id} className="border-t border-zinc-800 bg-zinc-950/30 text-zinc-200">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-zinc-100">{booking.customerName}</p>
@@ -265,7 +251,7 @@ export function AdminOverview({ bookings, blockedSlots, services, barbers }: Adm
                   </td>
                 </tr>
               ))}
-              {recentBookings.length === 0 ? (
+              {dashboard.recentBookings.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-copy-muted">
                     Nenhum registro recente.

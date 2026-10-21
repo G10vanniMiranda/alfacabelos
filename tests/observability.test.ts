@@ -193,7 +193,6 @@ test("strict runtime configuration fails safely and accepts isolated homologatio
   });
   assert.equal(invalid.status, "unhealthy");
   assert.deepEqual(invalid.issues.sort(), [
-    "alert_receiver",
     "application_environment",
     "application_url_security",
     "notification_worker_auth",
@@ -270,4 +269,46 @@ test("homologation fails closed when production identifiers are missing or reuse
   });
   assert.ok(reusedEvolution.issues.includes("production_evolution_instance"));
 
+});
+
+const readinessRef = "abcdefghijklmnopqrst";
+const strictReadinessEnv = {
+  APP_ENV: "production",
+  DATABASE_URL: `postgresql://postgres.${readinessRef}@pooler.supabase.com:6543/postgres`,
+  DIRECT_URL: `postgresql://postgres@db.${readinessRef}.supabase.co:5432/postgres`,
+  APP_URL: "https://alfa.example.test",
+  CRON_SECRET: "cron-secret-0123456789",
+  SUPABASE_URL: `https://${readinessRef}.supabase.co`,
+  SUPABASE_PROJECT_REF: readinessRef,
+  SUPABASE_SERVICE_ROLE_KEY: "configured",
+  SUPABASE_STORAGE_BUCKET: "barber",
+  WHATSAPP_ENABLED: "false",
+};
+
+test("readiness treats absent or blank ALERT_WEBHOOK_URL as disabled external alerts", () => {
+  assert.deepEqual(checkCriticalConfiguration(strictReadinessEnv), { status: "healthy", issues: [] });
+  for (const blank of ["", "   "]) {
+    assert.deepEqual(checkCriticalConfiguration({ ...strictReadinessEnv, ALERT_WEBHOOK_URL: blank }), { status: "healthy", issues: [] });
+  }
+});
+
+test("readiness rejects a configured unsafe ALERT_WEBHOOK_URL and accepts a valid one", () => {
+  for (const url of ["http://alerts.example.test/hook", "https://10.20.30.40/hook", "https://user:pw@alerts.example.test/hook", "not a url"]) {
+    const result = checkCriticalConfiguration({ ...strictReadinessEnv, ALERT_WEBHOOK_URL: url });
+    assert.equal(result.status, "unhealthy", url);
+    assert.deepEqual(result.issues, ["alert_receiver"], url);
+  }
+  assert.deepEqual(
+    checkCriticalConfiguration({ ...strictReadinessEnv, ALERT_WEBHOOK_URL: "https://alerts.example.test/hook" }),
+    { status: "healthy", issues: [] },
+  );
+});
+
+test("absent ALERT_WEBHOOK_URL does not relax other strict readiness checks", () => {
+  assert.ok(checkCriticalConfiguration({ ...strictReadinessEnv, APP_ENV: "staging", VERCEL_ENV: "production" }).issues.includes("application_environment"));
+  assert.ok(checkCriticalConfiguration({ ...strictReadinessEnv, SUPABASE_PROJECT_REF: undefined }).issues.includes("supabase_identity"));
+  assert.ok(checkCriticalConfiguration({ ...strictReadinessEnv, SUPABASE_PROJECT_REF: "zzzzzzzzzzzzzzzzzzzz" }).issues.includes("supabase_identity"));
+  assert.ok(checkCriticalConfiguration({ ...strictReadinessEnv, CRON_SECRET: "short" }).issues.includes("notification_worker_auth"));
+  const homolog = checkCriticalConfiguration({ ...strictReadinessEnv, APP_ENV: "homologation" });
+  assert.deepEqual(homolog.issues, ["production_identity_baseline"]);
 });

@@ -29,6 +29,7 @@ async function loginClient(page: Page, next = "/cliente") {
   await page.getByLabel("Telefone").fill(clientPhone);
   await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page).toHaveURL(/\/cliente$/);
 }
 
 async function loginStaff(page: Page, email: string) {

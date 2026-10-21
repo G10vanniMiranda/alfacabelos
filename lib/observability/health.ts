@@ -126,7 +126,8 @@ export function checkCriticalConfiguration(env: RuntimeEnvironment = process.env
       && databaseMatchesSupabaseRef(env.DATABASE_URL, projectRef as string)
       && databaseMatchesSupabaseRef(env.DIRECT_URL, projectRef as string);
     if (!supabaseMatches) issues.push("supabase_identity");
-    if (!isSafeAlertWebhookUrl(env.ALERT_WEBHOOK_URL)) issues.push("alert_receiver");
+    // Absent/blank webhook = external alerts disabled (same as dispatch); only a configured unsafe URL is an issue.
+    if (env.ALERT_WEBHOOK_URL?.trim() && !isSafeAlertWebhookUrl(env.ALERT_WEBHOOK_URL)) issues.push("alert_receiver");
 
     if (appEnv === "homologation") {
       const productionProjectRef = env.PRODUCTION_SUPABASE_PROJECT_REF?.trim().toLowerCase();

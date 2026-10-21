@@ -11,6 +11,7 @@ import { DateCalendar } from "@/components/scheduler/date-calendar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import { BUSINESS_CONFIG } from "@/lib/config";
+import { getAgendaPollingDelay, mergeBookingChanges, shouldUseIncrementalPolling } from "@/lib/query-contracts";
 import {
   formatBRLFromCents,
   getTodayInTimeZone,
@@ -20,10 +21,11 @@ import {
   zonedDateTimeToUtcIso,
 } from "@/lib/utils";
 import { buildBookingWhatsAppUrl } from "@/lib/whatsapp";
-import { Barber, BookingWithRelations, Service } from "@/types/domain";
+import { Barber, BookingWithRelations, DateRangeResponse, Service } from "@/types/domain";
 
 type AdminAgendaProps = {
   bookings: BookingWithRelations[];
+  initialLastUpdatedAt: string;
   barbers: Barber[];
   services: Service[];
 };
@@ -220,7 +222,7 @@ function getDefaultDraft(barbers: Barber[], services: Service[], selectedDate: s
   } satisfies CreateBookingDraft;
 }
 
-export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
+export function AdminAgenda({ bookings, initialLastUpdatedAt, barbers, services }: AdminAgendaProps) {
   const [businessToday] = useState(() => getTodayInTimeZone(BUSINESS_CONFIG.timezone));
   const [isPendingStatus, startStatusTransition] = useTransition();
   const [isPendingCreate, startCreateTransition] = useTransition();
@@ -241,6 +243,8 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
   );
   const knownBookingIdsRef = useRef(new Set(bookings.map((booking) => booking.id)));
   const hasLoadedPollRef = useRef(false);
+  const lastUpdatedAtRef = useRef(initialLastUpdatedAt);
+  const loadedRangeKeyRef = useRef(`${businessToday}:TODOS`);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
   const notificationAudioRef = useRef<AudioContext | null>(null);
 
@@ -363,20 +367,31 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
     }
   }
 
-  const syncBookings = useCallback(async (options?: { notifyNew?: boolean; showErrorToast?: boolean }) => {
+  const syncBookings = useCallback(async (options?: {
+    notifyNew?: boolean;
+    showErrorToast?: boolean;
+    incremental?: boolean;
+    signal?: AbortSignal;
+  }) => {
     try {
-      const response = await fetch("/api/admin/bookings", {
+      const params = new URLSearchParams({ date: dateFilter });
+      if (barberFilter !== "TODOS") params.set("barberId", barberFilter);
+      if (options?.incremental) {
+        params.set("updatedAfter", lastUpdatedAtRef.current);
+      }
+      const response = await fetch(`/api/admin/bookings?${params.toString()}`, {
         method: "GET",
         credentials: "same-origin",
         cache: "no-store",
+        signal: options?.signal,
       });
 
       if (!response.ok) {
         throw new Error("Falha ao atualizar agenda");
       }
 
-      const data = (await response.json()) as BookingWithRelations[];
-      const nextIds = new Set(data.map((booking) => booking.id));
+      const result = (await response.json()) as DateRangeResponse<BookingWithRelations>;
+      const data = result.data;
 
       if (options?.notifyNew) {
         const newBookings = data.filter((booking) => !knownBookingIdsRef.current.has(booking.id));
@@ -402,27 +417,93 @@ export function AdminAgenda({ bookings, barbers, services }: AdminAgendaProps) {
         hasLoadedPollRef.current = true;
       }
 
-      setAllBookings(data);
-      knownBookingIdsRef.current = nextIds;
+      setAllBookings((current) => options?.incremental ? mergeBookingChanges(current, data) : data);
+      if (options?.incremental) {
+        for (const booking of data) knownBookingIdsRef.current.add(booking.id);
+      } else {
+        knownBookingIdsRef.current = new Set(data.map((booking) => booking.id));
+      }
+      lastUpdatedAtRef.current = result.lastUpdatedAt;
+      return true;
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return false;
       if (options?.showErrorToast !== false) {
         pushToast(error instanceof Error ? error.message : "Erro ao atualizar agenda", "error");
       }
+      return false;
     }
-  }, [playNewBookingSound, pushToast]);
+  }, [barberFilter, dateFilter, playNewBookingSound, pushToast]);
 
   useEffect(() => {
     setAllBookings(bookings);
     knownBookingIdsRef.current = new Set(bookings.map((booking) => booking.id));
-  }, [bookings]);
+    lastUpdatedAtRef.current = initialLastUpdatedAt;
+  }, [bookings, initialLastUpdatedAt]);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      void syncBookings({ notifyNew: true, showErrorToast: false });
-    }, 15000);
+    const rangeKey = `${dateFilter}:${barberFilter}`;
+    if (loadedRangeKeyRef.current === rangeKey) return;
+    loadedRangeKeyRef.current = rangeKey;
+    lastUpdatedAtRef.current = new Date(0).toISOString();
+    const controller = new AbortController();
+    void syncBookings({ showErrorToast: true, signal: controller.signal });
+    return () => controller.abort();
+  }, [barberFilter, dateFilter, syncBookings]);
+
+  useEffect(() => {
+    let stopped = false;
+    let timerId: number | undefined;
+    let failureCount = 0;
+    let pollCount = 0;
+    let controller: AbortController | undefined;
+    let running = false;
+
+    const schedule = () => {
+      if (stopped) return;
+      if (timerId) window.clearTimeout(timerId);
+      const delay = getAgendaPollingDelay(document.visibilityState === "visible" ? "visible" : "hidden", failureCount);
+      timerId = window.setTimeout(run, delay);
+    };
+
+    const run = async () => {
+      if (stopped || running || document.visibilityState !== "visible") {
+        schedule();
+        return;
+      }
+      running = true;
+      controller = new AbortController();
+      pollCount += 1;
+      const succeeded = await syncBookings({
+        notifyNew: true,
+        showErrorToast: false,
+        incremental: shouldUseIncrementalPolling(pollCount),
+        signal: controller.signal,
+      });
+      running = false;
+      if (stopped) return;
+      failureCount = succeeded ? 0 : Math.min(failureCount + 1, 3);
+      schedule();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        controller?.abort();
+        if (timerId) window.clearTimeout(timerId);
+        schedule();
+      } else {
+        if (timerId) window.clearTimeout(timerId);
+        void run();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    schedule();
 
     return () => {
-      window.clearInterval(intervalId);
+      stopped = true;
+      controller?.abort();
+      if (timerId) window.clearTimeout(timerId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [syncBookings]);
 

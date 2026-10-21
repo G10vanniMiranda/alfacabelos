@@ -1,24 +1,17 @@
  "use client";
 
 import { useRef } from "react";
-import { Barber, BookingWithRelations } from "@/types/domain";
+import type { EarningsData } from "@/lib/booking-query-service";
+import { Barber } from "@/types/domain";
 import { BUSINESS_CONFIG } from "@/lib/config";
-import { formatBRLFromCents, formatDateTimeInTimeZone, getLocalDateInput } from "@/lib/utils";
+import { formatBRLFromCents, formatDateTimeInTimeZone } from "@/lib/utils";
 
 type AdminEarningsProps = {
   from: string;
   to: string;
   barberId: string;
   barbers: Barber[];
-  confirmedBookings: BookingWithRelations[];
-  pendingBookings: BookingWithRelations[];
-};
-
-type RevenueGroup = {
-  key: string;
-  label: string;
-  totalCents: number;
-  bookingsCount: number;
+  earnings: EarningsData;
 };
 
 type DateInputWithPickerProps = {
@@ -32,46 +25,6 @@ type DateInputElement = HTMLInputElement & {
 
 function formatDateTime(iso: string) {
   return formatDateTimeInTimeZone(iso, BUSINESS_CONFIG.timezone);
-}
-
-function formatDayLabel(date: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(`${date}T00:00:00`));
-}
-
-function sumRevenue(bookings: BookingWithRelations[]) {
-  return bookings.reduce((sum, booking) => sum + booking.service.priceCents, 0);
-}
-
-function groupRevenue(
-  bookings: BookingWithRelations[],
-  getKey: (booking: BookingWithRelations) => string,
-  getLabel: (booking: BookingWithRelations) => string,
-): RevenueGroup[] {
-  const map = new Map<string, RevenueGroup>();
-
-  for (const booking of bookings) {
-    const key = getKey(booking);
-    const existing = map.get(key);
-
-    if (existing) {
-      existing.totalCents += booking.service.priceCents;
-      existing.bookingsCount += 1;
-      continue;
-    }
-
-    map.set(key, {
-      key,
-      label: getLabel(booking),
-      totalCents: booking.service.priceCents,
-      bookingsCount: 1,
-    });
-  }
-
-  return Array.from(map.values()).sort((a, b) => b.totalCents - a.totalCents);
 }
 
 function DateInputWithPicker({ name, defaultValue }: DateInputWithPickerProps) {
@@ -108,29 +61,11 @@ export function AdminEarnings({
   to,
   barberId,
   barbers,
-  confirmedBookings,
-  pendingBookings,
+  earnings,
 }: AdminEarningsProps) {
-  const totalConfirmedCents = sumRevenue(confirmedBookings);
-  const pendingPotentialCents = sumRevenue(pendingBookings);
-  const totalBookings = confirmedBookings.length;
-  const averageTicketCents = totalBookings > 0 ? Math.round(totalConfirmedCents / totalBookings) : 0;
-
-  const dailyRevenue = groupRevenue(
-    confirmedBookings,
-    (booking) => getLocalDateInput(booking.dateTimeStart, BUSINESS_CONFIG.timezone),
-    (booking) => formatDayLabel(getLocalDateInput(booking.dateTimeStart, BUSINESS_CONFIG.timezone)),
-  );
-  const serviceRevenue = groupRevenue(
-    confirmedBookings,
-    (booking) => booking.serviceId,
-    (booking) => booking.service.name,
-  );
-  const barberRevenue = groupRevenue(
-    confirmedBookings,
-    (booking) => booking.barberId,
-    (booking) => booking.barber.name,
-  );
+  const averageTicketCents = earnings.confirmedCount > 0
+    ? Math.round(earnings.totalConfirmedCents / earnings.confirmedCount)
+    : 0;
 
   return (
     <section className="space-y-6">
@@ -165,17 +100,17 @@ export function AdminEarnings({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Faturamento</p>
-          <p className="mt-2 text-2xl font-black text-success-soft">{formatBRLFromCents(totalConfirmedCents)}</p>
+          <p className="mt-2 text-2xl font-black text-success-soft">{formatBRLFromCents(earnings.totalConfirmedCents)}</p>
           <p className="mt-1 text-sm text-zinc-400">apenas pagamentos confirmados</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Previsao</p>
-          <p className="mt-2 text-2xl font-black text-warning">{formatBRLFromCents(pendingPotentialCents)}</p>
+          <p className="mt-2 text-2xl font-black text-warning">{formatBRLFromCents(earnings.pendingPotentialCents)}</p>
           <p className="mt-1 text-sm text-zinc-400">valor aguardando confirmação de pagamento</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
           <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Atendimentos</p>
-          <p className="mt-2 text-2xl font-black text-zinc-100">{totalBookings}</p>
+          <p className="mt-2 text-2xl font-black text-zinc-100">{earnings.confirmedCount}</p>
           <p className="mt-1 text-sm text-zinc-400">pagamentos confirmados no período</p>
         </article>
         <article className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
@@ -189,42 +124,42 @@ export function AdminEarnings({
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
           <h3 className="text-lg font-semibold text-zinc-100">Ganhos por dia</h3>
           <div className="mt-4 space-y-2">
-            {dailyRevenue.map((item) => (
+            {earnings.dailyRevenue.map((item) => (
               <article key={item.key} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
                 <p className="font-semibold text-zinc-100">{item.label}</p>
                 <p className="mt-1 text-sm text-brand-highlight">{formatBRLFromCents(item.totalCents)}</p>
                 <p className="mt-1 text-xs text-copy-muted">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {dailyRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem faturamento no período.</p> : null}
+            {earnings.dailyRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem faturamento no período.</p> : null}
           </div>
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
           <h3 className="text-lg font-semibold text-zinc-100">Ganhos por serviço</h3>
           <div className="mt-4 space-y-2">
-            {serviceRevenue.map((item) => (
+            {earnings.serviceRevenue.map((item) => (
               <article key={item.key} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
                 <p className="font-semibold text-zinc-100">{item.label}</p>
                 <p className="mt-1 text-sm text-brand-highlight">{formatBRLFromCents(item.totalCents)}</p>
                 <p className="mt-1 text-xs text-copy-muted">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {serviceRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem serviços pagos no período.</p> : null}
+            {earnings.serviceRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem serviços pagos no período.</p> : null}
           </div>
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
           <h3 className="text-lg font-semibold text-zinc-100">Ganhos por barbeiro</h3>
           <div className="mt-4 space-y-2">
-            {barberRevenue.map((item) => (
+            {earnings.barberRevenue.map((item) => (
               <article key={item.key} className="rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
                 <p className="font-semibold text-zinc-100">{item.label}</p>
                 <p className="mt-1 text-sm text-brand-highlight">{formatBRLFromCents(item.totalCents)}</p>
                 <p className="mt-1 text-xs text-copy-muted">{item.bookingsCount} pagamento(s) confirmado(s)</p>
               </article>
             ))}
-            {barberRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem barbeiros com ganhos no período.</p> : null}
+            {earnings.barberRevenue.length === 0 ? <p className="text-sm text-copy-muted">Sem barbeiros com ganhos no período.</p> : null}
           </div>
         </section>
       </div>
@@ -243,11 +178,7 @@ export function AdminEarnings({
               </tr>
             </thead>
             <tbody>
-              {confirmedBookings
-                .slice()
-                .sort((a, b) => new Date(b.paymentConfirmedAt ?? b.dateTimeStart).getTime() - new Date(a.paymentConfirmedAt ?? a.dateTimeStart).getTime())
-                .slice(0, 20)
-                .map((booking) => (
+              {earnings.recentConfirmedBookings.map((booking) => (
                   <tr key={booking.id} className="border-t border-zinc-800 text-zinc-200">
                     <td className="px-2 py-2">{booking.customerName}</td>
                     <td className="px-2 py-2">{booking.service.name}</td>
@@ -256,7 +187,7 @@ export function AdminEarnings({
                     <td className="px-2 py-2 text-success-soft">{formatBRLFromCents(booking.service.priceCents)}</td>
                   </tr>
                 ))}
-              {confirmedBookings.length === 0 ? (
+              {earnings.recentConfirmedBookings.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-2 py-4 text-center text-copy-muted">
                     Nenhum recebimento confirmado no período selecionado.

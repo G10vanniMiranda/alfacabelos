@@ -20,10 +20,11 @@ test("home publica carrega navegacao principal sem overflow", async ({ page }) =
   await expectNoHorizontalOverflow(page);
 });
 
-test("fluxo publico de agendamento inicia e permanece responsivo", async ({ page }) => {
+test("fluxo de agendamento exige autenticação e preserva o destino", async ({ page }) => {
   await page.goto("/agendar");
+  await expect(page).toHaveURL(/\/cliente\/login\?next=(?:%2F|\/)agendar/);
   await expect(page.locator("main")).toBeVisible();
-  await expect(page.getByText(/agend|servi/i).first()).toBeVisible();
+  await expect(page.getByLabel("Telefone")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
