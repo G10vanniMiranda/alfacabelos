@@ -21,9 +21,12 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   }
 }
 
+// Budget covers connect + query: a cold Prisma connect through the pooler can exceed 1 s; 3 s keeps /api/ready worst case near 6 s.
+export const DB_HEALTH_TIMEOUT_MS = 3_000;
+
 export async function checkDatabaseHealth(
   query: () => Promise<unknown> = () => prisma.$queryRaw`SELECT 1`,
-  timeoutMs = 1_000,
+  timeoutMs = DB_HEALTH_TIMEOUT_MS,
 ): Promise<{ status: "healthy" | "unhealthy"; latencyMs: number | null; errorCode?: string }> {
   const startedAt = Date.now();
   try {
@@ -38,9 +41,10 @@ export async function checkDatabaseHealth(
   }
 }
 
-export async function checkSchemaReadiness(): Promise<{ status: "healthy" | "unhealthy"; compatible: boolean }> {
-  try {
-    const rows = await prisma.$queryRaw<Array<{ audit: string | null; heartbeat: string | null; notificationColumn: boolean }>>(Prisma.sql`
+type SchemaProbeRow = { audit: string | null; heartbeat: string | null; notificationColumn: boolean };
+
+export async function checkSchemaReadiness(
+  query: () => Promise<SchemaProbeRow[]> = () => prisma.$queryRaw<SchemaProbeRow[]>(Prisma.sql`
       SELECT
         to_regclass('public."AuditLog"')::text AS "audit",
         to_regclass('public."OperationalHeartbeat"')::text AS "heartbeat",
@@ -48,7 +52,11 @@ export async function checkSchemaReadiness(): Promise<{ status: "healthy" | "unh
           SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'NotificationDelivery' AND column_name = 'requestId'
         ) AS "notificationColumn"
-    `);
+    `),
+  timeoutMs = DB_HEALTH_TIMEOUT_MS,
+): Promise<{ status: "healthy" | "unhealthy"; compatible: boolean }> {
+  try {
+    const rows = await withTimeout(query(), timeoutMs);
     const compatible = Boolean(rows[0]?.audit && rows[0]?.heartbeat && rows[0]?.notificationColumn);
     return { status: compatible ? "healthy" : "unhealthy", compatible };
   } catch {
