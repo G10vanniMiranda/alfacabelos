@@ -13,6 +13,7 @@
     "validate:production": "tsx scripts/validate-production.ts",
     "environment:guard": "tsx scripts/assert-safe-test-environment.ts",
     "homologation:guard": "tsx scripts/assert-isolated-homologation.ts",
+    "homologation:migrate": "tsx scripts/homolog-migrate.ts",
     "test:integration": "tsx scripts/validate-production.ts --write-tests",
     "test:api": "tsx scripts/test-api-concurrency.ts",
     "test:e2e": "playwright test",
