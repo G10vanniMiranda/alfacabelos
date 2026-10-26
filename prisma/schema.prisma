@@ -115,7 +115,7 @@ model Booking {
   confirmationTokenUsedAt    DateTime?
   createdBy                  BookingCreatedBy     @default(CLIENT)
   createdAt                  DateTime             @default(now())
-  updatedAt                  DateTime             @updatedAt
+  updatedAt                  DateTime             @default(now()) @updatedAt
   seriesId                   String?
   occurrenceIndex            Int?
   occurrenceLocalDate        DateTime?            @db.Date
@@ -198,12 +198,12 @@ model NotificationDelivery {
   replayCount     Int                @default(0)
   lastReplayedAt  DateTime?
   createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  updatedAt       DateTime           @default(now()) @updatedAt
 
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   series  BookingSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
-  @@index([status, eligibleAt, nextRetryAt, createdAt])
+  @@index([status, eligibleAt, nextRetryAt, createdAt], map: "NotificationDelivery_status_eligibleAt_nextRetryAt_createdAt_id")
   @@index([lockedAt])
   @@index([bookingId, event])
   @@index([seriesId, event])
@@ -220,7 +220,7 @@ model OperationalHeartbeat {
   processedCount Int      @default(0)
   lastErrorCode  String?
   metadata       Json?
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime @default(now()) @updatedAt
 
   @@index([lastSuccessAt])
   @@index([status, lastRunAt])
@@ -268,7 +268,7 @@ model Client {
   status              ClientStatus         @default(ACTIVE)
   createdBy           ClientCreatedBy      @default(CLIENT)
   createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  updatedAt           DateTime             @default(now()) @updatedAt
   bookings            Booking[]
   bookingSeries       BookingSeries[]
   passwordResetTokens PasswordResetToken[]
