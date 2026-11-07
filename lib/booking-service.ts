@@ -498,7 +498,7 @@ export async function rescheduleClientBooking(input: {
     observations: booking.observations,
     dateTimeStart: input.start,
     dateTimeEnd: computedEnd,
-    notification: { event: "BOOKING_RESCHEDULED", audience: "OWNER", requestId: input.requestId },
+    notification: { event: "BOOKING_RESCHEDULED", actor: "CLIENT", requestId: input.requestId },
   });
   if (!updated) {
     throw new Error("Não foi possível concluir o reagendamento");

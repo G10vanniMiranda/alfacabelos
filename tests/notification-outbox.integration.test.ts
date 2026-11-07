@@ -425,7 +425,7 @@ test("concurrent confirmation, cancellation, series, replay and password reset c
   }
 });
 
-test("series with 1, 10 and 59 bookings create the same number of intents without network calls", { skip: !disposable }, async () => {
+test("series with 1, 10 and 59 bookings create one consolidated intent each, without network calls", { skip: !disposable }, async () => {
   const previousOwner = process.env.WHATSAPP_OWNER_PHONE;
   const previousFetch = globalThis.fetch;
   process.env.WHATSAPP_OWNER_PHONE = "(69) 99999-1234";
@@ -459,7 +459,12 @@ test("series with 1, 10 and 59 bookings create the same number of intents withou
     assert.equal(ten.bookingIds.length, 10);
     assert.equal(repeatedTen.duplicate, true);
     assert.equal(fiftyNine.bookingIds.length, 59);
-    assert.equal(await prisma.notificationDelivery.count(), 70);
+    // Owner phone equals the client's here, so each creation is a single client notice;
+    // the 10- and 59-occurrence series are consolidated instead of one notice per occurrence.
+    assert.equal(await prisma.notificationDelivery.count(), 3);
+    const fiftyNineNotice = await prisma.notificationDelivery.findFirstOrThrow({ where: { seriesId: fiftyNine.seriesId } });
+    assert.match(fiftyNineNotice.message, /Horários: 59/);
+    assert.match(fiftyNineNotice.idempotencyKey, /^series:/);
     const payload = await prisma.notificationDelivery.findFirstOrThrow({ where: { bookingId: one.bookingIds[0] } });
     assert.match(payload.message, /Cliente Outbox/);
     assert.equal(payload.recipientMasked.endsWith("1234"), true);
@@ -514,8 +519,8 @@ async function createLifecycleBooking(input: {
 }
 
 async function enqueueFor(bookingId: string, event: "BOOKING_REMINDER" | "BOOKING_CREATED_BY_STAFF" | "BOOKING_CANCELLED") {
-  await prisma.$transaction((tx) => enqueueBookingNotification(tx, { bookingId, event, audience: "CLIENT" }));
-  return prisma.notificationDelivery.findFirstOrThrow({ where: { bookingId, event } });
+  await prisma.$transaction((tx) => enqueueBookingNotification(tx, { bookingId, event }));
+  return prisma.notificationDelivery.findFirstOrThrow({ where: { bookingId, event, idempotencyKey: { contains: ":client:" } } });
 }
 
 function recordingSend() {

@@ -19,6 +19,7 @@ import {
 import { resetClientPasswordWithToken } from "@/lib/auth/client-password-reset-store";
 import { confirmClientBooking } from "@/lib/booking-service";
 import { cancelBookingSeries } from "@/lib/booking-series-service";
+import { scheduleBookingNotificationDelivery } from "@/lib/notifications/after-response";
 import { clearRateLimitEvents, registerRateLimitEvent } from "@/lib/security";
 import { ActionState } from "@/types/scheduler";
 import { prisma } from "@/lib/prisma";
@@ -211,7 +212,8 @@ export async function cancelMyBookingAction(formData: FormData) {
     return;
   }
 
-  await cancelBookingSeries({ bookingId, clientId: client.id, scope, notificationAudience: "OWNER", requestId });
+  await cancelBookingSeries({ bookingId, clientId: client.id, scope, cancelledBy: "CLIENT", requestId });
+  scheduleBookingNotificationDelivery(requestId);
   revalidatePath("/cliente");
   revalidatePath("/admin/agenda");
 }

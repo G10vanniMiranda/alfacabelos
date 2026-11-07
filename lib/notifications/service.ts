@@ -461,6 +461,29 @@ export async function deliverNotificationNow(
   });
 }
 
+/**
+ * Immediate delivery of the booking notices a request committed. Each row is claimed and sent
+ * on its own: one recipient failing (RETRY/DEAD) never blocks another. The cron stays the retry path.
+ */
+export async function deliverPendingBookingNotifications(
+  requestId: string,
+  options: Pick<WorkerOptions, "send" | "validate" | "random"> = {},
+): Promise<Array<DeliveryOutcome | "disabled" | "not_claimed" | "error">> {
+  if (process.env.WHATSAPP_ENABLED !== "true" || !requestId) return [];
+  const rows = await prisma.notificationDelivery.findMany({
+    where: { requestId, status: "PENDING", bookingId: { not: null } },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true },
+    take: 50,
+  });
+  const settled = await Promise.allSettled(rows.map((row) => deliverNotificationNow(row.id, options)));
+  return settled.map((result, index) => {
+    if (result.status === "fulfilled") return result.value;
+    logger.error("notification.inline_delivery_failed", { requestId, notificationId: rows[index]!.id, error: result.reason });
+    return "error";
+  });
+}
+
 /** Sealed payloads must not outlive the code they carry, even if no worker ever claims them. */
 export async function redactExpiredSealedMessages(now = new Date()): Promise<number> {
   const result = await prisma.notificationDelivery.updateMany({

@@ -51,6 +51,14 @@ export type NotificationValidityReferences = {
  */
 export const BOOKING_CREATED_NOTICE_MAX_AGE_MS = 6 * 60 * 60_000;
 
+/**
+ * Cancellation and reschedule notices share the same freshness window. Without it a notice
+ * enqueued while WhatsApp was disabled stayed valid until the appointment (possibly weeks),
+ * so turning the provider on later would fire stale messages. 6 h still covers the whole
+ * retry backoff (about 2 h over 8 attempts).
+ */
+export const BOOKING_CHANGE_NOTICE_MAX_AGE_MS = BOOKING_CREATED_NOTICE_MAX_AGE_MS;
+
 const DEFAULT_REMINDER_LEAD_MINUTES = 24 * 60;
 const DEFAULT_REMINDER_WINDOW_MINUTES = 10;
 const DEFAULT_REMINDER_MIN_LEAD_MINUTES = 60;
@@ -84,6 +92,12 @@ export function reminderSchedule(env: NodeJS.ProcessEnv = process.env): {
 
 export function passwordResetTokenHashFromKey(idempotencyKey: string): string | null {
   return /^password-reset:([0-9a-f]{64})$/.exec(idempotencyKey)?.[1] ?? null;
+}
+
+/** Booking keys are `booking:<id>:<owner|client>:…`; consolidated ones `series:<id>:<owner|client>:…`. */
+export function bookingAudienceFromKey(idempotencyKey: string): "OWNER" | "CLIENT" | null {
+  const audience = /^(?:booking|series):[^:]+:(owner|client):/.exec(idempotencyKey)?.[1];
+  return audience ? (audience.toUpperCase() as "OWNER" | "CLIENT") : null;
 }
 
 export function passwordRecoveryChallengeIdFromKey(idempotencyKey: string): string | null {
@@ -138,7 +152,12 @@ export function notificationValidityUpperBound(
       return start ? new Date(start.getTime() - reminderSchedule(env).minLeadMinutes * 60_000) : null;
     }
     case "BOOKING_RESCHEDULED":
-      return bookingStartFromKey(subject.idempotencyKey, "booking_rescheduled");
+      return earliest(
+        bookingStartFromKey(subject.idempotencyKey, "booking_rescheduled"),
+        new Date(subject.createdAt.getTime() + BOOKING_CHANGE_NOTICE_MAX_AGE_MS),
+      );
+    case "BOOKING_CANCELLED":
+      return new Date(subject.createdAt.getTime() + BOOKING_CHANGE_NOTICE_MAX_AGE_MS);
     default:
       return null;
   }
@@ -182,10 +201,13 @@ export function evaluateNotificationValidity(
   if (!subject.bookingId || !booking) return invalid("INVALID_REFERENCE", "booking_missing");
   const start = booking.dateTimeStart;
 
+  const changeNoticeDeadline = new Date(subject.createdAt.getTime() + BOOKING_CHANGE_NOTICE_MAX_AGE_MS);
+
   if (event === "BOOKING_CANCELLED") {
     if (booking.status !== "CANCELADO") return invalid("INVALID_REFERENCE", "booking_not_cancelled");
     if (start <= now) return invalid("EXPIRED", "booking_started");
-    return validUntil(start, now);
+    if (changeNoticeDeadline <= now) return invalid("EXPIRED", "notice_too_old");
+    return validUntil(earliest(start, changeNoticeDeadline), now);
   }
 
   if (booking.status === "CANCELADO") return invalid("CANCELED", "booking_cancelled");
@@ -206,14 +228,15 @@ export function evaluateNotificationValidity(
     const rescheduledStart = bookingStartFromKey(subject.idempotencyKey, "booking_rescheduled");
     if (!rescheduledStart) return invalid("INVALID_REFERENCE", "reschedule_reference_missing");
     if (rescheduledStart.getTime() !== start.getTime()) return invalid("INVALID_REFERENCE", "booking_rescheduled_again");
-    return validUntil(start, now);
+    if (changeNoticeDeadline <= now) return invalid("EXPIRED", "notice_too_old");
+    return validUntil(earliest(start, changeNoticeDeadline), now);
   }
 
   // BOOKING_CREATED_BY_STAFF / BOOKING_CREATED_BY_CLIENT
   const noticeDeadline = new Date(subject.createdAt.getTime() + BOOKING_CREATED_NOTICE_MAX_AGE_MS);
   if (noticeDeadline <= now) return invalid("EXPIRED", "notice_too_old");
-  if (event === "BOOKING_CREATED_BY_STAFF" && booking.confirmationTokenHash) {
-    // The client message carries a confirmation link; it is pointless once the
+  if (event === "BOOKING_CREATED_BY_STAFF" && booking.confirmationTokenHash && bookingAudienceFromKey(subject.idempotencyKey) === "CLIENT") {
+    // Only the client message carries a confirmation link; it is pointless once the
     // link can no longer confirm the booking.
     if (booking.confirmationTokenUsedAt || booking.status !== "PENDENTE") return invalid("EXPIRED", "confirmation_resolved");
     if (!booking.confirmationTokenExpiresAt || booking.confirmationTokenExpiresAt <= now) {
