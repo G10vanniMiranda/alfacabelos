@@ -72,6 +72,22 @@ function isHttpsUrl(value: string | undefined): boolean {
   }
 }
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+// Local homologation runtime only: plain HTTP on a loopback origin, never on Vercel (Preview or Production).
+function isLocalHomologationHttp(env: RuntimeEnvironment): boolean {
+  if (env.APP_ENV !== "homologation" || env.HOMOLOGATION_LOCAL_HTTP !== "true") return false;
+  if (env.VERCEL_ENV !== undefined || env.VERCEL !== undefined) return false;
+  if (!env.APP_URL || env.APP_URL !== env.NEXT_PUBLIC_APP_URL) return false;
+  try {
+    const url = new URL(env.APP_URL);
+    return url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname)
+      && !url.username && !url.password && url.pathname === "/" && !url.search && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
 function databaseMatchesSupabaseRef(value: string | undefined, projectRef: string): boolean {
   try {
     const url = new URL(value ?? "");
@@ -125,7 +141,7 @@ export function checkCriticalConfiguration(env: RuntimeEnvironment = process.env
 
   if (strictRuntime) {
     if (appEnv !== "production" && appEnv !== "homologation") issues.push("application_environment");
-    if (applicationUrl && !isHttpsUrl(applicationUrl)) issues.push("application_url_security");
+    if (applicationUrl && !isHttpsUrl(applicationUrl) && !isLocalHomologationHttp(env)) issues.push("application_url_security");
     if (!env.DIRECT_URL) issues.push("database_direct");
     if (!(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_STORAGE_BUCKET)) issues.push("supabase_configuration");
     const projectRef = env.SUPABASE_PROJECT_REF?.trim().toLowerCase();
