@@ -147,11 +147,17 @@ export function buildBookingRescheduleMessage(
 
 const SERIES_LISTED_OCCURRENCES = 10;
 
-function formatOccurrenceLine(iso: string): string {
-  const date = new Intl.DateTimeFormat("pt-BR", {
+function formatOccurrenceDate(iso: string): string {
+  return `${new Intl.DateTimeFormat("pt-BR", {
     weekday: "short", day: "2-digit", month: "2-digit", timeZone: BUSINESS_CONFIG.timezone,
-  }).format(new Date(iso));
-  return `• ${date} às ${formatBookingTimeOnly(iso)}`;
+  }).format(new Date(iso))} às ${formatBookingTimeOnly(iso)}`;
+}
+
+const OCCURRENCE_STATUS_LABEL: Record<string, string> = { CONFIRMADO: "confirmado", PENDENTE: "aguardando confirmação" };
+
+function formatOccurrenceLine(occurrence: BookingNotificationSnapshot, withStatus: boolean): string {
+  const status = withStatus ? OCCURRENCE_STATUS_LABEL[occurrence.status] : undefined;
+  return `• ${formatOccurrenceDate(occurrence.dateTimeStart)}${status ? ` — ${status}` : ""}`;
 }
 
 export type SeriesNotificationEvent = "BOOKING_CREATED_BY_CLIENT" | "BOOKING_CREATED_BY_STAFF" | "BOOKING_CANCELLED" | "BOOKING_RESCHEDULED";
@@ -166,8 +172,11 @@ export function buildSeriesNotificationMessage(input: {
   actor: BookingChangeActor;
   occurrences: BookingNotificationSnapshot[];
   seriesId: string;
+  /** Confirmation link of exactly one occurrence (staff-created series, client copy only). */
+  confirmation?: { link: string; occurrence: BookingNotificationSnapshot } | null;
 }): string {
   const occurrences = [...input.occurrences].sort((a, b) => a.dateTimeStart.localeCompare(b.dateTimeStart));
+  const creation = input.event === "BOOKING_CREATED_BY_CLIENT" || input.event === "BOOKING_CREATED_BY_STAFF";
   const first = occurrences[0]!;
   const last = occurrences[occurrences.length - 1]!;
   const owner = input.audience === "OWNER";
@@ -192,16 +201,21 @@ export function buildSeriesNotificationMessage(input: {
     `${input.event === "BOOKING_RESCHEDULED" ? "Novos horários" : "Horários"}: ${occurrences.length}`,
     `Período: ${formatBookingDate(first.dateTimeStart)} a ${formatBookingDate(last.dateTimeStart)}`,
     "",
-    ...occurrences.slice(0, SERIES_LISTED_OCCURRENCES).map((item) => formatOccurrenceLine(item.dateTimeStart)),
+    ...occurrences.slice(0, SERIES_LISTED_OCCURRENCES).map((item) => formatOccurrenceLine(item, creation)),
   );
   if (occurrences.length > SERIES_LISTED_OCCURRENCES) lines.push(`… e mais ${occurrences.length - SERIES_LISTED_OCCURRENCES} horário(s)`);
   lines.push("", owner ? `Série: ${input.seriesId}` : `Código: ${bookingReference(first.id)}`);
   if (!owner && input.event === "BOOKING_CREATED_BY_STAFF") {
-    // Each occurrence keeps its own token; only the first one's link is sent (see booking-intents).
-    const link = buildBookingConfirmationLink(first);
-    lines.push("", link
-      ? `Para confirmar o primeiro horário, use o link: ${link}\nOs demais horários ficam reservados; para confirmá-los, fale conosco.`
-      : "Entre em contato conosco para confirmar seus horários.");
+    // Confirmation stays per occurrence: one link confirms one booking, never the whole series.
+    const pending = occurrences.filter((item) => item.status === "PENDENTE");
+    const link = input.confirmation;
+    if (link) {
+      lines.push("", `Para confirmar o horário de ${formatOccurrenceDate(link.occurrence.dateTimeStart)}, use o link:`, link.link,
+        "Este link confirma somente esse horário.");
+      if (pending.some((item) => item.id !== link.occurrence.id)) lines.push("Os demais horários aguardando confirmação podem ser confirmados conosco.");
+    } else if (pending.length) {
+      lines.push("", "Os horários aguardando confirmação podem ser confirmados conosco.");
+    }
   }
   return lines.join("\n");
 }

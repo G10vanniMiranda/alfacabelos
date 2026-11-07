@@ -3,6 +3,7 @@ import { NotificationEvent, Prisma, type NotificationDelivery } from "@prisma/cl
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppOnce, type WhatsAppSendResult } from "@/lib/notifications/whatsapp-provider";
 import { logger } from "@/lib/observability/logger";
+import { isSeriesCreationNotice, renderSeriesCreationNotice } from "@/lib/notifications/series-notice";
 import {
   deriveRecoveryKeys,
   isSealedMessage,
@@ -315,14 +316,17 @@ async function settleDelivery(
   now: Date,
   random: () => number,
   validUntil: Date | null = null,
+  deliveredText?: string,
 ): Promise<DeliveryOutcome> {
   if (result.ok) {
+    // A rebuilt summary is recorded as sent; sealed payloads are discarded instead.
+    const recordedText = !isSealedMessage(item.message) && deliveredText && deliveredText !== item.message ? { message: deliveredText } : {};
     await prisma.notificationDelivery.updateMany({
       where: { id: item.id, status: "PROCESSING", lockedBy: workerId },
       data: {
         status: "SENT", sentAt: now, processedAt: now, eligibleAt: null, nextRetryAt: null,
         lockedAt: null, lockedBy: null, providerMessageId: result.providerMessageId ?? null,
-        ...terminalRedaction(item),
+        ...terminalRedaction(item), ...recordedText,
       },
     });
     return "sent";
@@ -394,12 +398,24 @@ async function processClaimedDelivery(item: ClaimedDelivery, context: ProcessCon
     });
     return outcome;
   }
-  const outbound = openOutboundMessage(item);
+  let outbound = openOutboundMessage(item);
   if (!outbound) {
     // Missing/rotated secret or tampered ciphertext: never send, never retry.
     const outcome = await retireInvalidDelivery(item, workerId, { errorCategory: "payload_unreadable", reason: "sealed_payload_unreadable" }, new Date());
     logger.warn("notification.payload_unreadable", { requestId: item.requestId, workerId, notificationId: item.id, eventType: item.event, status: outcome });
     return outcome;
+  }
+  if (isSeriesCreationNotice(item)) {
+    // Never send the enqueue-time summary: occurrences may have been cancelled, moved,
+    // confirmed or passed since then. Rebuild it from the series' current state.
+    const rendered = await renderSeriesCreationNotice(prisma, item, new Date()).catch(() => undefined);
+    if (rendered === undefined) return deferUnverifiableDelivery(item, workerId, "series_render_failed", new Date(), random);
+    if (rendered === null) {
+      return retireInvalidDelivery(item, workerId, {
+        errorCategory: LIFECYCLE_ERROR_CATEGORY.EXPIRED, reason: "series_no_upcoming_occurrence",
+      }, new Date());
+    }
+    outbound = { text: rendered };
   }
   const result = await send({
     to: item.recipient, message: outbound.text, context: item.context, idempotencyKey: item.idempotencyKey, otp: outbound.otp,
@@ -407,7 +423,7 @@ async function processClaimedDelivery(item: ClaimedDelivery, context: ProcessCon
     ok: false, retryable: true, category: "unexpected",
     error: error instanceof Error ? error.message : "Unexpected provider error",
   }));
-  const outcome = await settleDelivery(item, workerId, result, new Date(), random, validity.validUntil);
+  const outcome = await settleDelivery(item, workerId, result, new Date(), random, validity.validUntil, outbound.otp ? undefined : outbound.text);
   const fields = {
     requestId: item.requestId, workerId, notificationId: item.id, eventType: item.event,
     bookingId: item.bookingId, attempt: item.attempts, status: outcome,

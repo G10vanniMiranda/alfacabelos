@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildBookingNotificationIntents, buildSeriesNotificationIntents, BOOKING_EVENT_AUDIENCES } from "../lib/notifications/booking-intents";
 import { bookingAudienceFromKey, evaluateNotificationValidity, notificationValidityUpperBound } from "../lib/notifications/validity-policy";
-import { bookingReference, type BookingNotificationSnapshot } from "../lib/whatsapp";
+import { bookingReference, buildSeriesNotificationMessage, type BookingNotificationSnapshot } from "../lib/whatsapp";
 
 // Synthetic numbers only (DDD 20 is not assigned in Brazil).
 const OWNER = "(20) 90000-0001";
@@ -176,6 +176,41 @@ test("série criada pela equipe: só o link da primeira ocorrência, e só para 
   assert.equal((client!.message.match(/confirmar-agendamento/g) ?? []).length, 1);
   assert.match(client!.message, /token=token-primeiro-sintetico/);
   assert.doesNotMatch(owner!.message, /token|confirmar-agendamento/);
+});
+
+test("resumo de criação: status de cada horário e link que confirma só uma ocorrência", () => {
+  const list = occurrences(3).map((item, index) => ({ ...item, status: index === 0 ? "CONFIRMADO" : "PENDENTE" }));
+  const withLink = buildSeriesNotificationMessage({
+    event: "BOOKING_CREATED_BY_STAFF", audience: "CLIENT", actor: "STAFF", occurrences: list, seriesId: SERIES_ID,
+    confirmation: { link: "https://alfa.example.test/confirmar-agendamento?token=abc", occurrence: list[1]! },
+  });
+  assert.match(withLink, /— confirmado/);
+  assert.equal((withLink.match(/— aguardando confirmação/g) ?? []).length, 2);
+  assert.match(withLink, /Para confirmar o horário de .*04\/03.*, use o link:/, "o link nomeia a ocorrência que confirma");
+  assert.match(withLink, /Este link confirma somente esse horário\./);
+  assert.match(withLink, /Os demais horários aguardando confirmação podem ser confirmados conosco\./);
+  const noLink = buildSeriesNotificationMessage({ event: "BOOKING_CREATED_BY_STAFF", audience: "CLIENT", actor: "STAFF", occurrences: list, seriesId: SERIES_ID });
+  assert.doesNotMatch(noLink, /link|token/i);
+  assert.match(noLink, /Os horários aguardando confirmação podem ser confirmados conosco\./);
+  const allConfirmed = buildSeriesNotificationMessage({ event: "BOOKING_CREATED_BY_STAFF", audience: "CLIENT", actor: "STAFF", occurrences: list.map((item) => ({ ...item, status: "CONFIRMADO" })), seriesId: SERIES_ID });
+  assert.doesNotMatch(allConfirmed, /aguardando|podem ser confirmados/);
+  const cancel = buildSeriesNotificationMessage({ event: "BOOKING_CANCELLED", audience: "CLIENT", actor: "CLIENT", occurrences: list, seriesId: SERIES_ID });
+  assert.doesNotMatch(cancel, /— confirmado|aguardando/, "cancelamento não lista status");
+});
+
+test("validade da criação de série: depende de haver ocorrência futura ativa, não da âncora", () => {
+  const now = new Date("2037-03-01T12:00:00.000Z");
+  const subject = { event: "BOOKING_CREATED_BY_STAFF" as const, bookingId: "anchor", seriesId: SERIES_ID, createdAt: new Date("2037-03-01T11:00:00.000Z"), idempotencyKey: `series:${SERIES_ID}:client:booking_created_by_staff` };
+  const cancelledAnchor = { status: "CANCELADO" as const, dateTimeStart: new Date("2037-03-03T14:00:00.000Z"), confirmationTokenHash: "h", confirmationTokenExpiresAt: null, confirmationTokenUsedAt: null };
+  const occurrence = (status: "PENDENTE" | "CONFIRMADO" | "CANCELADO", day: number) => ({ status, dateTimeStart: new Date(Date.UTC(2037, 2, day, 14)) });
+  const evaluate = (seriesOccurrences: ReturnType<typeof occurrence>[], at = now) =>
+    evaluateNotificationValidity(subject, { booking: cancelledAnchor, passwordResetToken: null, seriesOccurrences }, at);
+  assert.equal(evaluate([occurrence("CANCELADO", 3), occurrence("PENDENTE", 4)]).outcome, "VALID", "âncora cancelada não derruba o resumo");
+  assert.equal(evaluate([occurrence("CONFIRMADO", 4)]).outcome, "VALID");
+  assert.deepEqual(evaluate([occurrence("CANCELADO", 3), occurrence("CANCELADO", 4)]), { outcome: "INVALID", classification: "CANCELED", reason: "series_no_upcoming_occurrence" });
+  assert.deepEqual(evaluate([occurrence("PENDENTE", 3)], new Date("2037-03-03T15:00:00.000Z")).outcome, "INVALID", "só ocorrências passadas");
+  assert.equal(evaluate([occurrence("PENDENTE", 4)], new Date("2037-03-01T17:30:00.000Z")).outcome, "INVALID", "mais de 6 h");
+  assert.equal(evaluate([]).outcome, "INVALID", "série removida");
 });
 
 test("série: mesmo número para os dois públicos gera uma única mensagem", () => {

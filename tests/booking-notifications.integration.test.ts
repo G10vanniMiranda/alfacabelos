@@ -198,7 +198,7 @@ test("falha parcial: um destinatário falha, o outro recebe; o retry entrega dep
 
     // The worker claims the oldest eligible rows first: leftovers from other suites in this
     // disposable database must not crowd the batch (same reset the outbox suite does).
-    await prisma.notificationDelivery.deleteMany({ where: { NOT: { bookingId: created.bookingIds[0]! } } });
+    await prisma.notificationDelivery.deleteMany({ where: { OR: [{ bookingId: null }, { bookingId: { not: created.bookingIds[0]! } }] } });
     const retried: string[] = [];
     await withWhatsApp(() => processNotificationBatch({
       workerId: "retry-test", batchSize: 10, now: new Date(owner.nextRetryAt!.getTime() + 1_000),
@@ -348,7 +348,7 @@ test("provedor religado depois: só avisos recentes saem; os antigos morrem sem 
     await createBookingSeriesAtomic(fresh);
     // Simulate a backlog kept while WhatsApp was off: the stale request's notices are 7 h old.
     await prisma.notificationDelivery.updateMany({ where: { requestId: stale.requestId }, data: { createdAt: new Date(Date.now() - 7 * 3_600_000) } });
-    await prisma.notificationDelivery.deleteMany({ where: { requestId: { notIn: [stale.requestId!, fresh.requestId!] } } });
+    await prisma.notificationDelivery.deleteMany({ where: { OR: [{ requestId: null }, { requestId: { notIn: [stale.requestId!, fresh.requestId!] } }] } });
     const sent: string[] = [];
     const summary = await withWhatsApp(() => processNotificationBatch({
       workerId: "re-enable", batchSize: 20,

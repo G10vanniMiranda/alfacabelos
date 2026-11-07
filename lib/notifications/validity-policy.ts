@@ -24,7 +24,8 @@ export type NotificationValidity =
   | { outcome: "UNSUPPORTED_EVENT"; reason: "event_policy_missing" }
   | { outcome: "TEMPORARILY_UNVERIFIABLE"; reason: string };
 
-export type NotificationValiditySubject = Pick<NotificationDelivery, "event" | "idempotencyKey" | "bookingId" | "createdAt">;
+export type NotificationValiditySubject = Pick<NotificationDelivery, "event" | "idempotencyKey" | "bookingId" | "createdAt">
+  & { seriesId?: string | null };
 
 export type NotificationValidityReferences = {
   booking: {
@@ -41,7 +42,13 @@ export type NotificationValidityReferences = {
     consumedAt: Date | null;
     invalidatedAt: Date | null;
   } | null;
+  /** Current occurrences of the series, for consolidated creation notices. */
+  seriesOccurrences?: Array<{ status: BookingStatus; dateTimeStart: Date }> | null;
 };
+
+function isSeriesCreationKey(event: NotificationEvent, idempotencyKey: string): boolean {
+  return (event === "BOOKING_CREATED_BY_CLIENT" || event === "BOOKING_CREATED_BY_STAFF") && idempotencyKey.startsWith("series:");
+}
 
 /**
  * Creation notices (staff pre-booking confirmation and the owner's new-booking
@@ -197,6 +204,20 @@ export function evaluateNotificationValidity(
     return { outcome: "UNSUPPORTED_EVENT", reason: "event_policy_missing" };
   }
 
+  if (isSeriesCreationKey(event, subject.idempotencyKey)) {
+    // The summary is rebuilt at send time, so it only needs one upcoming active occurrence;
+    // the anchor occurrence being cancelled, moved, confirmed or past is not a reason to drop it.
+    const noticeDeadline = new Date(subject.createdAt.getTime() + BOOKING_CREATED_NOTICE_MAX_AGE_MS);
+    if (noticeDeadline <= now) return invalid("EXPIRED", "notice_too_old");
+    const occurrences = references.seriesOccurrences ?? [];
+    const upcoming = occurrences.filter((item) => (item.status === "PENDENTE" || item.status === "CONFIRMADO") && item.dateTimeStart > now);
+    if (!upcoming.length) {
+      const allCancelled = occurrences.length > 0 && occurrences.every((item) => item.status === "CANCELADO");
+      return invalid(allCancelled ? "CANCELED" : "EXPIRED", "series_no_upcoming_occurrence");
+    }
+    return validUntil(noticeDeadline, now);
+  }
+
   const booking = references.booking;
   if (!subject.bookingId || !booking) return invalid("INVALID_REFERENCE", "booking_missing");
   const start = booking.dateTimeStart;
@@ -255,7 +276,8 @@ export async function loadNotificationValidityReferences(
 ): Promise<NotificationValidityReferences> {
   const tokenHash = subject.event === "PASSWORD_RESET" ? passwordResetTokenHashFromKey(subject.idempotencyKey) : null;
   const challengeId = subject.event === "PASSWORD_RESET" ? passwordRecoveryChallengeIdFromKey(subject.idempotencyKey) : null;
-  const [booking, passwordResetToken, passwordResetChallenge] = await Promise.all([
+  const seriesId = isSeriesCreationKey(subject.event, subject.idempotencyKey) ? subject.seriesId ?? null : undefined;
+  const [booking, passwordResetToken, passwordResetChallenge, seriesOccurrences] = await Promise.all([
     subject.bookingId && subject.event !== "PASSWORD_RESET"
       ? db.booking.findUnique({
         where: { id: subject.bookingId },
@@ -274,8 +296,11 @@ export async function loadNotificationValidityReferences(
         select: { expiresAt: true, verifiedAt: true, consumedAt: true, invalidatedAt: true },
       })
       : null,
+    // A deleted series (seriesId set to NULL) has no occurrences left: the notice is retired.
+    seriesId === undefined ? undefined
+      : seriesId ? db.booking.findMany({ where: { seriesId }, select: { status: true, dateTimeStart: true } }) : [],
   ]);
-  return { booking, passwordResetToken, passwordResetChallenge };
+  return { booking, passwordResetToken, passwordResetChallenge, seriesOccurrences };
 }
 
 /**

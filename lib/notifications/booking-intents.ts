@@ -5,6 +5,7 @@ import { enqueueWhatsAppNotifications, type NotificationIntentInput } from "@/li
 import { normalizeWhatsAppPhone } from "@/lib/notifications/phone";
 import { whatsAppProviderName } from "@/lib/notifications/whatsapp-provider";
 import {
+  buildBookingConfirmationLink,
   buildBookingCancellationMessage,
   buildBookingRescheduleMessage,
   buildBookingWhatsAppMessage,
@@ -166,14 +167,18 @@ export function buildSeriesNotificationIntents(input: {
   const keyTail = input.event === "BOOKING_CANCELLED" ? `${group}:${event}`
     : input.event === "BOOKING_RESCHEDULED" ? `${group}:${event}:${anchor.dateTimeStart}`
     : event;
+  const firstLink = input.event === "BOOKING_CREATED_BY_STAFF" ? buildBookingConfirmationLink(first) : null;
   return resolveRecipients(first, BOOKING_EVENT_AUDIENCES[input.event], context).map(([audience, recipient]) => ({
     event: input.event,
     bookingId: anchor.id,
     seriesId: input.seriesId,
     idempotencyKey: `series:${input.seriesId}:${audience.toLowerCase()}:${keyTail}`,
     to: recipient,
+    // Creation summaries are rebuilt from the series' current state right before sending
+    // (lib/notifications/series-notice.ts); this text is the enqueue-time version.
     message: buildSeriesNotificationMessage({
       event: input.event, audience, actor: input.actor ?? "STAFF", occurrences, seriesId: input.seriesId,
+      confirmation: audience === "CLIENT" && firstLink ? { link: firstLink, occurrence: first } : null,
     }),
     context: `${event}:series:${input.seriesId}`,
     requestId: input.requestId,
