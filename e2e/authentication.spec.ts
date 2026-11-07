@@ -178,11 +178,15 @@ test("sessao expirada e recuperacao de senha preservam privacidade", async ({ pa
   await expect(page.locator("#auth-feedback")).toContainText("Sua sessão expirou");
   await page.goto("/esqueci-minha-senha");
   await page.getByLabel("Telefone cadastrado").fill(recoveryPhone);
-  await page.getByRole("button", { name: "Enviar instruções" }).click();
-  const status = page.getByRole("status");
-  await expect(status).toContainText(/se existir uma conta vinculada/i);
-  await expect(status).toBeFocused();
-  await expect(page.getByRole("button", { name: /solicitar novamente em \d+s/i })).toBeDisabled();
+  await page.getByRole("button", { name: "Enviar código" }).click();
+  const feedback = page.locator("#auth-feedback");
+  await expect(feedback).toBeFocused();
+  // Channel-agnostic: either the code step (channel configured) or an honest "unavailable" notice.
+  await expect(feedback).toContainText(/se este telefone estiver cadastrado|não conseguimos enviar códigos/i);
+  await expect(feedback).not.toContainText(/não encontrado|inexistente|não cadastrado/i);
+  if (await page.getByLabel("Código de 8 números").isVisible()) {
+    await expect(page.getByRole("button", { name: /pedir novo código em \d+s/i })).toBeDisabled();
+  }
 });
 
 test("cliente autenticado nao retorna ao login e open redirect e bloqueado", async ({ page }) => {

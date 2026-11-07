@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { isWhatsAppConfigured } from "@/lib/whatsapp";
 import { getOperationalNotificationMetrics } from "@/lib/observability/metrics";
 import { isSafeAlertWebhookUrl } from "@/lib/observability/alert-delivery";
+import { deriveRecoveryKeys } from "@/lib/auth/password-recovery-crypto";
 
 export type ServiceHealth = "healthy" | "degraded" | "unhealthy" | "disabled" | "unknown";
 type RuntimeEnvironment = Partial<NodeJS.ProcessEnv>;
@@ -136,6 +137,11 @@ export function checkCriticalConfiguration(env: RuntimeEnvironment = process.env
       && env.WHATSAPP_API_URL?.includes("{instanceId}")
       && !env.WHATSAPP_INSTANCE_ID?.trim()) {
       issues.push("whatsapp_instance");
+    }
+    // Recovery codes cannot be hashed or sealed without it; the flow would report "unavailable".
+    if (!deriveRecoveryKeys(env.PASSWORD_RESET_SECRET)) issues.push("password_recovery_secret");
+    if (env.WHATSAPP_PROVIDER?.trim().toLowerCase() === "meta" && !env.WHATSAPP_AUTH_TEMPLATE_NAME?.trim()) {
+      issues.push("whatsapp_auth_template");
     }
   }
 

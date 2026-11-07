@@ -272,7 +272,29 @@ model Client {
   bookings            Booking[]
   bookingSeries       BookingSeries[]
   passwordResetTokens PasswordResetToken[]
+  passwordResetChallenges PasswordResetChallenge[]
   sessions            ClientSession[]
+}
+
+// One-time recovery code challenge. Neither the raw code nor the browser handle is stored:
+// `handleHash` is SHA-256 of the HttpOnly cookie value, `codeHash` is an HMAC keyed by a server secret.
+model PasswordResetChallenge {
+  id            String    @id
+  clientId      String
+  handleHash    String    @unique
+  codeHash      String
+  channel       String
+  attempts      Int       @default(0)
+  expiresAt     DateTime
+  verifiedAt    DateTime?
+  consumedAt    DateTime?
+  invalidatedAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+  @@index([expiresAt])
 }
 
 model PasswordResetToken {

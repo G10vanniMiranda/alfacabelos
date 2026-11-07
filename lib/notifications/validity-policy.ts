@@ -1,5 +1,6 @@
 import type { BookingStatus, NotificationDelivery, NotificationEvent, Prisma } from "@prisma/client";
 import { evaluatePasswordResetToken, PASSWORD_RESET_TOKEN_TTL_MINUTES } from "@/lib/auth/password-reset-security";
+import { RECOVERY_CODE_TTL_MINUTES } from "@/lib/auth/password-recovery-crypto";
 
 // Business validity is separate from claim eligibility: a row may be claimable
 // (PENDING/RETRY, eligibleAt <= now) and still describe something that is no
@@ -34,6 +35,12 @@ export type NotificationValidityReferences = {
     confirmationTokenUsedAt: Date | null;
   } | null;
   passwordResetToken: { expiresAt: Date; usedAt: Date | null } | null;
+  passwordResetChallenge?: {
+    expiresAt: Date;
+    verifiedAt: Date | null;
+    consumedAt: Date | null;
+    invalidatedAt: Date | null;
+  } | null;
 };
 
 /**
@@ -79,6 +86,10 @@ export function passwordResetTokenHashFromKey(idempotencyKey: string): string | 
   return /^password-reset:([0-9a-f]{64})$/.exec(idempotencyKey)?.[1] ?? null;
 }
 
+export function passwordRecoveryChallengeIdFromKey(idempotencyKey: string): string | null {
+  return /^password-reset-code:([0-9a-f-]{36})$/.exec(idempotencyKey)?.[1] ?? null;
+}
+
 function bookingStartFromKey(idempotencyKey: string, event: "booking_reminder" | "booking_rescheduled"): Date | null {
   const marker = `:${event}:`;
   const index = idempotencyKey.indexOf(marker);
@@ -114,9 +125,11 @@ export function notificationValidityUpperBound(
   env: NodeJS.ProcessEnv = process.env,
 ): Date | null {
   switch (subject.event) {
-    case "PASSWORD_RESET":
-      // The token is created before the outbox row in the same transaction.
-      return new Date(subject.createdAt.getTime() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60_000);
+    case "PASSWORD_RESET": {
+      // The token/challenge is created before the outbox row in the same transaction.
+      const ttl = passwordRecoveryChallengeIdFromKey(subject.idempotencyKey) ? RECOVERY_CODE_TTL_MINUTES : PASSWORD_RESET_TOKEN_TTL_MINUTES;
+      return new Date(subject.createdAt.getTime() + ttl * 60_000);
+    }
     case "BOOKING_CREATED_BY_STAFF":
     case "BOOKING_CREATED_BY_CLIENT":
       return new Date(subject.createdAt.getTime() + BOOKING_CREATED_NOTICE_MAX_AGE_MS);
@@ -138,6 +151,15 @@ export function evaluateNotificationValidity(
   env: NodeJS.ProcessEnv = process.env,
 ): NotificationValidity {
   const event: NotificationEvent = subject.event;
+
+  if (event === "PASSWORD_RESET" && passwordRecoveryChallengeIdFromKey(subject.idempotencyKey)) {
+    // A code is only worth sending while its challenge can still be verified.
+    const challenge = references.passwordResetChallenge;
+    if (!challenge) return invalid("INVALID_REFERENCE", "reset_code_challenge_missing");
+    if (challenge.verifiedAt || challenge.consumedAt) return invalid("EXPIRED", "reset_code_used");
+    if (challenge.invalidatedAt) return invalid("EXPIRED", "reset_code_superseded");
+    return validUntil(challenge.expiresAt, now);
+  }
 
   if (event === "PASSWORD_RESET") {
     // Fail closed: without a verifiable token row there is no proof the link works.
@@ -202,14 +224,15 @@ export function evaluateNotificationValidity(
   return validUntil(earliest(start, noticeDeadline), now);
 }
 
-type ValidityDb = Pick<Prisma.TransactionClient, "booking" | "passwordResetToken">;
+type ValidityDb = Pick<Prisma.TransactionClient, "booking" | "passwordResetToken" | "passwordResetChallenge">;
 
 export async function loadNotificationValidityReferences(
   db: ValidityDb,
   subject: NotificationValiditySubject,
 ): Promise<NotificationValidityReferences> {
   const tokenHash = subject.event === "PASSWORD_RESET" ? passwordResetTokenHashFromKey(subject.idempotencyKey) : null;
-  const [booking, passwordResetToken] = await Promise.all([
+  const challengeId = subject.event === "PASSWORD_RESET" ? passwordRecoveryChallengeIdFromKey(subject.idempotencyKey) : null;
+  const [booking, passwordResetToken, passwordResetChallenge] = await Promise.all([
     subject.bookingId && subject.event !== "PASSWORD_RESET"
       ? db.booking.findUnique({
         where: { id: subject.bookingId },
@@ -222,8 +245,14 @@ export async function loadNotificationValidityReferences(
     tokenHash
       ? db.passwordResetToken.findUnique({ where: { tokenHash }, select: { expiresAt: true, usedAt: true } })
       : null,
+    challengeId
+      ? db.passwordResetChallenge.findUnique({
+        where: { id: challengeId },
+        select: { expiresAt: true, verifiedAt: true, consumedAt: true, invalidatedAt: true },
+      })
+      : null,
   ]);
-  return { booking, passwordResetToken };
+  return { booking, passwordResetToken, passwordResetChallenge };
 }
 
 /**

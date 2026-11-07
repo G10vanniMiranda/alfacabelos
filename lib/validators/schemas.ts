@@ -56,6 +56,23 @@ export const requestPasswordResetSchema = z.object({
   identifier: passwordResetIdentifierSchema,
 });
 
+export const recoveryCodeSchema = z.object({
+  code: z
+    .string()
+    .transform((value) => value.replace(/[\s-]/g, ""))
+    .refine((value) => /^\d{8}$/.test(value), { message: "Digite os 8 números do código" }),
+});
+
+export const recoveryPasswordSchema = z
+  .object({
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As senhas não conferem",
+    path: ["confirmPassword"],
+  });
+
 export const resetPasswordSchema = z
   .object({
     token: z.string().trim().min(16, "Token inválido").max(256, "Token inválido"),
