@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
     "check:sensitive-files": "node scripts/check-sensitive-files.mjs",
     "check:migrations": "node scripts/check-migrations.mjs",
     "validate:production": "tsx scripts/validate-production.ts",
