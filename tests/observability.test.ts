@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 import { evaluateOperationalAlerts } from "../lib/observability/alerts";
 import { dispatchOperationalAlerts, type AlertDeliveryDependencies } from "../lib/observability/alert-delivery";
 import { platformRequestId, requestIdFromHeaders } from "../lib/observability/context";
-import { checkCriticalConfiguration, checkDatabaseHealth, classifyWorkerHeartbeat } from "../lib/observability/health";
+import { DB_HEALTH_TIMEOUT_MS, checkCriticalConfiguration, checkDatabaseHealth, checkSchemaReadiness, classifyWorkerHeartbeat } from "../lib/observability/health";
 import { logger, maskLogPhone, sanitizeAuditMetadata, sanitizeLogValue } from "../lib/observability/logger";
 import { deriveNotificationQueueDepths } from "../lib/observability/metrics";
 
@@ -311,4 +311,140 @@ test("absent ALERT_WEBHOOK_URL does not relax other strict readiness checks", ()
   assert.ok(checkCriticalConfiguration({ ...strictReadinessEnv, CRON_SECRET: "short" }).issues.includes("notification_worker_auth"));
   const homolog = checkCriticalConfiguration({ ...strictReadinessEnv, APP_ENV: "homologation" });
   assert.deepEqual(homolog.issues, ["production_identity_baseline"]);
+});
+
+const localHomologationEnv = {
+  APP_ENV: "homologation",
+  HOMOLOGATION_LOCAL_HTTP: "true",
+  DATABASE_URL: "postgresql://postgres.homologref@pooler.supabase.com:6543/postgres",
+  DIRECT_URL: "postgresql://postgres.homologref@pooler.supabase.com:5432/postgres",
+  APP_URL: "http://127.0.0.1:3100",
+  NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3100",
+  CRON_SECRET: "homolog-cron-secret-2026",
+  SUPABASE_URL: "https://homologref.supabase.co",
+  SUPABASE_PROJECT_REF: "homologref",
+  SUPABASE_SERVICE_ROLE_KEY: "configured",
+  SUPABASE_STORAGE_BUCKET: "alfa-homolog",
+  PRODUCTION_SUPABASE_PROJECT_REF: "prodref",
+  PRODUCTION_APP_HOST: "alfa.example.test",
+  PRODUCTION_STORAGE_BUCKET: "barber",
+  WHATSAPP_ENABLED: "false",
+};
+
+test("local homologation accepts plain HTTP only on an identical loopback origin", () => {
+  for (const url of ["http://127.0.0.1:3100", "http://localhost:3100", "http://[::1]:3100", "http://127.0.0.1:3100/"]) {
+    assert.deepEqual(checkCriticalConfiguration({ ...localHomologationEnv, APP_URL: url, NEXT_PUBLIC_APP_URL: url }), { status: "healthy", issues: [] }, url);
+  }
+});
+
+test("local homologation HTTP exception never applies outside its exact conditions", () => {
+  const rejected: Array<[string, Record<string, string | undefined>]> = [
+    ["flag absent", { HOMOLOGATION_LOCAL_HTTP: undefined }],
+    ["flag not exactly true", { HOMOLOGATION_LOCAL_HTTP: "TRUE" }],
+    ["flag numeric", { HOMOLOGATION_LOCAL_HTTP: "1" }],
+    ["production app env", { APP_ENV: "production" }],
+    ["vercel preview", { VERCEL_ENV: "preview" }],
+    ["vercel production", { VERCEL_ENV: "production" }],
+    ["vercel env blank", { VERCEL_ENV: "" }],
+    ["vercel runtime", { VERCEL: "1" }],
+    ["public url absent", { NEXT_PUBLIC_APP_URL: undefined }],
+    ["urls differ", { NEXT_PUBLIC_APP_URL: "http://localhost:3100" }],
+  ];
+  for (const [label, override] of rejected) {
+    const result = checkCriticalConfiguration({ ...localHomologationEnv, ...override });
+    assert.ok(result.issues.includes("application_url_security"), label);
+  }
+  for (const url of [
+    "http://alfa-homolog.example.test", "http://127.0.0.1.example.test:3100", "http://localhost.example.test:3100",
+    "http://0.0.0.0:3100", "http://192.168.0.10:3100", "http://user:pw@127.0.0.1:3100", "http://127.0.0.1:3100/app",
+    "http://127.0.0.1:3100/?next=x", "127.0.0.1:3100", "ftp://127.0.0.1:3100",
+  ]) {
+    const result = checkCriticalConfiguration({ ...localHomologationEnv, APP_URL: url, NEXT_PUBLIC_APP_URL: url });
+    assert.ok(result.issues.includes("application_url_security"), url);
+  }
+});
+
+test("local homologation HTTP exception keeps isolation guards active", () => {
+  const result = checkCriticalConfiguration({
+    ...localHomologationEnv,
+    DATABASE_URL: "postgresql://postgres.prodref@pooler.supabase.com:6543/postgres",
+    SUPABASE_STORAGE_BUCKET: "barber",
+  });
+  assert.equal(result.status, "unhealthy");
+  assert.ok(result.issues.includes("production_database"));
+  assert.ok(result.issues.includes("production_storage"));
+  assert.ok(result.issues.includes("supabase_identity"));
+  assert.ok(!result.issues.includes("application_url_security"));
+});
+
+const compatibleSchemaRow = { audit: "\"AuditLog\"", heartbeat: "\"OperationalHeartbeat\"", notificationColumn: true };
+
+async function withMockedTimers<T>(run: () => Promise<T>): Promise<T> {
+  mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  try {
+    return await run();
+  } finally {
+    mock.timers.reset();
+  }
+}
+
+test("database health budget is 3000 ms and is the default", () => {
+  assert.equal(DB_HEALTH_TIMEOUT_MS, 3_000);
+});
+
+test("database health with default timeout accepts a legit slow query (1500 ms)", async () => {
+  const result = await withMockedTimers(async () => {
+    const pending = checkDatabaseHealth(() => new Promise((resolve) => setTimeout(() => resolve(1), 1_500)));
+    mock.timers.tick(1_500);
+    return pending;
+  });
+  assert.equal(result.status, "healthy");
+  assert.equal(typeof result.latencyMs, "number");
+});
+
+test("database health with default timeout reports timeout at 3000 ms", async () => {
+  const result = await withMockedTimers(async () => {
+    const pending = checkDatabaseHealth(() => new Promise(() => undefined));
+    mock.timers.tick(3_000);
+    return pending;
+  });
+  assert.deepEqual(result, { status: "unhealthy", latencyMs: 3_000, errorCode: "timeout" });
+});
+
+test("schema readiness is healthy and compatible for a complete schema", async () => {
+  assert.deepEqual(await checkSchemaReadiness(async () => [compatibleSchemaRow]), { status: "healthy", compatible: true });
+});
+
+test("schema readiness is unhealthy for each missing piece or empty result", async () => {
+  for (const rows of [
+    [{ ...compatibleSchemaRow, audit: null }],
+    [{ ...compatibleSchemaRow, heartbeat: null }],
+    [{ ...compatibleSchemaRow, notificationColumn: false }],
+    [],
+  ]) {
+    assert.deepEqual(await checkSchemaReadiness(async () => rows), { status: "unhealthy", compatible: false });
+  }
+});
+
+test("schema readiness is unhealthy on pending (timeout) and rejected queries", async () => {
+  assert.deepEqual(await checkSchemaReadiness(() => new Promise(() => undefined), 5), { status: "unhealthy", compatible: false });
+  assert.deepEqual(await checkSchemaReadiness(async () => { throw new Error("password leaked"); }), { status: "unhealthy", compatible: false });
+});
+
+test("schema readiness with default timeout accepts a legit slow query (1500 ms)", async () => {
+  const result = await withMockedTimers(async () => {
+    const pending = checkSchemaReadiness(() => new Promise((resolve) => setTimeout(() => resolve([compatibleSchemaRow]), 1_500)));
+    mock.timers.tick(1_500);
+    return pending;
+  });
+  assert.deepEqual(result, { status: "healthy", compatible: true });
+});
+
+test("schema readiness with default timeout fails at 3000 ms", async () => {
+  const result = await withMockedTimers(async () => {
+    const pending = checkSchemaReadiness(() => new Promise(() => undefined));
+    mock.timers.tick(3_000);
+    return pending;
+  });
+  assert.deepEqual(result, { status: "unhealthy", compatible: false });
 });

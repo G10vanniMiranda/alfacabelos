@@ -1,0 +1,68 @@
+# ALFA CABELOS on the VPS: Next.js app behind the existing Traefik + notification scheduler.
+# Database stays on Supabase (no PostgreSQL here). Secrets live only in the env files next to
+# this compose file on the host (chmod 600, never committed). See deploy/vps/README.md.
+#
+#   docker compose --env-file deploy.env up -d --build
+name: alfa-cabelos
+
+x-hardening: &hardening
+  init: true
+  restart: unless-stopped
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  app:
+    <<: *hardening
+    image: alfa-cabelos:${APP_VERSION:?set APP_VERSION to the git SHA being deployed}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file: [./app.env]
+    environment:
+      APP_VERSION: ${APP_VERSION}
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:size=64m
+      - /app/.next/cache:size=256m,uid=1000,gid=1000
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 256
+    networks: [backend, edge]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      # The worker endpoint is reachable only from the backend network, never through Traefik.
+      traefik.http.routers.alfa-cabelos.rule: Host(`${APP_HOST:?set APP_HOST}`) && !PathPrefix(`/api/internal`)
+      traefik.http.routers.alfa-cabelos.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.alfa-cabelos.tls: "true"
+      traefik.http.routers.alfa-cabelos.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.alfa-cabelos.loadbalancer.server.port: "3000"
+
+  scheduler:
+    <<: *hardening
+    image: alfa-cabelos:${APP_VERSION}
+    command: ["node", "scripts/notification-scheduler.mjs"]
+    # Only the worker secret: the scheduler never sees database or provider credentials.
+    env_file: [./scheduler.env]
+    environment:
+      NOTIFICATION_WORKER_URL: http://app:3000/api/internal/notifications/process
+    depends_on:
+      app: { condition: service_healthy }
+    mem_limit: 96m
+    cpus: 0.25
+    pids_limit: 32
+    networks: [backend]
+    labels:
+      traefik.enable: "false"
+
+networks:
+  backend:
+    internal: true
+  edge:
+    name: ${TRAEFIK_NETWORK:-traefik}
+    external: true

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { isWhatsAppConfigured } from "@/lib/whatsapp";
 import { getOperationalNotificationMetrics } from "@/lib/observability/metrics";
 import { isSafeAlertWebhookUrl } from "@/lib/observability/alert-delivery";
+import { deriveRecoveryKeys } from "@/lib/auth/password-recovery-crypto";
 
 export type ServiceHealth = "healthy" | "degraded" | "unhealthy" | "disabled" | "unknown";
 type RuntimeEnvironment = Partial<NodeJS.ProcessEnv>;
@@ -21,9 +22,12 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   }
 }
 
+// Budget covers connect + query: a cold Prisma connect through the pooler can exceed 1 s; 3 s keeps /api/ready worst case near 6 s.
+export const DB_HEALTH_TIMEOUT_MS = 3_000;
+
 export async function checkDatabaseHealth(
   query: () => Promise<unknown> = () => prisma.$queryRaw`SELECT 1`,
-  timeoutMs = 1_000,
+  timeoutMs = DB_HEALTH_TIMEOUT_MS,
 ): Promise<{ status: "healthy" | "unhealthy"; latencyMs: number | null; errorCode?: string }> {
   const startedAt = Date.now();
   try {
@@ -38,9 +42,10 @@ export async function checkDatabaseHealth(
   }
 }
 
-export async function checkSchemaReadiness(): Promise<{ status: "healthy" | "unhealthy"; compatible: boolean }> {
-  try {
-    const rows = await prisma.$queryRaw<Array<{ audit: string | null; heartbeat: string | null; notificationColumn: boolean }>>(Prisma.sql`
+type SchemaProbeRow = { audit: string | null; heartbeat: string | null; notificationColumn: boolean };
+
+export async function checkSchemaReadiness(
+  query: () => Promise<SchemaProbeRow[]> = () => prisma.$queryRaw<SchemaProbeRow[]>(Prisma.sql`
       SELECT
         to_regclass('public."AuditLog"')::text AS "audit",
         to_regclass('public."OperationalHeartbeat"')::text AS "heartbeat",
@@ -48,7 +53,11 @@ export async function checkSchemaReadiness(): Promise<{ status: "healthy" | "unh
           SELECT 1 FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = 'NotificationDelivery' AND column_name = 'requestId'
         ) AS "notificationColumn"
-    `);
+    `),
+  timeoutMs = DB_HEALTH_TIMEOUT_MS,
+): Promise<{ status: "healthy" | "unhealthy"; compatible: boolean }> {
+  try {
+    const rows = await withTimeout(query(), timeoutMs);
     const compatible = Boolean(rows[0]?.audit && rows[0]?.heartbeat && rows[0]?.notificationColumn);
     return { status: compatible ? "healthy" : "unhealthy", compatible };
   } catch {
@@ -59,6 +68,22 @@ export async function checkSchemaReadiness(): Promise<{ status: "healthy" | "unh
 function isHttpsUrl(value: string | undefined): boolean {
   try {
     return new URL(value ?? "").protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+// Local homologation runtime only: plain HTTP on a loopback origin, never on Vercel (Preview or Production).
+function isLocalHomologationHttp(env: RuntimeEnvironment): boolean {
+  if (env.APP_ENV !== "homologation" || env.HOMOLOGATION_LOCAL_HTTP !== "true") return false;
+  if (env.VERCEL_ENV !== undefined || env.VERCEL !== undefined) return false;
+  if (!env.APP_URL || env.APP_URL !== env.NEXT_PUBLIC_APP_URL) return false;
+  try {
+    const url = new URL(env.APP_URL);
+    return url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname)
+      && !url.username && !url.password && url.pathname === "/" && !url.search && !url.hash;
   } catch {
     return false;
   }
@@ -113,11 +138,16 @@ export function checkCriticalConfiguration(env: RuntimeEnvironment = process.env
       && !env.WHATSAPP_INSTANCE_ID?.trim()) {
       issues.push("whatsapp_instance");
     }
+    // Recovery codes cannot be hashed or sealed without it; the flow would report "unavailable".
+    if (!deriveRecoveryKeys(env.PASSWORD_RESET_SECRET)) issues.push("password_recovery_secret");
+    if (env.WHATSAPP_PROVIDER?.trim().toLowerCase() === "meta" && !env.WHATSAPP_AUTH_TEMPLATE_NAME?.trim()) {
+      issues.push("whatsapp_auth_template");
+    }
   }
 
   if (strictRuntime) {
     if (appEnv !== "production" && appEnv !== "homologation") issues.push("application_environment");
-    if (applicationUrl && !isHttpsUrl(applicationUrl)) issues.push("application_url_security");
+    if (applicationUrl && !isHttpsUrl(applicationUrl) && !isLocalHomologationHttp(env)) issues.push("application_url_security");
     if (!env.DIRECT_URL) issues.push("database_direct");
     if (!(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_STORAGE_BUCKET)) issues.push("supabase_configuration");
     const projectRef = env.SUPABASE_PROJECT_REF?.trim().toLowerCase();

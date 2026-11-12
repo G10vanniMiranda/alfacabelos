@@ -9,6 +9,9 @@ import { requestIdFromHeaders } from "@/lib/observability/context";
 import { logger } from "@/lib/observability/logger";
 import { recordAuditEvent } from "@/lib/observability/audit";
 import { prisma } from "@/lib/prisma";
+import { cancelBookingSeries } from "@/lib/booking-series-service";
+import { scheduleBookingNotificationDelivery } from "@/lib/notifications/after-response";
+import { updateBookingStatusSchema } from "@/lib/validators/schemas";
 
 async function getPrincipal(request: NextRequest) {
   const token = request.cookies.get("barber_admin")?.value ?? "";
@@ -49,8 +52,17 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const payload = await request.json();
-    await assertBookingScope(principal, String(payload.bookingId ?? ""));
+    const parsed = updateBookingStatusSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ message: "Erro ao atualizar status" }, { status: 400 });
+    }
+    const payload = parsed.data;
+    await assertBookingScope(principal, payload.bookingId);
+    // A staff cancellation goes through the same path as the panel action, so both parties are told.
+    if (payload.status === "CANCELADO") {
+      await cancelBookingSeries({ bookingId: payload.bookingId, scope: "SINGLE", cancelledBy: "STAFF", requestId });
+      scheduleBookingNotificationDelivery(requestId);
+    }
     const updated = await updateBookingStatus(payload);
     await recordAuditEvent(prisma, {
       actorType: principal.role,

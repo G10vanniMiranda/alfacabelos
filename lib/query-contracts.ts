@@ -25,10 +25,10 @@ const adminBookingsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(ADMIN_BOOKINGS_MAX_LIMIT).default(ADMIN_BOOKINGS_DEFAULT_LIMIT),
 }).superRefine((value, context) => {
   if ((value.start && !value.end) || (!value.start && value.end)) {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: "start e end devem ser informados juntos" });
+    context.addIssue({ code: "custom", message: "start e end devem ser informados juntos" });
   }
   if (value.date && (value.start || value.end)) {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: "use date ou start/end, não ambos" });
+    context.addIssue({ code: "custom", message: "use date ou start/end, não ambos" });
   }
 });
 

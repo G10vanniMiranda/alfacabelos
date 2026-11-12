@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 import {
   clientLoginSchema,
   clientRegisterSchema,
-  requestPasswordResetSchema,
   resetPasswordSchema,
 } from "@/lib/validators/schemas";
 import {
@@ -17,20 +16,14 @@ import {
   normalizeClientPhone,
   revokeClientSession,
 } from "@/lib/auth/client-store";
-import {
-  createPasswordResetForIdentifier,
-  PASSWORD_RESET_GENERIC_MESSAGE,
-  PASSWORD_RESET_RESEND_COOLDOWN_SECONDS,
-  registerPasswordResetAttempt,
-  resetClientPasswordWithToken,
-} from "@/lib/auth/client-password-reset-store";
+import { resetClientPasswordWithToken } from "@/lib/auth/client-password-reset-store";
 import { confirmClientBooking } from "@/lib/booking-service";
 import { cancelBookingSeries } from "@/lib/booking-series-service";
-import { clearRateLimitEvents, getClientIpFromHeaders, registerRateLimitEvent } from "@/lib/security";
+import { scheduleBookingNotificationDelivery } from "@/lib/notifications/after-response";
+import { clearRateLimitEvents, registerRateLimitEvent } from "@/lib/security";
 import { ActionState } from "@/types/scheduler";
 import { prisma } from "@/lib/prisma";
 import { requestIdFromHeaders } from "@/lib/observability/context";
-import { logger } from "@/lib/observability/logger";
 
 const CLIENT_COOKIE = "barber_client";
 
@@ -154,56 +147,8 @@ export async function loginClientAction(_prev: ActionState, formData: FormData):
   return { success: true, message: "Login realizado com sucesso" };
 }
 
-export async function requestClientPasswordResetAction(
-  _prev: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  const parsed = requestPasswordResetSchema.safeParse({
-    identifier: String(formData.get("identifier") ?? ""),
-  });
-
-  if (!parsed.success) {
-    return { success: false, message: parsed.error.issues[0]?.message ?? "Dados inválidos" };
-  }
-
-  try {
-    const requestHeaders = await headers();
-    const requestId = requestIdFromHeaders(requestHeaders);
-    const clientIp = getClientIpFromHeaders(requestHeaders);
-    const rateLimit = await registerPasswordResetAttempt(parsed.data.identifier, clientIp, requestId);
-    if (rateLimit.blocked) {
-      return {
-        success: true,
-        message: PASSWORD_RESET_GENERIC_MESSAGE,
-        retryAfterSeconds: Math.max(PASSWORD_RESET_RESEND_COOLDOWN_SECONDS, rateLimit.retryAfterSeconds),
-        cooldownStartedAt: Date.now(),
-      };
-    }
-
-    await createPasswordResetForIdentifier(parsed.data.identifier, requestId);
-    return {
-      success: true,
-      message: PASSWORD_RESET_GENERIC_MESSAGE,
-      retryAfterSeconds: PASSWORD_RESET_RESEND_COOLDOWN_SECONDS,
-      cooldownStartedAt: Date.now(),
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (message.includes("Can't reach database server")) {
-      return { success: false, message: "Não foi possível acessar sua conta agora. Tente novamente em alguns instantes." };
-    }
-
-    logger.error("password_reset.request_failed", { error });
-  }
-
-  return {
-    success: true,
-    message: PASSWORD_RESET_GENERIC_MESSAGE,
-    retryAfterSeconds: PASSWORD_RESET_RESEND_COOLDOWN_SECONDS,
-    cooldownStartedAt: Date.now(),
-  };
-}
-
+// Recovery requests now go through lib/actions/password-recovery-actions.ts (one-time code).
+// This action only serves links issued before that change, until they expire.
 export async function resetClientPasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = resetPasswordSchema.safeParse({
     token: String(formData.get("token") ?? ""),
@@ -267,7 +212,8 @@ export async function cancelMyBookingAction(formData: FormData) {
     return;
   }
 
-  await cancelBookingSeries({ bookingId, clientId: client.id, scope, notificationAudience: "OWNER", requestId });
+  await cancelBookingSeries({ bookingId, clientId: client.id, scope, cancelledBy: "CLIENT", requestId });
+  scheduleBookingNotificationDelivery(requestId);
   revalidatePath("/cliente");
   revalidatePath("/admin/agenda");
 }

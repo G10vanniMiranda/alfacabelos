@@ -7,12 +7,14 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
     "check:sensitive-files": "node scripts/check-sensitive-files.mjs",
     "check:migrations": "node scripts/check-migrations.mjs",
     "validate:production": "tsx scripts/validate-production.ts",
     "environment:guard": "tsx scripts/assert-safe-test-environment.ts",
     "homologation:guard": "tsx scripts/assert-isolated-homologation.ts",
+    "homologation:migrate": "tsx scripts/homolog-migrate.ts",
+    "homologation:seed": "tsx scripts/homolog-seed.ts",
     "test:integration": "tsx scripts/validate-production.ts --write-tests",
     "test:api": "tsx scripts/test-api-concurrency.ts",
     "test:e2e": "playwright test",
@@ -28,10 +30,10 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
-    "next": "16.3.8",
+    "next": "16.4.6",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "zod": "^3.24.1"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

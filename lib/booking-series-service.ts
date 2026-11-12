@@ -8,8 +8,7 @@ import { getBookingOccupiedMinutes, mergeOperatingWindows } from "@/lib/scheduli
 import { getLocalDateInput, getTimeLabelInTimeZone, overlaps, zonedDateTimeToUtcIso } from "@/lib/utils";
 import type { BookingCreatedBy, RecurrenceFrequency, SeriesMutationScope } from "@/types/domain";
 import { sha256 } from "@/lib/security";
-import { buildBookingNotificationIntent, enqueueBookingNotification } from "@/lib/notifications/booking-intents";
-import { enqueueWhatsAppNotifications, type NotificationIntentInput } from "@/lib/notifications/service";
+import { enqueueBookingNotification, enqueueOccurrenceGroupNotification, type BookingChangeActor } from "@/lib/notifications/booking-intents";
 
 export type CreateBookingSeriesInput = {
   serviceId: string;
@@ -83,6 +82,34 @@ async function existingResult(
   if (!existing) return null;
   if (existing.requestHash !== requestHash) throw new Error("Chave de idempotência reutilizada com dados diferentes");
   const rawConfirmationTokens = new Map<string, string>();
+  const event = input.createdBy === "CLIENT" ? "BOOKING_CREATED_BY_CLIENT" : "BOOKING_CREATED_BY_STAFF";
+  if (existing.bookings.length > 1) {
+    // Replay of a series: re-enqueue the consolidated notices (deduplicated by key). The raw token
+    // is not stored, so a new one is issued for the first occurrence only if its notice never existed.
+    await prisma.$transaction(async (tx) => {
+      const first = existing.bookings[0]!;
+      let rawToken: string | undefined;
+      if (input.requireConfirmation && first.status === "PENDENTE") {
+        const delivery = await tx.notificationDelivery.findUnique({
+          where: { idempotencyKey: `series:${existing.id}:client:booking_created_by_staff` },
+          select: { id: true },
+        });
+        if (!delivery) {
+          rawToken = randomBytes(32).toString("base64url");
+          await tx.booking.update({ where: { id: first.id }, data: {
+            confirmationTokenHash: sha256(rawToken),
+            confirmationTokenExpiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          } });
+          rawConfirmationTokens.set(first.id, rawToken);
+        }
+      }
+      await enqueueOccurrenceGroupNotification(tx, {
+        seriesId: existing.id, bookingIds: existing.bookings.map((item) => item.id), event,
+        firstConfirmationToken: rawToken, requestId: input.requestId,
+      });
+    });
+    return { seriesId: existing.id, bookingIds: existing.bookings.map((item) => item.id), rawConfirmationTokens, duplicate: true };
+  }
   await prisma.$transaction(async (tx) => {
     for (const booking of existing.bookings) {
       let rawToken: string | undefined;
@@ -102,8 +129,7 @@ async function existingResult(
       }
       await enqueueBookingNotification(tx, {
         bookingId: booking.id,
-        event: input.createdBy === "CLIENT" ? "BOOKING_CREATED_BY_CLIENT" : "BOOKING_CREATED_BY_STAFF",
-        audience: input.createdBy === "CLIENT" ? "OWNER" : "CLIENT",
+        event,
         confirmationToken: rawToken,
         requestId: input.requestId,
       });
@@ -243,21 +269,14 @@ export async function createBookingSeriesAtomic(input: CreateBookingSeriesInput)
         };
       });
       await tx.booking.createMany({ data: rows.map((row) => row.data) });
-      const intents = rows.map((row) => buildBookingNotificationIntent({
-        snapshot: {
-          id: row.id, customerName: input.customerName, customerPhone: input.customerPhone,
-          observations: input.observations?.trim() || null,
-          dateTimeStart: row.occurrence.start.toISOString(), status: "PENDENTE",
-          confirmationToken: row.rawToken,
-          service: { name: service.name, priceCents: service.priceCents },
-          barber: { name: barber.name },
-        },
-        event: input.createdBy === "CLIENT" ? "BOOKING_CREATED_BY_CLIENT" : "BOOKING_CREATED_BY_STAFF",
-        audience: input.createdBy === "CLIENT" ? "OWNER" : "CLIENT",
+      // A series gets one consolidated notice per audience, not one per occurrence.
+      await enqueueOccurrenceGroupNotification(tx, {
         seriesId: series?.id,
+        bookingIds,
+        event: input.createdBy === "CLIENT" ? "BOOKING_CREATED_BY_CLIENT" : "BOOKING_CREATED_BY_STAFF",
+        firstConfirmationToken: rows[0]?.rawToken,
         requestId: input.requestId,
-      })).filter((intent): intent is NotificationIntentInput => intent !== null);
-      await enqueueWhatsAppNotifications(tx, intents);
+      });
       return { seriesId: series?.id, bookingIds, rawConfirmationTokens, duplicate: false };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
@@ -318,7 +337,8 @@ export async function cancelBookingSeries(input: {
   bookingId: string;
   scope: SeriesMutationScope;
   clientId?: string;
-  notificationAudience?: "OWNER" | "CLIENT";
+  /** Who cancelled; when set, owner and client are both notified. */
+  cancelledBy?: BookingChangeActor;
   requestId?: string;
 }) {
   const booking = await prisma.booking.findUnique({ where: { id: input.bookingId }, select: { id: true, clientId: true, seriesId: true, dateTimeStart: true, occurrenceIndex: true } });
@@ -344,15 +364,14 @@ export async function cancelBookingSeries(input: {
         await tx.bookingSeries.update({ where: { id: booking.seriesId }, data: { endsOn: toDateOnly(getLocalDateInput(previous.toISOString(), BUSINESS_CONFIG.timezone)) } });
       }
     }
-    if (input.notificationAudience) {
-      for (const item of affected) {
-        await enqueueBookingNotification(tx, {
-          bookingId: item.id,
-          event: "BOOKING_CANCELLED",
-          audience: input.notificationAudience,
-          requestId: input.requestId,
-        });
-      }
+    if (input.cancelledBy) {
+      await enqueueOccurrenceGroupNotification(tx, {
+        seriesId: booking.seriesId,
+        bookingIds: affected.map((item) => item.id),
+        event: "BOOKING_CANCELLED",
+        actor: input.cancelledBy,
+        requestId: input.requestId,
+      });
     }
     return { count: result.count, bookingIds: affected.map((item) => item.id), seriesId: booking.seriesId ?? undefined };
   });
@@ -482,14 +501,13 @@ export async function updateBookingSeriesOccurrences(input: {
         },
       });
     }
-    for (const bookingId of selectedIds) {
-      await enqueueBookingNotification(tx, {
-        bookingId,
-        event: "BOOKING_RESCHEDULED",
-        audience: "CLIENT",
-        requestId: input.requestId,
-      });
-    }
+    await enqueueOccurrenceGroupNotification(tx, {
+      seriesId: effectiveScope === "SINGLE" ? null : destinationSeriesId,
+      bookingIds: selectedIds,
+      event: "BOOKING_RESCHEDULED",
+      actor: "STAFF",
+      requestId: input.requestId,
+    });
     return { bookingIds: selectedIds, seriesId: destinationSeriesId ?? undefined };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }

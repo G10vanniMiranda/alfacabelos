@@ -4,15 +4,15 @@ export type WhatsAppSendResult =
   | { ok: true; providerMessageId?: string }
   | { ok: false; retryable: boolean; category: string; error: string };
 
-type WhatsAppProvider = "evolution" | "meta" | "zapi" | "custom";
+export type WhatsAppProvider = "evolution" | "meta" | "zapi" | "custom";
 
-function provider(): WhatsAppProvider {
-  const configured = process.env.WHATSAPP_PROVIDER?.trim().toLowerCase();
+export function whatsAppProviderName(env: Partial<NodeJS.ProcessEnv> = process.env): WhatsAppProvider {
+  const configured = env.WHATSAPP_PROVIDER?.trim().toLowerCase();
   if (configured === "evolution") return "evolution";
   if (configured === "meta" || configured === "whatsapp-cloud") return "meta";
   if (configured === "z-api" || configured === "zapi") return "zapi";
 
-  const url = process.env.WHATSAPP_API_URL?.toLowerCase() ?? "";
+  const url = env.WHATSAPP_API_URL?.toLowerCase() ?? "";
   if (url.includes("graph.facebook.com")) return "meta";
   if (url.includes("evolution")) return "evolution";
   if (url.includes("z-api") || url.includes("zapi")) return "zapi";
@@ -29,7 +29,25 @@ function endpoint(providerName: WhatsAppProvider): string | null {
   return instanceId ? url.replace("{instanceId}", encodeURIComponent(instanceId)) : url;
 }
 
-function payload(providerName: WhatsAppProvider, phone: string, message: string) {
+/**
+ * Meta only accepts business-initiated messages through approved templates. A one-time code
+ * goes through an AUTHENTICATION template whose body and copy-code button both take the code.
+ */
+export function payload(providerName: WhatsAppProvider, phone: string, message: string, otp?: string, env: Partial<NodeJS.ProcessEnv> = process.env) {
+  const template = env.WHATSAPP_AUTH_TEMPLATE_NAME?.trim();
+  if (providerName === "meta" && otp && template) {
+    return {
+      messaging_product: "whatsapp", to: phone, type: "template",
+      template: {
+        name: template,
+        language: { code: env.WHATSAPP_AUTH_TEMPLATE_LANGUAGE?.trim() || "pt_BR" },
+        components: [
+          { type: "body", parameters: [{ type: "text", text: otp }] },
+          { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: otp }] },
+        ],
+      },
+    };
+  }
   if (providerName === "meta") {
     return { messaging_product: "whatsapp", to: phone, type: "text", text: { preview_url: false, body: message } };
   }
@@ -60,13 +78,14 @@ export async function sendWhatsAppOnce(input: {
   message: string;
   context: string;
   idempotencyKey: string;
+  otp?: string;
 }): Promise<WhatsAppSendResult> {
   const phone = normalizeWhatsAppPhone(input.to);
   if (!phone) return { ok: false, retryable: false, category: "invalid_recipient", error: "Invalid WhatsApp recipient" };
   if (!input.message.trim() || input.message.length > 4096) {
     return { ok: false, retryable: false, category: "invalid_payload", error: "Invalid WhatsApp payload" };
   }
-  const providerName = provider();
+  const providerName = whatsAppProviderName();
   const url = endpoint(providerName);
   const token = process.env.WHATSAPP_API_TOKEN?.trim();
   if (!url || !token) return { ok: false, retryable: false, category: "configuration", error: "WhatsApp provider is not configured" };
@@ -78,7 +97,7 @@ export async function sendWhatsAppOnce(input: {
     const response = await fetch(url, {
       method: "POST",
       headers: headers(providerName, token, input.idempotencyKey),
-      body: JSON.stringify(payload(providerName, phone, input.message)),
+      body: JSON.stringify(payload(providerName, phone, input.message, input.otp)),
       signal: controller.signal,
     });
     const responseBody = await response.json().catch(() => undefined);
