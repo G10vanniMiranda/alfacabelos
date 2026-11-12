@@ -14,7 +14,7 @@ export function schedulerConfig(env = process.env) {
   const url = env.NOTIFICATION_WORKER_URL?.trim();
   const secret = env.CRON_SECRET?.trim();
   if (!url) throw new Error("NOTIFICATION_WORKER_URL is required");
-  if (!secret || secret.length < 16) throw new Error("CRON_SECRET is required (16+ chars)");
+  if (!secret || secret.length < 32) throw new Error("CRON_SECRET is required (32+ chars)");
   const parsed = new URL(url);
   if (!/^https?:$/.test(parsed.protocol)) throw new Error("NOTIFICATION_WORKER_URL must be http(s)");
   const interval = Number(env.NOTIFICATION_SCHEDULER_INTERVAL_SECONDS ?? DEFAULT_INTERVAL_SECONDS);
@@ -43,6 +43,8 @@ export async function callWorker({ url, secret }, fetchImpl = fetch) {
     const response = await fetchImpl(url, {
       method: "GET",
       headers: { authorization: `Bearer ${secret}`, "user-agent": "alfa-notification-scheduler" },
+      // Never forward the bearer token to a redirect target.
+      redirect: "error",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const body = await response.json().catch(() => ({}));

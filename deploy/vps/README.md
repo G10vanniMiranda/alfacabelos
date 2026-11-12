@@ -18,6 +18,8 @@ Nothing here creates a PostgreSQL server, opens a host port, or changes DNS.
 
 1. Traefik running with a Docker provider, an HTTPS entrypoint and a certificate resolver.
    Put their names in `deploy.env` (`TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT`, `TRAEFIK_CERTRESOLVER`).
+   Keep the entrypoint's `forwardedHeaders` untrusted (Traefik's default): the app's rate limits use
+   `X-Forwarded-For`, which Traefik must overwrite with the real client address.
 2. An approved hostname (`APP_HOST`) whose DNS already points to the VPS.
    Until a hostname is approved, run only the private smoke test below.
 3. Supabase project matching `APP_ENV` (homologation for staging; production only after GO).

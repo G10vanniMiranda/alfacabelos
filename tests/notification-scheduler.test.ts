@@ -7,6 +7,7 @@ const SECRET = "s".repeat(32);
 test("scheduler config requires a worker URL and a strong secret, and bounds the interval", () => {
   assert.throws(() => schedulerConfig({ CRON_SECRET: SECRET }), /NOTIFICATION_WORKER_URL/);
   assert.throws(() => schedulerConfig({ NOTIFICATION_WORKER_URL: "http://app:3000/x", CRON_SECRET: "short" }), /CRON_SECRET/);
+  assert.throws(() => schedulerConfig({ NOTIFICATION_WORKER_URL: "http://app:3000/x", CRON_SECRET: "s".repeat(31) }), /CRON_SECRET/);
   assert.throws(() => schedulerConfig({ NOTIFICATION_WORKER_URL: "file:///etc/passwd", CRON_SECRET: SECRET }), /http/);
   const base = { NOTIFICATION_WORKER_URL: "http://app:3000/api/internal/notifications/process", CRON_SECRET: SECRET };
   assert.equal(schedulerConfig(base).intervalSeconds, 300);
