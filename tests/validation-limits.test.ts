@@ -80,6 +80,9 @@ test("free-text, identifier and secret fields are bounded", () => {
   assert.equal(createBlockedSlotSchema.safeParse({ dateTimeStart: recurringBase.start, dateTimeEnd: recurringBase.start, reason: long }).success, false);
   assert.equal(recoveryCodeSchema.safeParse({ code: long }).success, false);
   assert.equal(createAdminBookingSchema.safeParse({ ...recurringBase, repeatUntil: long }).success, false);
+  const reschedule = { ...recurringBase, recurrence: "NONE", idempotencyKey: undefined, repeatUntil: undefined };
+  assert.equal(firstMessage(createAdminBookingSchema.safeParse({ ...reschedule, rescheduleBookingId: long })), "Agendamento inválido");
+  assert.equal(createAdminBookingSchema.parse({ ...reschedule, rescheduleBookingId: "booking-1" }).rescheduleBookingId, "booking-1");
 });
 
 test("transforms, defaults, refinements and coercion keep their v3 behaviour", () => {

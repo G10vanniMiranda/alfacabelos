@@ -149,6 +149,7 @@ export const createAdminBookingSchema = z
     interval: z.number().int().min(1).max(52).optional(),
     weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
     idempotencyKey: z.string().trim().min(16).max(128).optional(),
+    rescheduleBookingId: idSchema("Agendamento inválido").optional(),
   })
   .superRefine((data, ctx) => {
     if (data.recurrence === "NONE") {

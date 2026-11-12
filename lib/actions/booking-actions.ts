@@ -246,12 +246,12 @@ export async function createClientBookingsAction(payload: {
       };
     }
 
-    if (payload.rescheduleBookingId) {
+    if (parsed.data.rescheduleBookingId) {
       if (parsed.data.recurrence !== "NONE" || starts.length !== 1) {
         return { success: false, message: "Reagendamentos não podem criar uma série recorrente." };
       }
       const updated = await rescheduleClientBooking({
-        bookingId: payload.rescheduleBookingId,
+        bookingId: parsed.data.rescheduleBookingId,
         clientId: client.id,
         serviceId: parsed.data.serviceId,
         barberId: parsed.data.barberId,
