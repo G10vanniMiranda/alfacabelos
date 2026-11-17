@@ -162,8 +162,20 @@ sha256sum alfa-prod-<UTC>.dump.gpg > alfa-prod-<UTC>.dump.gpg.sha256
 # delete the plaintext dump after the restore test; copy only the .gpg off-host (VPS /var/backups/alfa-cabelos, mode 600)
 ```
 
-A backup counts only after a restore test into a disposable `postgres:15` (Supabase roles
-`anon`, `authenticated`, `service_role` created first) with matching row counts and migration list.
+A backup counts only after a restore test with matching row counts and migration list. The dump
+recreates schema `public`, so restore into a fresh database without it:
+
+```sh
+docker run -d --name alfa-restore-test -e POSTGRES_PASSWORD=restore postgres:15
+docker exec alfa-restore-test psql -qU postgres \
+  -c "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN;" \
+  -c "CREATE DATABASE restore" -c "\c restore" -c "DROP SCHEMA public CASCADE"
+gpg --batch --pinentry-mode loopback --passphrase-file <key-file> -d -o restore.dump alfa-prod-<UTC>.dump.gpg
+docker cp restore.dump alfa-restore-test:/tmp/backup.dump
+docker exec alfa-restore-test pg_restore -U postgres -d restore --no-owner --exit-on-error /tmp/backup.dump
+docker exec alfa-restore-test psql -U postgres -d restore -c 'SELECT count(*) FROM "_prisma_migrations"'
+docker rm -f alfa-restore-test && rm restore.dump
+```
 Dumps contain personal data: never in Git, chat or tickets. Keep the passphrase in the operator's
 password manager; without it the backup is unrecoverable.
 
