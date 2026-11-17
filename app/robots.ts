@@ -17,6 +17,10 @@ function getSiteUrl(): string {
 }
 
 export default function robots(): MetadataRoute.Robots {
+  // Homologation and any non-production host must never be indexed.
+  if (process.env.APP_ENV?.trim().toLowerCase() !== "production") {
+    return { rules: { userAgent: "*", disallow: "/" } };
+  }
   const siteUrl = getSiteUrl();
 
   return {
