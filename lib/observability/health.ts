@@ -4,6 +4,7 @@ import { isWhatsAppConfigured } from "@/lib/whatsapp";
 import { getOperationalNotificationMetrics } from "@/lib/observability/metrics";
 import { isSafeAlertWebhookUrl } from "@/lib/observability/alert-delivery";
 import { deriveRecoveryKeys } from "@/lib/auth/password-recovery-crypto";
+import { readCanaryConfig } from "@/lib/notifications/canary-config";
 
 export type ServiceHealth = "healthy" | "degraded" | "unhealthy" | "disabled" | "unknown";
 type RuntimeEnvironment = Partial<NodeJS.ProcessEnv>;
@@ -119,9 +120,14 @@ function normalizedHost(value: string | undefined): string | null {
   }
 }
 
-export function checkCriticalConfiguration(env: RuntimeEnvironment = process.env): { status: "healthy" | "unhealthy"; issues: string[] } {
+export function checkCriticalConfiguration(env: RuntimeEnvironment = process.env, now = new Date()): { status: "healthy" | "unhealthy"; issues: string[] } {
   const issues: string[] = [];
   const appEnv = env.APP_ENV?.trim().toLowerCase();
+  const canary = readCanaryConfig(env, now);
+  // The canary exception exists only in homologation; anywhere else its presence is a misconfiguration.
+  const canaryFlag = env.WHATSAPP_CANARY_ENABLED?.trim().toLowerCase();
+  if (canaryFlag && canaryFlag !== "false" && appEnv !== "homologation") issues.push("whatsapp_canary_environment");
+  if (canary.status === "invalid") issues.push("whatsapp_canary_configuration");
   const vercelEnv = env.VERCEL_ENV?.trim().toLowerCase();
   const strictRuntime = appEnv === "production" || appEnv === "homologation" || vercelEnv === "production" || vercelEnv === "preview";
   const applicationUrl = env.APP_URL || env.NEXT_PUBLIC_APP_URL || (env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined);
@@ -176,9 +182,19 @@ export function checkCriticalConfiguration(env: RuntimeEnvironment = process.env
 
       if (env.WHATSAPP_ENABLED === "true") {
         const productionInstanceId = env.PRODUCTION_EVOLUTION_INSTANCE_ID?.trim();
+        const instanceId = env.WHATSAPP_INSTANCE_ID?.trim();
+        // The business has a single WhatsApp number, so homologation may only use the production
+        // instance inside an active canary bound to that instance (allowlist and budget enforced per send).
+        const canaryCoversInstance = canary.status === "active" && canary.config.instanceId === instanceId;
         if (!productionInstanceId) issues.push("production_evolution_baseline");
-        else if (env.WHATSAPP_INSTANCE_ID?.trim() === productionInstanceId) issues.push("production_evolution_instance");
+        else if (instanceId === productionInstanceId && !canaryCoversInstance) issues.push("production_evolution_instance");
       }
+    }
+
+    if (appEnv === "production" && env.WHATSAPP_ENABLED === "true"
+      && env.WHATSAPP_PROVIDER?.trim().toLowerCase() === "evolution") {
+      const instanceId = env.WHATSAPP_INSTANCE_ID?.trim();
+      if (!instanceId || instanceId !== env.PRODUCTION_EVOLUTION_INSTANCE_ID?.trim()) issues.push("whatsapp_instance_identity");
     }
   }
   return { status: issues.length ? "unhealthy" : "healthy", issues };

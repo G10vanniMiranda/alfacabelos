@@ -1,4 +1,5 @@
 import { normalizeWhatsAppPhone } from "@/lib/notifications/phone";
+import { authorizeWhatsAppSend } from "@/lib/notifications/send-authorization";
 
 export type WhatsAppSendResult =
   | { ok: true; providerMessageId?: string }
@@ -89,6 +90,12 @@ export async function sendWhatsAppOnce(input: {
   const url = endpoint(providerName);
   const token = process.env.WHATSAPP_API_TOKEN?.trim();
   if (!url || !token) return { ok: false, retryable: false, category: "configuration", error: "WhatsApp provider is not configured" };
+
+  // Every provider call in the app goes through here, so this is the one fail-closed gate.
+  const authorization = await authorizeWhatsAppSend({ to: phone, provider: providerName, context: input.context });
+  if (!authorization.allowed) {
+    return { ok: false, retryable: authorization.retryable, category: "send_blocked", error: `WhatsApp send blocked: ${authorization.reason}` };
+  }
 
   const controller = new AbortController();
   const timeoutMs = boundedTimeout(Number(process.env.WHATSAPP_REQUEST_TIMEOUT_MS));
