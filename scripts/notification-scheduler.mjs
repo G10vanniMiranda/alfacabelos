@@ -83,8 +83,40 @@ export async function runTick(config, { fetchImpl = fetch, sleep = (ms) => new P
   }
 }
 
+export const HEARTBEAT_PATH = "/tmp/alfa-scheduler-heartbeat.json";
+
+/** Liveness of the loop itself (not of the worker): written at start and after every tick. */
+/** @param {number} now @param {number} intervalSeconds @param {number | undefined} lastStatus */
+export function heartbeatContent(now, intervalSeconds, lastStatus) {
+  // Longest legitimate gap: one interval plus a tick with retry (2 x 75 s + 20 s), with margin.
+  return JSON.stringify({ at: now, staleAfterMs: (intervalSeconds * 2 + 120) * 1000, lastStatus });
+}
+
+/** @param {string} content @param {number} now */
+export function isHeartbeatFresh(content, now) {
+  try {
+    const { at, staleAfterMs } = JSON.parse(content);
+    return Number.isFinite(at) && Number.isFinite(staleAfterMs) && now - at >= 0 && now - at < staleAfterMs;
+  } catch {
+    return false;
+  }
+}
+
+async function writeHeartbeat(content) {
+  const { writeFile } = await import("node:fs/promises");
+  // A read-only root without a writable /tmp only loses the healthcheck signal, never the schedule.
+  await writeFile(HEARTBEAT_PATH, content).catch(() => {});
+}
+
+async function healthcheck() {
+  const { readFile } = await import("node:fs/promises");
+  const content = await readFile(HEARTBEAT_PATH, "utf8").catch(() => "");
+  process.exit(isHeartbeatFresh(content, Date.now()) ? 0 : 1);
+}
+
 async function main() {
   const config = schedulerConfig();
+  await writeHeartbeat(heartbeatContent(Date.now(), config.intervalSeconds, undefined));
   let stopping = false;
   let wake = () => {};
   const stop = (signal) => {
@@ -102,12 +134,13 @@ async function main() {
       wake = () => { clearTimeout(timer); resolve(); };
     });
     if (stopping) break;
-    await runTick(config);
+    const result = await runTick(config);
+    await writeHeartbeat(heartbeatContent(Date.now(), config.intervalSeconds, result.status));
   }
 }
 
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith("notification-scheduler.mjs")) {
-  main().catch((error) => {
+  (process.argv.includes("--healthcheck") ? healthcheck() : main()).catch((error) => {
     console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: "error", event: "notification.scheduler.fatal", error: error instanceof Error ? error.message : String(error) }));
     process.exit(1);
   });

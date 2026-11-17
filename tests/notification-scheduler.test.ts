@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isRetryable, msUntilNextTick, runTick, schedulerConfig } from "../scripts/notification-scheduler.mjs";
+import { heartbeatContent, isHeartbeatFresh, isRetryable, msUntilNextTick, runTick, schedulerConfig } from "../scripts/notification-scheduler.mjs";
 
 const SECRET = "s".repeat(32);
 
@@ -52,4 +52,16 @@ test("only network failures, timeouts and 5xx are retried, at most once", async 
   const success = await runTick(config, { fetchImpl: ok, sleep: async () => {}, log: (line: string) => okLogs.push(line) });
   assert.equal(success?.sent, 2);
   assert.equal(JSON.parse(okLogs[0]).event, "notification.scheduler.tick");
+});
+
+test("container healthcheck reflects the scheduler loop, not the Next.js server", () => {
+  const start = Date.UTC(2026, 10, 17, 12, 0, 0);
+  const content = heartbeatContent(start, 300, 200);
+  assert.equal(isHeartbeatFresh(content, start + 60_000), true);
+  // Interval + a retried tick still counts as alive; two missed intervals do not.
+  assert.equal(isHeartbeatFresh(content, start + (300 + 170) * 1000), true);
+  assert.equal(isHeartbeatFresh(content, start + (300 * 2 + 120) * 1000), false);
+  assert.equal(isHeartbeatFresh(content, start - 1), false);
+  assert.equal(isHeartbeatFresh("", start), false);
+  assert.equal(isHeartbeatFresh("{\"at\":\"x\"}", start), false);
 });
