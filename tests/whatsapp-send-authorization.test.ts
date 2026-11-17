@@ -60,6 +60,7 @@ const production = {
   SUPABASE_URL: `https://${productionRef}.supabase.co`,
   SUPABASE_PROJECT_REF: productionRef,
   SUPABASE_STORAGE_BUCKET: "barber",
+  PRODUCTION_SUPABASE_PROJECT_REF: productionRef,
 };
 
 const policy = (env: Record<string, string | undefined>, to = OPERATOR, at = now) =>
@@ -83,6 +84,13 @@ test("production sends only with healthy configuration and the explicitly author
   assert.match(reason(policy({ ...production, PRODUCTION_EVOLUTION_INSTANCE_ID: undefined })), /whatsapp_instance_identity/);
   assert.match(reason(policy({ ...production, PASSWORD_RESET_SECRET: undefined })), /password_recovery_secret/);
   assert.match(reason(policy({ ...production, WHATSAPP_API_TOKEN: "" })), /whatsapp_provider/);
+});
+
+test("a non-production database labelled production cannot send", () => {
+  // e.g. the staging stack started with APP_ENV=production by mistake
+  const relabelled = { ...homologation, APP_ENV: "production" };
+  assert.match(reason(policy(relabelled)), /whatsapp_production_identity/);
+  assert.match(reason(policy({ ...production, PRODUCTION_SUPABASE_PROJECT_REF: undefined })), /whatsapp_production_identity/);
 });
 
 test("canary settings are refused in production (no generic bypass variable)", () => {

@@ -191,10 +191,14 @@ export function checkCriticalConfiguration(env: RuntimeEnvironment = process.env
       }
     }
 
-    if (appEnv === "production" && env.WHATSAPP_ENABLED === "true"
-      && env.WHATSAPP_PROVIDER?.trim().toLowerCase() === "evolution") {
-      const instanceId = env.WHATSAPP_INSTANCE_ID?.trim();
-      if (!instanceId || instanceId !== env.PRODUCTION_EVOLUTION_INSTANCE_ID?.trim()) issues.push("whatsapp_instance_identity");
+    if (appEnv === "production" && env.WHATSAPP_ENABLED === "true") {
+      // Real customers are messaged only from the production database: a copy labelled
+      // "production" on another project (e.g. staging) cannot send.
+      if (!projectRef || env.PRODUCTION_SUPABASE_PROJECT_REF?.trim().toLowerCase() !== projectRef) issues.push("whatsapp_production_identity");
+      if (env.WHATSAPP_PROVIDER?.trim().toLowerCase() === "evolution") {
+        const instanceId = env.WHATSAPP_INSTANCE_ID?.trim();
+        if (!instanceId || instanceId !== env.PRODUCTION_EVOLUTION_INSTANCE_ID?.trim()) issues.push("whatsapp_instance_identity");
+      }
     }
   }
   return { status: issues.length ? "unhealthy" : "healthy", issues };

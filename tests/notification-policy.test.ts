@@ -26,6 +26,7 @@ beforeEach(() => {
     CRON_SECRET: "cron-secret-0123456789",
     SUPABASE_URL: `https://${sendRef}.supabase.co`,
     SUPABASE_PROJECT_REF: sendRef,
+    PRODUCTION_SUPABASE_PROJECT_REF: sendRef,
     SUPABASE_SERVICE_ROLE_KEY: "configured",
     SUPABASE_STORAGE_BUCKET: "barber",
     PASSWORD_RESET_SECRET: "x".repeat(64),
