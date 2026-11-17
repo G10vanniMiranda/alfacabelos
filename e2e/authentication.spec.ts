@@ -58,6 +58,10 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (recurrenceSeriesIds.length) {
+    // Delete the notices too: removing the bookings only nulls their bookingId, and a leftover
+    // PENDING row would reach the worker as soon as WhatsApp is enabled in that environment.
+    const bookingIds = (await prisma.booking.findMany({ where: { seriesId: { in: recurrenceSeriesIds } }, select: { id: true } })).map((item) => item.id);
+    await prisma.notificationDelivery.deleteMany({ where: { OR: [{ bookingId: { in: bookingIds } }, { seriesId: { in: recurrenceSeriesIds } }] } });
     await prisma.booking.deleteMany({ where: { seriesId: { in: recurrenceSeriesIds } } });
     await prisma.bookingSeries.deleteMany({ where: { id: { in: recurrenceSeriesIds } } });
   }
