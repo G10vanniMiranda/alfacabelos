@@ -18,6 +18,7 @@ import {
 } from "@/lib/whatsapp";
 import { logger } from "@/lib/observability/logger";
 import { reminderSchedule } from "@/lib/notifications/validity-policy";
+import { recordOwnerAlert } from "@/lib/notifications/owner-alerts";
 
 export type Audience = "OWNER" | "CLIENT";
 export type { BookingChangeActor };
@@ -212,6 +213,10 @@ export async function enqueueOccurrenceGroupNotification(
     orderBy: { dateTimeStart: "asc" },
   });
   if (!bookings.length) return 0;
+  await recordOwnerAlert(tx, {
+    event: input.event, bookingIds: bookings.map((booking) => booking.id), seriesId: input.seriesId,
+    actor: input.actor, requestId: input.requestId,
+  });
   if (bookings.length === 1 || !input.seriesId) {
     let count = 0;
     for (const booking of bookings) {
@@ -244,6 +249,9 @@ export async function enqueueBookingNotification(
     include: BOOKING_SNAPSHOT_INCLUDE,
   });
   if (!booking) throw new Error(`Booking ${input.bookingId} not found while creating notification intent`);
+  await recordOwnerAlert(tx, {
+    event: input.event, bookingIds: [booking.id], seriesId: booking.seriesId, actor: input.actor, requestId: input.requestId,
+  });
   const intents = buildBookingNotificationIntents({
     snapshot: toSnapshot(booking, input.confirmationToken),
     seriesId: booking.seriesId ?? undefined,
