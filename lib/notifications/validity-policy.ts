@@ -1,5 +1,6 @@
 import type { BookingStatus, NotificationDelivery, NotificationEvent, Prisma } from "@prisma/client";
 import { evaluatePasswordResetToken, PASSWORD_RESET_TOKEN_TTL_MINUTES } from "@/lib/auth/password-reset-security";
+import { RECOVERY_CODE_TTL_MINUTES } from "@/lib/auth/password-recovery-crypto";
 
 // Business validity is separate from claim eligibility: a row may be claimable
 // (PENDING/RETRY, eligibleAt <= now) and still describe something that is no
@@ -23,7 +24,8 @@ export type NotificationValidity =
   | { outcome: "UNSUPPORTED_EVENT"; reason: "event_policy_missing" }
   | { outcome: "TEMPORARILY_UNVERIFIABLE"; reason: string };
 
-export type NotificationValiditySubject = Pick<NotificationDelivery, "event" | "idempotencyKey" | "bookingId" | "createdAt">;
+export type NotificationValiditySubject = Pick<NotificationDelivery, "event" | "idempotencyKey" | "bookingId" | "createdAt">
+  & { seriesId?: string | null };
 
 export type NotificationValidityReferences = {
   booking: {
@@ -34,7 +36,19 @@ export type NotificationValidityReferences = {
     confirmationTokenUsedAt: Date | null;
   } | null;
   passwordResetToken: { expiresAt: Date; usedAt: Date | null } | null;
+  passwordResetChallenge?: {
+    expiresAt: Date;
+    verifiedAt: Date | null;
+    consumedAt: Date | null;
+    invalidatedAt: Date | null;
+  } | null;
+  /** Current occurrences of the series, for consolidated creation notices. */
+  seriesOccurrences?: Array<{ status: BookingStatus; dateTimeStart: Date }> | null;
 };
+
+function isSeriesCreationKey(event: NotificationEvent, idempotencyKey: string): boolean {
+  return (event === "BOOKING_CREATED_BY_CLIENT" || event === "BOOKING_CREATED_BY_STAFF") && idempotencyKey.startsWith("series:");
+}
 
 /**
  * Creation notices (staff pre-booking confirmation and the owner's new-booking
@@ -43,6 +57,14 @@ export type NotificationValidityReferences = {
  * remains unchanged; a notice carrying a link also requires the link to be valid.
  */
 export const BOOKING_CREATED_NOTICE_MAX_AGE_MS = 6 * 60 * 60_000;
+
+/**
+ * Cancellation and reschedule notices share the same freshness window. Without it a notice
+ * enqueued while WhatsApp was disabled stayed valid until the appointment (possibly weeks),
+ * so turning the provider on later would fire stale messages. 6 h still covers the whole
+ * retry backoff (about 2 h over 8 attempts).
+ */
+export const BOOKING_CHANGE_NOTICE_MAX_AGE_MS = BOOKING_CREATED_NOTICE_MAX_AGE_MS;
 
 const DEFAULT_REMINDER_LEAD_MINUTES = 24 * 60;
 const DEFAULT_REMINDER_WINDOW_MINUTES = 10;
@@ -77,6 +99,16 @@ export function reminderSchedule(env: NodeJS.ProcessEnv = process.env): {
 
 export function passwordResetTokenHashFromKey(idempotencyKey: string): string | null {
   return /^password-reset:([0-9a-f]{64})$/.exec(idempotencyKey)?.[1] ?? null;
+}
+
+/** Booking keys are `booking:<id>:<owner|client>:…`; consolidated ones `series:<id>:<owner|client>:…`. */
+export function bookingAudienceFromKey(idempotencyKey: string): "OWNER" | "CLIENT" | null {
+  const audience = /^(?:booking|series):[^:]+:(owner|client):/.exec(idempotencyKey)?.[1];
+  return audience ? (audience.toUpperCase() as "OWNER" | "CLIENT") : null;
+}
+
+export function passwordRecoveryChallengeIdFromKey(idempotencyKey: string): string | null {
+  return /^password-reset-code:([0-9a-f-]{36})$/.exec(idempotencyKey)?.[1] ?? null;
 }
 
 function bookingStartFromKey(idempotencyKey: string, event: "booking_reminder" | "booking_rescheduled"): Date | null {
@@ -114,9 +146,11 @@ export function notificationValidityUpperBound(
   env: NodeJS.ProcessEnv = process.env,
 ): Date | null {
   switch (subject.event) {
-    case "PASSWORD_RESET":
-      // The token is created before the outbox row in the same transaction.
-      return new Date(subject.createdAt.getTime() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60_000);
+    case "PASSWORD_RESET": {
+      // The token/challenge is created before the outbox row in the same transaction.
+      const ttl = passwordRecoveryChallengeIdFromKey(subject.idempotencyKey) ? RECOVERY_CODE_TTL_MINUTES : PASSWORD_RESET_TOKEN_TTL_MINUTES;
+      return new Date(subject.createdAt.getTime() + ttl * 60_000);
+    }
     case "BOOKING_CREATED_BY_STAFF":
     case "BOOKING_CREATED_BY_CLIENT":
       return new Date(subject.createdAt.getTime() + BOOKING_CREATED_NOTICE_MAX_AGE_MS);
@@ -125,7 +159,12 @@ export function notificationValidityUpperBound(
       return start ? new Date(start.getTime() - reminderSchedule(env).minLeadMinutes * 60_000) : null;
     }
     case "BOOKING_RESCHEDULED":
-      return bookingStartFromKey(subject.idempotencyKey, "booking_rescheduled");
+      return earliest(
+        bookingStartFromKey(subject.idempotencyKey, "booking_rescheduled"),
+        new Date(subject.createdAt.getTime() + BOOKING_CHANGE_NOTICE_MAX_AGE_MS),
+      );
+    case "BOOKING_CANCELLED":
+      return new Date(subject.createdAt.getTime() + BOOKING_CHANGE_NOTICE_MAX_AGE_MS);
     default:
       return null;
   }
@@ -138,6 +177,15 @@ export function evaluateNotificationValidity(
   env: NodeJS.ProcessEnv = process.env,
 ): NotificationValidity {
   const event: NotificationEvent = subject.event;
+
+  if (event === "PASSWORD_RESET" && passwordRecoveryChallengeIdFromKey(subject.idempotencyKey)) {
+    // A code is only worth sending while its challenge can still be verified.
+    const challenge = references.passwordResetChallenge;
+    if (!challenge) return invalid("INVALID_REFERENCE", "reset_code_challenge_missing");
+    if (challenge.verifiedAt || challenge.consumedAt) return invalid("EXPIRED", "reset_code_used");
+    if (challenge.invalidatedAt) return invalid("EXPIRED", "reset_code_superseded");
+    return validUntil(challenge.expiresAt, now);
+  }
 
   if (event === "PASSWORD_RESET") {
     // Fail closed: without a verifiable token row there is no proof the link works.
@@ -156,14 +204,31 @@ export function evaluateNotificationValidity(
     return { outcome: "UNSUPPORTED_EVENT", reason: "event_policy_missing" };
   }
 
+  if (isSeriesCreationKey(event, subject.idempotencyKey)) {
+    // The summary is rebuilt at send time, so it only needs one upcoming active occurrence;
+    // the anchor occurrence being cancelled, moved, confirmed or past is not a reason to drop it.
+    const noticeDeadline = new Date(subject.createdAt.getTime() + BOOKING_CREATED_NOTICE_MAX_AGE_MS);
+    if (noticeDeadline <= now) return invalid("EXPIRED", "notice_too_old");
+    const occurrences = references.seriesOccurrences ?? [];
+    const upcoming = occurrences.filter((item) => (item.status === "PENDENTE" || item.status === "CONFIRMADO") && item.dateTimeStart > now);
+    if (!upcoming.length) {
+      const allCancelled = occurrences.length > 0 && occurrences.every((item) => item.status === "CANCELADO");
+      return invalid(allCancelled ? "CANCELED" : "EXPIRED", "series_no_upcoming_occurrence");
+    }
+    return validUntil(noticeDeadline, now);
+  }
+
   const booking = references.booking;
   if (!subject.bookingId || !booking) return invalid("INVALID_REFERENCE", "booking_missing");
   const start = booking.dateTimeStart;
 
+  const changeNoticeDeadline = new Date(subject.createdAt.getTime() + BOOKING_CHANGE_NOTICE_MAX_AGE_MS);
+
   if (event === "BOOKING_CANCELLED") {
     if (booking.status !== "CANCELADO") return invalid("INVALID_REFERENCE", "booking_not_cancelled");
     if (start <= now) return invalid("EXPIRED", "booking_started");
-    return validUntil(start, now);
+    if (changeNoticeDeadline <= now) return invalid("EXPIRED", "notice_too_old");
+    return validUntil(earliest(start, changeNoticeDeadline), now);
   }
 
   if (booking.status === "CANCELADO") return invalid("CANCELED", "booking_cancelled");
@@ -184,14 +249,15 @@ export function evaluateNotificationValidity(
     const rescheduledStart = bookingStartFromKey(subject.idempotencyKey, "booking_rescheduled");
     if (!rescheduledStart) return invalid("INVALID_REFERENCE", "reschedule_reference_missing");
     if (rescheduledStart.getTime() !== start.getTime()) return invalid("INVALID_REFERENCE", "booking_rescheduled_again");
-    return validUntil(start, now);
+    if (changeNoticeDeadline <= now) return invalid("EXPIRED", "notice_too_old");
+    return validUntil(earliest(start, changeNoticeDeadline), now);
   }
 
   // BOOKING_CREATED_BY_STAFF / BOOKING_CREATED_BY_CLIENT
   const noticeDeadline = new Date(subject.createdAt.getTime() + BOOKING_CREATED_NOTICE_MAX_AGE_MS);
   if (noticeDeadline <= now) return invalid("EXPIRED", "notice_too_old");
-  if (event === "BOOKING_CREATED_BY_STAFF" && booking.confirmationTokenHash) {
-    // The client message carries a confirmation link; it is pointless once the
+  if (event === "BOOKING_CREATED_BY_STAFF" && booking.confirmationTokenHash && bookingAudienceFromKey(subject.idempotencyKey) === "CLIENT") {
+    // Only the client message carries a confirmation link; it is pointless once the
     // link can no longer confirm the booking.
     if (booking.confirmationTokenUsedAt || booking.status !== "PENDENTE") return invalid("EXPIRED", "confirmation_resolved");
     if (!booking.confirmationTokenExpiresAt || booking.confirmationTokenExpiresAt <= now) {
@@ -202,14 +268,16 @@ export function evaluateNotificationValidity(
   return validUntil(earliest(start, noticeDeadline), now);
 }
 
-type ValidityDb = Pick<Prisma.TransactionClient, "booking" | "passwordResetToken">;
+type ValidityDb = Pick<Prisma.TransactionClient, "booking" | "passwordResetToken" | "passwordResetChallenge">;
 
 export async function loadNotificationValidityReferences(
   db: ValidityDb,
   subject: NotificationValiditySubject,
 ): Promise<NotificationValidityReferences> {
   const tokenHash = subject.event === "PASSWORD_RESET" ? passwordResetTokenHashFromKey(subject.idempotencyKey) : null;
-  const [booking, passwordResetToken] = await Promise.all([
+  const challengeId = subject.event === "PASSWORD_RESET" ? passwordRecoveryChallengeIdFromKey(subject.idempotencyKey) : null;
+  const seriesId = isSeriesCreationKey(subject.event, subject.idempotencyKey) ? subject.seriesId ?? null : undefined;
+  const [booking, passwordResetToken, passwordResetChallenge, seriesOccurrences] = await Promise.all([
     subject.bookingId && subject.event !== "PASSWORD_RESET"
       ? db.booking.findUnique({
         where: { id: subject.bookingId },
@@ -222,8 +290,17 @@ export async function loadNotificationValidityReferences(
     tokenHash
       ? db.passwordResetToken.findUnique({ where: { tokenHash }, select: { expiresAt: true, usedAt: true } })
       : null,
+    challengeId
+      ? db.passwordResetChallenge.findUnique({
+        where: { id: challengeId },
+        select: { expiresAt: true, verifiedAt: true, consumedAt: true, invalidatedAt: true },
+      })
+      : null,
+    // A deleted series (seriesId set to NULL) has no occurrences left: the notice is retired.
+    seriesId === undefined ? undefined
+      : seriesId ? db.booking.findMany({ where: { seriesId }, select: { status: true, dateTimeStart: true } }) : [],
   ]);
-  return { booking, passwordResetToken };
+  return { booking, passwordResetToken, passwordResetChallenge, seriesOccurrences };
 }
 
 /**

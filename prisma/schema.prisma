@@ -115,7 +115,7 @@ model Booking {
   confirmationTokenUsedAt    DateTime?
   createdBy                  BookingCreatedBy     @default(CLIENT)
   createdAt                  DateTime             @default(now())
-  updatedAt                  DateTime             @updatedAt
+  updatedAt                  DateTime             @default(now()) @updatedAt
   seriesId                   String?
   occurrenceIndex            Int?
   occurrenceLocalDate        DateTime?            @db.Date
@@ -198,12 +198,12 @@ model NotificationDelivery {
   replayCount     Int                @default(0)
   lastReplayedAt  DateTime?
   createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  updatedAt       DateTime           @default(now()) @updatedAt
 
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   series  BookingSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
-  @@index([status, eligibleAt, nextRetryAt, createdAt])
+  @@index([status, eligibleAt, nextRetryAt, createdAt], map: "NotificationDelivery_status_eligibleAt_nextRetryAt_createdAt_id")
   @@index([lockedAt])
   @@index([bookingId, event])
   @@index([seriesId, event])
@@ -220,7 +220,7 @@ model OperationalHeartbeat {
   processedCount Int      @default(0)
   lastErrorCode  String?
   metadata       Json?
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime @default(now()) @updatedAt
 
   @@index([lastSuccessAt])
   @@index([status, lastRunAt])
@@ -268,11 +268,33 @@ model Client {
   status              ClientStatus         @default(ACTIVE)
   createdBy           ClientCreatedBy      @default(CLIENT)
   createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  updatedAt           DateTime             @default(now()) @updatedAt
   bookings            Booking[]
   bookingSeries       BookingSeries[]
   passwordResetTokens PasswordResetToken[]
+  passwordResetChallenges PasswordResetChallenge[]
   sessions            ClientSession[]
+}
+
+// One-time recovery code challenge. Neither the raw code nor the browser handle is stored:
+// `handleHash` is SHA-256 of the HttpOnly cookie value, `codeHash` is an HMAC keyed by a server secret.
+model PasswordResetChallenge {
+  id            String    @id
+  clientId      String
+  handleHash    String    @unique
+  codeHash      String
+  channel       String
+  attempts      Int       @default(0)
+  expiresAt     DateTime
+  verifiedAt    DateTime?
+  consumedAt    DateTime?
+  invalidatedAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+  @@index([expiresAt])
 }
 
 model PasswordResetToken {

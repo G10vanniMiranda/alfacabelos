@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import {
   computeRetryDelayMs,
   isDeliveryEligibleForClaim,
@@ -11,26 +11,35 @@ import { sendWhatsAppOnce } from "../lib/notifications/whatsapp-provider";
 import { isValidCronAuthorization } from "../lib/notifications/cron-auth";
 
 const originalFetch = globalThis.fetch;
-const originalEnv = {
-  url: process.env.WHATSAPP_API_URL,
-  token: process.env.WHATSAPP_API_TOKEN,
-  timeout: process.env.WHATSAPP_REQUEST_TIMEOUT_MS,
-  provider: process.env.WHATSAPP_PROVIDER,
-  instanceId: process.env.WHATSAPP_INSTANCE_ID,
-};
+const originalEnv = { ...process.env };
+
+// Transport tests run under a valid production send policy; the policy itself is covered in
+// whatsapp-send-authorization.test.ts.
+const sendRef = "abcdefghijklmnopqrst";
+beforeEach(() => {
+  Object.assign(process.env, {
+    APP_ENV: "production",
+    WHATSAPP_ENABLED: "true",
+    DATABASE_URL: `postgresql://postgres.${sendRef}@pooler.supabase.com:6543/postgres`,
+    DIRECT_URL: `postgresql://postgres@db.${sendRef}.supabase.co:5432/postgres`,
+    APP_URL: "https://alfa.example.test",
+    CRON_SECRET: "cron-secret-0123456789",
+    SUPABASE_URL: `https://${sendRef}.supabase.co`,
+    SUPABASE_PROJECT_REF: sendRef,
+    PRODUCTION_SUPABASE_PROJECT_REF: sendRef,
+    SUPABASE_SERVICE_ROLE_KEY: "configured",
+    SUPABASE_STORAGE_BUCKET: "barber",
+    PASSWORD_RESET_SECRET: "x".repeat(64),
+    WHATSAPP_PROVIDER: "custom",
+  });
+  delete process.env.WHATSAPP_CANARY_ENABLED;
+  delete process.env.ALERT_WEBHOOK_URL;
+});
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
-  for (const [key, value] of Object.entries({
-    WHATSAPP_API_URL: originalEnv.url,
-    WHATSAPP_API_TOKEN: originalEnv.token,
-    WHATSAPP_REQUEST_TIMEOUT_MS: originalEnv.timeout,
-    WHATSAPP_PROVIDER: originalEnv.provider,
-    WHATSAPP_INSTANCE_ID: originalEnv.instanceId,
-  })) {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
+  for (const key of Object.keys(process.env)) if (!(key in originalEnv)) delete process.env[key];
+  Object.assign(process.env, originalEnv);
 });
 
 test("normalizes Brazilian WhatsApp numbers and rejects invalid recipients", () => {
@@ -143,6 +152,7 @@ test("provider Evolution usa contrato explicito e captura o id retornado", async
   process.env.WHATSAPP_PROVIDER = "evolution";
   process.env.WHATSAPP_API_URL = "https://gateway.example.test/message/sendText/{instanceId}";
   process.env.WHATSAPP_INSTANCE_ID = "alfa-homolog";
+  process.env.PRODUCTION_EVOLUTION_INSTANCE_ID = "alfa-homolog";
   process.env.WHATSAPP_API_TOKEN = "evolution-key";
 
   let requestedUrl = "";

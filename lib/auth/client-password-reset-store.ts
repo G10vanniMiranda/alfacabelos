@@ -268,6 +268,11 @@ export async function resetClientPasswordWithToken(rawToken: string, password: s
         data: { usedAt: now },
       });
 
+      await tx.passwordResetChallenge.updateMany({
+        where: { clientId: token.clientId, consumedAt: null, invalidatedAt: null },
+        data: { invalidatedAt: now },
+      });
+
       return token.clientId;
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

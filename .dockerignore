@@ -1,0 +1,20 @@
+# Secrets never enter the build context.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Deployment files (and any env file an operator creates there) are not needed in the image.
+deploy
+
+# Build output, dependencies and local tooling are rebuilt inside the image.
+node_modules
+.next
+.vercel
+.git
+coverage
+playwright-report
+test-results
+tmp
+*.log
+.DS_Store

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getAppUrl } from "@/lib/app-url";
 
 export function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -75,7 +76,12 @@ export function isSameOriginRequest(request: NextRequest): boolean {
   }
 
   try {
-    return new URL(origin).origin === request.nextUrl.origin;
+    const requestOrigin = new URL(origin).origin;
+    if (requestOrigin === request.nextUrl.origin) return true;
+    // Behind a reverse proxy (Docker/Traefik) nextUrl reflects the internal listener, not the
+    // public host, so also accept the configured public origin. APP_URL is server config, not input.
+    const appUrl = getAppUrl();
+    return appUrl !== null && requestOrigin === new URL(appUrl).origin;
   } catch {
     return false;
   }

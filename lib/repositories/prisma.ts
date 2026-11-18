@@ -847,7 +847,7 @@ export const prismaRepository: BookingRepository = {
           await enqueueBookingNotification(tx, {
             bookingId: booking.id,
             event: input.notification.event,
-            audience: input.notification.audience,
+            actor: input.notification.actor,
             requestId: input.notification.requestId,
           });
         }

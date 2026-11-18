@@ -58,6 +58,10 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (recurrenceSeriesIds.length) {
+    // Delete the notices too: removing the bookings only nulls their bookingId, and a leftover
+    // PENDING row would reach the worker as soon as WhatsApp is enabled in that environment.
+    const bookingIds = (await prisma.booking.findMany({ where: { seriesId: { in: recurrenceSeriesIds } }, select: { id: true } })).map((item) => item.id);
+    await prisma.notificationDelivery.deleteMany({ where: { OR: [{ bookingId: { in: bookingIds } }, { seriesId: { in: recurrenceSeriesIds } }] } });
     await prisma.booking.deleteMany({ where: { seriesId: { in: recurrenceSeriesIds } } });
     await prisma.bookingSeries.deleteMany({ where: { id: { in: recurrenceSeriesIds } } });
   }
@@ -122,8 +126,12 @@ test("API autenticada materializa atomicamente todas as quartas-feiras da serie"
 test("login do cliente mascara telefone, exibe senha e acessa a area correta", async ({ page }) => {
   await page.goto("/cliente/login");
   const phone = page.getByLabel("Telefone");
-  await phone.pressSequentially(clientPhone);
-  await expect(phone).toHaveValue(/\(69\) \d{5}-\d{4}/);
+  // Typing before React hydrates the masked input is lost on slow dev servers; retry until the mask applies.
+  await expect(async () => {
+    await phone.fill("");
+    await phone.pressSequentially(clientPhone);
+    await expect(phone).toHaveValue(/\(69\) \d{5}-\d{4}/, { timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
   const passwordInput = page.getByLabel("Senha", { exact: true });
   await passwordInput.fill(password);
   await expect(passwordInput).toHaveAttribute("type", "password");
@@ -178,11 +186,15 @@ test("sessao expirada e recuperacao de senha preservam privacidade", async ({ pa
   await expect(page.locator("#auth-feedback")).toContainText("Sua sessão expirou");
   await page.goto("/esqueci-minha-senha");
   await page.getByLabel("Telefone cadastrado").fill(recoveryPhone);
-  await page.getByRole("button", { name: "Enviar instruções" }).click();
-  const status = page.getByRole("status");
-  await expect(status).toContainText(/se existir uma conta vinculada/i);
-  await expect(status).toBeFocused();
-  await expect(page.getByRole("button", { name: /solicitar novamente em \d+s/i })).toBeDisabled();
+  await page.getByRole("button", { name: "Enviar código" }).click();
+  const feedback = page.locator("#auth-feedback");
+  await expect(feedback).toBeFocused();
+  // Channel-agnostic: either the code step (channel configured) or an honest "unavailable" notice.
+  await expect(feedback).toContainText(/se este telefone estiver cadastrado|não conseguimos enviar códigos/i);
+  await expect(feedback).not.toContainText(/não encontrado|inexistente|não cadastrado/i);
+  if (await page.getByLabel("Código de 8 números").isVisible()) {
+    await expect(page.getByRole("button", { name: /pedir novo código em \d+s/i })).toBeDisabled();
+  }
 });
 
 test("cliente autenticado nao retorna ao login e open redirect e bloqueado", async ({ page }) => {
@@ -229,5 +241,6 @@ test("formularios mantem labels, autocomplete, teclado e responsividade", async 
     expect(audit, `auditoria em ${width}px`).toEqual({ fits: true, duplicateIds: [], unlabeledInputs: 0 });
   }
   await page.keyboard.press("Tab");
-  await expect(page.locator(":focus")).toBeVisible();
+  // The dev server's overlay (<nextjs-portal>, absent in production) can take focus in WebKit.
+  await expect(page.locator(":focus:not(nextjs-portal)").first()).toBeVisible();
 });

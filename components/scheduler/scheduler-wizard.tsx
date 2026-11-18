@@ -487,6 +487,7 @@ export function SchedulerWizard({
               <button
                 type="button"
                 key={service.id}
+                aria-pressed={draft.serviceId === service.id}
                 onClick={() => setDraft((prev) => ({ ...prev, serviceId: service.id, time: undefined }))}
                 className={`rounded-xl border p-4 text-left transition ${draft.serviceId === service.id
                   ? "border-brand-highlight/70 bg-brand-highlight/10 shadow-lg shadow-black/20"
@@ -685,9 +686,11 @@ export function SchedulerWizard({
             </div>
 
             <div>
-              <label className="text-sm font-medium text-zinc-300">Nome completo</label>
+              <label htmlFor="booking-customer-name" className="text-sm font-medium text-zinc-300">Nome completo</label>
               <input
+                id="booking-customer-name"
                 type="text"
+                autoComplete="name"
                 value={draft.customerName ?? ""}
                 onChange={(event) => setDraft((prev) => ({ ...prev, customerName: event.target.value }))}
                 className="ui-control mt-2 h-12 w-full px-3"
@@ -695,9 +698,12 @@ export function SchedulerWizard({
             </div>
 
             <div>
-              <label className="text-sm font-medium text-zinc-300">Telefone</label>
+              <label htmlFor="booking-customer-phone" className="text-sm font-medium text-zinc-300">Telefone</label>
               <input
-                type="text"
+                id="booking-customer-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 value={draft.customerPhone ?? ""}
                 onChange={(event) =>
                   setDraft((prev) => ({ ...prev, customerPhone: formatPhone(event.target.value) }))

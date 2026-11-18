@@ -42,3 +42,6 @@ test-results/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# VPS deployment secrets (only the *.example templates are tracked)
+deploy/vps/*.env

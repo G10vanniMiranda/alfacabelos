@@ -215,8 +215,13 @@ test("validity upper bound is derived from the outbox row alone", () => {
     new Date(createdAt.getTime() + 6 * hour));
   const start = new Date(now.getTime() + 20 * hour);
   assert.deepEqual(notificationValidityUpperBound(subject("BOOKING_REMINDER", reminderKey(start)), env), new Date(start.getTime() - hour));
-  assert.deepEqual(notificationValidityUpperBound(subject("BOOKING_RESCHEDULED", `booking:booking-1:client:booking_rescheduled:${start.toISOString()}`), env), start);
-  assert.equal(notificationValidityUpperBound(subject("BOOKING_CANCELLED", "booking:booking-1:client:booking_cancelled"), env), null);
+  // Change notices are also capped at 6 h after enqueue (default createdAt = now - 1 h), so a
+  // backlog kept while WhatsApp was disabled cannot fire long after the fact.
+  const changeCap = new Date(now.getTime() + 5 * hour);
+  assert.deepEqual(notificationValidityUpperBound(subject("BOOKING_RESCHEDULED", `booking:booking-1:client:booking_rescheduled:${start.toISOString()}`), env), changeCap);
+  const soon = new Date(now.getTime() + 2 * hour);
+  assert.deepEqual(notificationValidityUpperBound(subject("BOOKING_RESCHEDULED", `booking:booking-1:client:booking_rescheduled:${soon.toISOString()}`), env), soon);
+  assert.deepEqual(notificationValidityUpperBound(subject("BOOKING_CANCELLED", "booking:booking-1:client:booking_cancelled"), env), changeCap);
 });
 
 test("reminder schedule keeps the minimum lead inside the enqueue window", () => {

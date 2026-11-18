@@ -1,5 +1,8 @@
 import type { MetadataRoute } from "next";
 
+// Read the public host at request time: a Docker image is built once and deployed to several hosts.
+export const dynamic = "force-dynamic";
+
 function getSiteUrl(): string {
   const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
   if (configured) {
@@ -14,6 +17,10 @@ function getSiteUrl(): string {
 }
 
 export default function robots(): MetadataRoute.Robots {
+  // Homologation and any non-production host must never be indexed.
+  if (process.env.APP_ENV?.trim().toLowerCase() !== "production") {
+    return { rules: { userAgent: "*", disallow: "/" } };
+  }
   const siteUrl = getSiteUrl();
 
   return {

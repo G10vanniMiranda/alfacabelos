@@ -40,7 +40,8 @@ export type UpdateBookingInput = {
   dateTimeEnd: string;
   notification?: {
     event: "BOOKING_RESCHEDULED";
-    audience: "OWNER" | "CLIENT";
+    /** Who rescheduled; owner and client are both notified. */
+    actor: "CLIENT" | "STAFF";
     requestId?: string;
   };
 };

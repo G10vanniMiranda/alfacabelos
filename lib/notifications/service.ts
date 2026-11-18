@@ -3,6 +3,14 @@ import { NotificationEvent, Prisma, type NotificationDelivery } from "@prisma/cl
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppOnce, type WhatsAppSendResult } from "@/lib/notifications/whatsapp-provider";
 import { logger } from "@/lib/observability/logger";
+import { isSeriesCreationNotice, renderSeriesCreationNotice } from "@/lib/notifications/series-notice";
+import {
+  deriveRecoveryKeys,
+  isSealedMessage,
+  openDeliveryPayload,
+  RECOVERY_CODE_TTL_MINUTES,
+  REDACTED_DELIVERY_MESSAGE,
+} from "@/lib/auth/password-recovery-crypto";
 import { recordWorkerHeartbeat } from "@/lib/observability/health";
 import {
   notificationClaimEligibilitySql,
@@ -73,7 +81,7 @@ export type WorkerOptions = {
   workerId?: string;
   now?: Date;
   random?: () => number;
-  send?: (input: { to: string; message: string; context: string; idempotencyKey: string }) => Promise<WhatsAppSendResult>;
+  send?: (input: { to: string; message: string; context: string; idempotencyKey: string; otp?: string }) => Promise<WhatsAppSendResult>;
   validate?: (item: ClaimedDelivery, now: Date) => Promise<NotificationValidity>;
 };
 
@@ -249,9 +257,15 @@ async function retireInvalidDelivery(
       processedAt: now,
       lockedAt: null,
       lockedBy: null,
+      ...terminalRedaction(item),
     },
   });
   return "expired";
+}
+
+/** A sealed payload is discarded as soon as its row reaches a terminal state. */
+function terminalRedaction(item: Pick<ClaimedDelivery, "message">): { message?: string } {
+  return isSealedMessage(item.message) ? { message: REDACTED_DELIVERY_MESSAGE } : {};
 }
 
 /**
@@ -302,13 +316,17 @@ async function settleDelivery(
   now: Date,
   random: () => number,
   validUntil: Date | null = null,
+  deliveredText?: string,
 ): Promise<DeliveryOutcome> {
   if (result.ok) {
+    // A rebuilt summary is recorded as sent; sealed payloads are discarded instead.
+    const recordedText = !isSealedMessage(item.message) && deliveredText && deliveredText !== item.message ? { message: deliveredText } : {};
     await prisma.notificationDelivery.updateMany({
       where: { id: item.id, status: "PROCESSING", lockedBy: workerId },
       data: {
         status: "SENT", sentAt: now, processedAt: now, eligibleAt: null, nextRetryAt: null,
         lockedAt: null, lockedBy: null, providerMessageId: result.providerMessageId ?? null,
+        ...terminalRedaction(item), ...recordedText,
       },
     });
     return "sent";
@@ -334,9 +352,166 @@ async function settleDelivery(
       processedAt: shouldRetry ? null : now,
       lockedAt: null,
       lockedBy: null,
+      ...(shouldRetry ? {} : terminalRedaction(item)),
     },
   });
   return shouldRetry ? "retry" : "dead";
+}
+
+type ProcessContext = {
+  workerId: string;
+  random: () => number;
+  send: NonNullable<WorkerOptions["send"]>;
+  validate: NonNullable<WorkerOptions["validate"]>;
+};
+
+/** Sealed (encrypted) messages are opened only here, right before the provider call. */
+function openOutboundMessage(item: ClaimedDelivery): { text: string; otp?: string } | null {
+  if (!isSealedMessage(item.message)) return { text: item.message };
+  const keys = deriveRecoveryKeys();
+  return keys ? openDeliveryPayload(keys, item.message, item.idempotencyKey) : null;
+}
+
+async function processClaimedDelivery(item: ClaimedDelivery, context: ProcessContext): Promise<DeliveryOutcome> {
+  const { workerId, random, send, validate } = context;
+  const deliveryStartedAt = Date.now();
+  // Revalidate business validity as late as possible: the booking or token may
+  // have changed between enqueue, claim and now. Only VALID reaches the provider.
+  const validity = await validate(item, new Date()).catch((): NotificationValidity => ({
+    outcome: "TEMPORARILY_UNVERIFIABLE", reason: "validity_check_failed",
+  }));
+  if (validity.outcome !== "VALID") {
+    const at = new Date();
+    const outcome = validity.outcome === "TEMPORARILY_UNVERIFIABLE"
+      ? await deferUnverifiableDelivery(item, workerId, validity.reason, at, random)
+      : await retireInvalidDelivery(item, workerId, {
+        errorCategory: validity.outcome === "INVALID"
+          ? LIFECYCLE_ERROR_CATEGORY[validity.classification]
+          : LIFECYCLE_ERROR_CATEGORY.UNSUPPORTED_EVENT,
+        reason: validity.reason,
+      }, at);
+    logger.warn(validity.outcome === "TEMPORARILY_UNVERIFIABLE" ? "notification.unverifiable" : "notification.expired", {
+      requestId: item.requestId, workerId, notificationId: item.id, eventType: item.event,
+      bookingId: item.bookingId, attempt: item.attempts, status: outcome,
+      validity: validity.outcome, classification: validity.outcome === "INVALID" ? validity.classification : undefined,
+      reason: validity.reason, durationMs: Date.now() - deliveryStartedAt,
+    });
+    return outcome;
+  }
+  let outbound = openOutboundMessage(item);
+  if (!outbound) {
+    // Missing/rotated secret or tampered ciphertext: never send, never retry.
+    const outcome = await retireInvalidDelivery(item, workerId, { errorCategory: "payload_unreadable", reason: "sealed_payload_unreadable" }, new Date());
+    logger.warn("notification.payload_unreadable", { requestId: item.requestId, workerId, notificationId: item.id, eventType: item.event, status: outcome });
+    return outcome;
+  }
+  if (isSeriesCreationNotice(item)) {
+    // Never send the enqueue-time summary: occurrences may have been cancelled, moved,
+    // confirmed or passed since then. Rebuild it from the series' current state.
+    const rendered = await renderSeriesCreationNotice(prisma, item, new Date()).catch(() => undefined);
+    if (rendered === undefined) return deferUnverifiableDelivery(item, workerId, "series_render_failed", new Date(), random);
+    if (rendered === null) {
+      return retireInvalidDelivery(item, workerId, {
+        errorCategory: LIFECYCLE_ERROR_CATEGORY.EXPIRED, reason: "series_no_upcoming_occurrence",
+      }, new Date());
+    }
+    outbound = { text: rendered };
+  }
+  const result = await send({
+    to: item.recipient, message: outbound.text, context: item.context, idempotencyKey: item.idempotencyKey, otp: outbound.otp,
+  }).catch((error): WhatsAppSendResult => ({
+    ok: false, retryable: true, category: "unexpected",
+    error: error instanceof Error ? error.message : "Unexpected provider error",
+  }));
+  const outcome = await settleDelivery(item, workerId, result, new Date(), random, validity.validUntil, outbound.otp ? undefined : outbound.text);
+  const fields = {
+    requestId: item.requestId, workerId, notificationId: item.id, eventType: item.event,
+    bookingId: item.bookingId, attempt: item.attempts, status: outcome,
+    providerStatus: result.ok ? "accepted" : result.category,
+    durationMs: Date.now() - deliveryStartedAt,
+  };
+  if (outcome === "sent") logger.debug("notification.sent", fields);
+  else logger.warn(`notification.${outcome}`, fields);
+  return outcome;
+}
+
+/** Claims one specific row under the same eligibility and lease rules as the batch claim. */
+export async function claimNotificationById(input: { id: string; workerId: string; now?: Date }): Promise<ClaimedDelivery | null> {
+  const now = input.now ?? new Date();
+  const eligibility = notificationClaimEligibilitySql({
+    now, maxAttempts: notificationMaxAttempts(), staleBefore: notificationStaleBefore(now),
+  });
+  const rows = await prisma.$queryRaw<ClaimedDelivery[]>(Prisma.sql`
+    UPDATE "NotificationDelivery"
+    SET "status" = 'PROCESSING',
+        "attempts" = "attempts" + 1,
+        "lockedAt" = ${now},
+        "lockedBy" = ${input.workerId},
+        "lastError" = NULL,
+        "errorCategory" = NULL,
+        "updatedAt" = ${now}
+    WHERE "id" = ${input.id} AND ${eligibility}
+    RETURNING "id", "event", "recipient", "recipientMasked", "message", "context",
+      "idempotencyKey", "attempts", "bookingId", "seriesId", "requestId", "eligibleAt", "createdAt"
+  `);
+  return rows[0] ?? null;
+}
+
+/**
+ * Immediate, best-effort delivery of one row (time-bound codes must not wait for the cron).
+ * If the row is already claimed or not eligible it does nothing; the cron remains the retry path.
+ */
+export async function deliverNotificationNow(
+  id: string,
+  options: Pick<WorkerOptions, "send" | "validate" | "random" | "workerId"> = {},
+): Promise<DeliveryOutcome | "disabled" | "not_claimed"> {
+  if (process.env.WHATSAPP_ENABLED !== "true") return "disabled";
+  const workerId = options.workerId ?? `inline-${randomUUID()}`;
+  const item = await claimNotificationById({ id, workerId });
+  if (!item) return "not_claimed";
+  return processClaimedDelivery(item, {
+    workerId,
+    random: options.random ?? Math.random,
+    send: options.send ?? sendWhatsAppOnce,
+    validate: options.validate ?? ((delivery, at) => checkNotificationValidity(prisma, delivery, at)),
+  });
+}
+
+/**
+ * Immediate delivery of the booking notices a request committed. Each row is claimed and sent
+ * on its own: one recipient failing (RETRY/DEAD) never blocks another. The cron stays the retry path.
+ */
+export async function deliverPendingBookingNotifications(
+  requestId: string,
+  options: Pick<WorkerOptions, "send" | "validate" | "random"> = {},
+): Promise<Array<DeliveryOutcome | "disabled" | "not_claimed" | "error">> {
+  if (process.env.WHATSAPP_ENABLED !== "true" || !requestId) return [];
+  const rows = await prisma.notificationDelivery.findMany({
+    where: { requestId, status: "PENDING", bookingId: { not: null } },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true },
+    take: 50,
+  });
+  const settled = await Promise.allSettled(rows.map((row) => deliverNotificationNow(row.id, options)));
+  return settled.map((result, index) => {
+    if (result.status === "fulfilled") return result.value;
+    logger.error("notification.inline_delivery_failed", { requestId, notificationId: rows[index]!.id, error: result.reason });
+    return "error";
+  });
+}
+
+/** Sealed payloads must not outlive the code they carry, even if no worker ever claims them. */
+export async function redactExpiredSealedMessages(now = new Date()): Promise<number> {
+  const result = await prisma.notificationDelivery.updateMany({
+    where: {
+      event: "PASSWORD_RESET",
+      message: { startsWith: "enc:" },
+      createdAt: { lt: new Date(now.getTime() - RECOVERY_CODE_TTL_MINUTES * 60_000) },
+      status: { not: "PROCESSING" },
+    },
+    data: { message: REDACTED_DELIVERY_MESSAGE },
+  });
+  return result.count;
 }
 
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -402,6 +577,7 @@ export async function processNotificationBatch(options: WorkerOptions = {}): Pro
   };
   await heartbeat({ worker: "notification-outbox", status: "running", metadata: { workerId, batchSize, concurrency } });
   try {
+    await redactExpiredSealedMessages(now);
     if (process.env.WHATSAPP_ENABLED !== "true") {
       const summary = { workerId, claimed: 0, sent: 0, retry: 0, dead: 0, expired: 0, durationMs: Date.now() - startedAt, metrics: await getOutboxMetrics() };
       await heartbeat({ worker: "notification-outbox", status: "success", durationMs: summary.durationMs, processedCount: 0, metadata: { disabled: true } });
@@ -409,48 +585,7 @@ export async function processNotificationBatch(options: WorkerOptions = {}): Pro
     }
 
     const claimed = await claimNotificationBatch({ workerId, batchSize, now });
-    const outcomes = await mapWithConcurrency(claimed, concurrency, async (item) => {
-      const deliveryStartedAt = Date.now();
-      // Revalidate business validity as late as possible: the booking or token may
-      // have changed between enqueue, claim and now. Only VALID reaches the provider.
-      const validity = await validate(item, new Date()).catch((): NotificationValidity => ({
-        outcome: "TEMPORARILY_UNVERIFIABLE", reason: "validity_check_failed",
-      }));
-      if (validity.outcome !== "VALID") {
-        const at = new Date();
-        const outcome = validity.outcome === "TEMPORARILY_UNVERIFIABLE"
-          ? await deferUnverifiableDelivery(item, workerId, validity.reason, at, random)
-          : await retireInvalidDelivery(item, workerId, {
-            errorCategory: validity.outcome === "INVALID"
-              ? LIFECYCLE_ERROR_CATEGORY[validity.classification]
-              : LIFECYCLE_ERROR_CATEGORY.UNSUPPORTED_EVENT,
-            reason: validity.reason,
-          }, at);
-        logger.warn(validity.outcome === "TEMPORARILY_UNVERIFIABLE" ? "notification.unverifiable" : "notification.expired", {
-          requestId: item.requestId, workerId, notificationId: item.id, eventType: item.event,
-          bookingId: item.bookingId, attempt: item.attempts, status: outcome,
-          validity: validity.outcome, classification: validity.outcome === "INVALID" ? validity.classification : undefined,
-          reason: validity.reason, durationMs: Date.now() - deliveryStartedAt,
-        });
-        return outcome;
-      }
-      const result = await send({
-        to: item.recipient, message: item.message, context: item.context, idempotencyKey: item.idempotencyKey,
-      }).catch((error): WhatsAppSendResult => ({
-        ok: false, retryable: true, category: "unexpected",
-        error: error instanceof Error ? error.message : "Unexpected provider error",
-      }));
-      const outcome = await settleDelivery(item, workerId, result, new Date(), random, validity.validUntil);
-      const fields = {
-        requestId: item.requestId, workerId, notificationId: item.id, eventType: item.event,
-        bookingId: item.bookingId, attempt: item.attempts, status: outcome,
-        providerStatus: result.ok ? "accepted" : result.category,
-        durationMs: Date.now() - deliveryStartedAt,
-      };
-      if (outcome === "sent") logger.debug("notification.sent", fields);
-      else logger.warn(`notification.${outcome}`, fields);
-      return outcome;
-    });
+    const outcomes = await mapWithConcurrency(claimed, concurrency, (item) => processClaimedDelivery(item, { workerId, random, send, validate }));
     const summary = {
       workerId, claimed: claimed.length,
       sent: outcomes.filter((item) => item === "sent").length,

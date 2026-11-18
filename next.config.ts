@@ -7,6 +7,8 @@ if (process.env.NODE_ENV === "development") {
 }
 
 const nextConfig: NextConfig = {
+  // Self-contained server bundle for the Docker image (deploy/vps); Vercel ignores it.
+  output: "standalone",
   compress: true,
   poweredByHeader: false,
   experimental: {

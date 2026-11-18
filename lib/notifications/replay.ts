@@ -20,7 +20,7 @@ export async function replayDeadNotification(input: {
           where: { id: input.notificationId },
           select: {
             id: true, status: true, attempts: true, replayCount: true, errorCategory: true, bookingId: true,
-            event: true, idempotencyKey: true, createdAt: true,
+            event: true, idempotencyKey: true, createdAt: true, seriesId: true,
           },
         });
         if (!delivery) return { ok: false, reason: "not_found" };

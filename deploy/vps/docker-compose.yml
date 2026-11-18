@@ -1,0 +1,70 @@
+# ALFA CABELOS on the VPS: Next.js app published on host loopback, fronted by the host Nginx
+# (TLS via certbot), plus the notification scheduler. No Traefik. Database stays on Supabase.
+# Secrets live only in the env files next to this compose file on the host (chmod 600, never
+# committed). See deploy/vps/README.md.
+#
+#   docker compose -p <project> --env-file deploy.env up -d
+name: alfa-cabelos
+
+x-hardening: &hardening
+  init: true
+  restart: unless-stopped
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  app:
+    <<: *hardening
+    image: alfa-cabelos:${APP_VERSION:?set APP_VERSION to the git SHA being deployed}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file: [./app.env]
+    environment:
+      APP_VERSION: ${APP_VERSION}
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:size=64m
+      - /app/.next/cache:size=256m,uid=1000,gid=1000
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 256
+    # Loopback only: the host Nginx is the single public entry point and refuses /api/internal.
+    ports: ["127.0.0.1:${APP_PORT:?set APP_PORT}:3000"]
+    networks: [backend, egress]
+
+  scheduler:
+    <<: *hardening
+    image: alfa-cabelos:${APP_VERSION}
+    command: ["node", "scripts/notification-scheduler.mjs"]
+    # Only the worker secret: the scheduler never sees database or provider credentials.
+    env_file: [./scheduler.env]
+    environment:
+      NOTIFICATION_WORKER_URL: http://app:3000/api/internal/notifications/process
+    depends_on:
+      app: { condition: service_healthy }
+    tmpfs:
+      - /tmp:size=1m,uid=1000,gid=1000
+    # The image HEALTHCHECK probes the Next.js server, which does not run here: check the loop instead.
+    healthcheck:
+      test: ["CMD", "node", "scripts/notification-scheduler.mjs", "--healthcheck"]
+      interval: 60s
+      timeout: 5s
+      retries: 2
+      start_period: 15s
+    stop_grace_period: 10s
+    mem_limit: 96m
+    cpus: 0.25
+    pids_limit: 32
+    networks: [backend]
+
+networks:
+  # No internet access: scheduler -> app only.
+  backend:
+    internal: true
+  # Outbound access for the app (Supabase, Evolution). Owned by this project; no other stack joins it.
+  egress: {}

@@ -12,6 +12,7 @@ import { requestIdFromHeaders } from "@/lib/observability/context";
 import { logger } from "@/lib/observability/logger";
 import { recordAuditEvent } from "@/lib/observability/audit";
 import { prisma } from "@/lib/prisma";
+import { scheduleBookingNotificationDelivery } from "@/lib/notifications/after-response";
 
 export async function POST(request: NextRequest) {
   const startedAt = Date.now();
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
       requireConfirmation: Boolean(staff),
       requestId,
     });
+    scheduleBookingNotificationDelivery(requestId);
     const bookings = (await Promise.all(creation.bookingIds.map(getBookingById))).filter(Boolean);
     const booking = bookings[0];
     if (staff && booking) {

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { AdminAlerts } from "@/components/admin/admin-alerts";
 import { ToastProvider } from "@/components/ui/toast";
 import { isAdminAuthenticated } from "@/lib/actions/booking-actions";
 
@@ -20,6 +21,7 @@ export default async function AdminPanelLayout({
           <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[260px_minmax(0,1fr)] xl:items-start">
             <AdminSidebar />
             <div className="min-w-0">
+              <AdminAlerts />
               {children}
             </div>
           </div>

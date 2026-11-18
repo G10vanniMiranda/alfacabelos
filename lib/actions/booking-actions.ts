@@ -42,6 +42,7 @@ import { requestIdFromHeaders } from "@/lib/observability/context";
 import { logger } from "@/lib/observability/logger";
 import { recordAuditEvent } from "@/lib/observability/audit";
 import type { StaffPrincipal } from "@/lib/auth/admin-session-store";
+import { scheduleBookingNotificationDelivery } from "@/lib/notifications/after-response";
 
 const ADMIN_COOKIE = "barber_admin";
 const CLIENT_COOKIE = "barber_client";
@@ -245,18 +246,19 @@ export async function createClientBookingsAction(payload: {
       };
     }
 
-    if (payload.rescheduleBookingId) {
+    if (parsed.data.rescheduleBookingId) {
       if (parsed.data.recurrence !== "NONE" || starts.length !== 1) {
         return { success: false, message: "Reagendamentos não podem criar uma série recorrente." };
       }
       const updated = await rescheduleClientBooking({
-        bookingId: payload.rescheduleBookingId,
+        bookingId: parsed.data.rescheduleBookingId,
         clientId: client.id,
         serviceId: parsed.data.serviceId,
         barberId: parsed.data.barberId,
         start: starts[0],
         requestId,
       });
+      scheduleBookingNotificationDelivery(requestId);
       revalidatePath("/cliente");
       revalidatePath("/agendar");
       revalidatePath("/admin/agenda");
@@ -280,6 +282,7 @@ export async function createClientBookingsAction(payload: {
       createdBy: "CLIENT",
       requestId,
     });
+    scheduleBookingNotificationDelivery(requestId);
     const createdBookingIds = creation.bookingIds;
     const firstBookingId = createdBookingIds[0];
 
@@ -365,6 +368,7 @@ export async function createAdminBookingsAction(payload: {
       requireConfirmation: true,
       requestId,
     });
+    scheduleBookingNotificationDelivery(requestId);
     const createdBookingIds = creation.bookingIds;
     const firstBookingId = createdBookingIds[0];
     await auditStaffAction(principal, requestId, "booking.created", creation.seriesId ? "BookingSeries" : "Booking", creation.seriesId ?? firstBookingId, { occurrenceCount: createdBookingIds.length });
@@ -472,9 +476,10 @@ export async function updateBookingStatusAction(payload: { bookingId: string; st
     await cancelBookingSeries({
       bookingId: payload.bookingId,
       scope: payload.scope ?? "SINGLE",
-      notificationAudience: "CLIENT",
+      cancelledBy: "STAFF",
       requestId,
     });
+    scheduleBookingNotificationDelivery(requestId);
   } else {
     await updateBookingStatus({ bookingId: payload.bookingId, status: payload.status });
   }
@@ -518,6 +523,7 @@ export async function updateAdminBookingAction(payload: {
       barberId: scopeBarber(principal, payload.barberId)!,
       requestId,
     });
+    scheduleBookingNotificationDelivery(requestId);
     await auditStaffAction(principal, requestId, "booking.rescheduled", "Booking", payload.bookingId, { scope: payload.scope ?? "SINGLE", serviceId: payload.serviceId, barberId: scopeBarber(principal, payload.barberId) });
     revalidatePath("/admin/agenda");
     revalidatePath("/admin/dashboard");
