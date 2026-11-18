@@ -126,8 +126,12 @@ test("API autenticada materializa atomicamente todas as quartas-feiras da serie"
 test("login do cliente mascara telefone, exibe senha e acessa a area correta", async ({ page }) => {
   await page.goto("/cliente/login");
   const phone = page.getByLabel("Telefone");
-  await phone.pressSequentially(clientPhone);
-  await expect(phone).toHaveValue(/\(69\) \d{5}-\d{4}/);
+  // Typing before React hydrates the masked input is lost on slow dev servers; retry until the mask applies.
+  await expect(async () => {
+    await phone.fill("");
+    await phone.pressSequentially(clientPhone);
+    await expect(phone).toHaveValue(/\(69\) \d{5}-\d{4}/, { timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
   const passwordInput = page.getByLabel("Senha", { exact: true });
   await passwordInput.fill(password);
   await expect(passwordInput).toHaveAttribute("type", "password");
@@ -237,5 +241,6 @@ test("formularios mantem labels, autocomplete, teclado e responsividade", async 
     expect(audit, `auditoria em ${width}px`).toEqual({ fits: true, duplicateIds: [], unlabeledInputs: 0 });
   }
   await page.keyboard.press("Tab");
-  await expect(page.locator(":focus")).toBeVisible();
+  // The dev server's overlay (<nextjs-portal>, absent in production) can take focus in WebKit.
+  await expect(page.locator(":focus:not(nextjs-portal)").first()).toBeVisible();
 });

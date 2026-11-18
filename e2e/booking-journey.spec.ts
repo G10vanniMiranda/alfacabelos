@@ -6,6 +6,9 @@ import { createAdminAccess } from "@/lib/auth/admin-access-store";
 // Full journey through the UI: a new client registers, books with the wizard, cancels from the
 // client area, and the owner sees both changes as persistent alerts in the admin panel.
 test.describe.configure({ mode: "serial" });
+// Registration is rate-limited per client IP (a security control). Each run of this journey (one per
+// browser project) presents its own synthetic address, as the proxy would for distinct visitors.
+test.use({ extraHTTPHeaders: { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 250) + 1}` } });
 
 const runId = randomUUID().slice(0, 8);
 const password = "TesteSeguro#2026";

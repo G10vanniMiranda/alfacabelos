@@ -5,6 +5,7 @@ const testPort = new URL(baseURL).port || "3000";
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   timeout: 30_000,
   expect: { timeout: 8_000 },
   fullyParallel: true,
