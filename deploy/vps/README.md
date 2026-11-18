@@ -134,6 +134,26 @@ workers and kept across restarts. Blocked sends are logged as `whatsapp.send_blo
 recipient and settle the delivery as `DEAD/send_blocked`. End the round with `WHATSAPP_ENABLED=false`
 and `WHATSAPP_CANARY_ENABLED=false`, `$C up -d app`, then confirm the outbox has no `PENDING`/`RETRY` rows.
 
+### Evolution API requirements (learned in the 2026-11-17/18 incident)
+
+- WhatsApp has moved most contacts to LID addressing. Evolution v2.3.2 (Baileys 6.7.19) and the
+  official v2.3.7 image (Baileys 7.0.0-rc.9) left API messages as "Aguardando mensagem" on the
+  recipient's phone. Both Baileys versions are also affected by the critical advisory
+  GHSA-qvv5-jq5g-4cgg (fixed in 7.0.0-rc12). The VPS runs `local/evolution-api:2.3.7-baileys-rc14`,
+  built from tag `2.3.7` (commit `cd800f29`) with only the `baileys` dependency pinned to `7.0.0-rc14`
+  (`/opt/build/evolution-2.3.7-rc14`). No official stable image ships rc12+ yet.
+- With `CACHE_REDIS_ENABLED=true`, Evolution keeps the Signal keys (sessions, pre-keys, sender keys,
+  LID mappings) in Redis hash `evolution:instance:<instanceId>` and only `creds` in Postgres. Pairing
+  again with **Connect** keeps the old Redis keys under new creds, which produces unreadable
+  messages. To re-pair, always use the official logout first (`DELETE /instance/logout/<instance>`,
+  which clears both), then connect; the pairing code (`/instance/connect/<instance>?number=<owner>`)
+  works when the Manager is not reachable.
+- HTTP 201 and `PENDING` prove nothing: check `MessageUpdate` for `SERVER_ACK`/`DELIVERY_ACK` and that
+  inbound messages are being stored, and confirm readability on a real phone.
+- Staging reaches Evolution through `evolution.mi7anda.cloud`. While that DNS zone is unavailable, the
+  staging stack adds `compose.dns-workaround.yml` (`extra_hosts` to the VPS IP, real certificate still
+  verified); remove it when DNS resolves again.
+
 ## Database migrations (separate step, production needs GO)
 
 The containers never run migrations. With GO and a verified backup, from a checkout of the approved SHA

@@ -48,11 +48,14 @@ async function auditPage(page: Page) {
 
 for (const path of PUBLIC_PAGES) {
   test(`${path} sem overflow, com nomes acessíveis e sem erros em ${WIDTHS.length} larguras`, async ({ page }) => {
+    // One navigation per page, then resize: responsive CSS reacts to the viewport, and the dev
+    // server used in CI keeps connections open, so waiting for network idle per width is slow and flaky.
+    test.setTimeout(90_000);
     const errors = collectErrors(page);
+    await page.goto(path, { waitUntil: "load" });
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: width < 768 ? 800 : 900 });
-      await page.goto(path);
-      await page.waitForLoadState("networkidle");
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const audit = await auditPage(page);
       expect(audit.overflow, `${path} @${width}px`).toBeLessThanOrEqual(1);
       expect(audit.lang, path).toBe("pt-BR");
