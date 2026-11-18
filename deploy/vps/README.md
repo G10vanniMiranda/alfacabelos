@@ -142,6 +142,17 @@ and `WHATSAPP_CANARY_ENABLED=false`, `$C up -d app`, then confirm the outbox has
   GHSA-qvv5-jq5g-4cgg (fixed in 7.0.0-rc12). The VPS runs `local/evolution-api:2.3.7-baileys-rc14`,
   built from tag `2.3.7` (commit `cd800f29`) with only the `baileys` dependency pinned to `7.0.0-rc14`
   (`/opt/build/evolution-2.3.7-rc14`). No official stable image ships rc12+ yet.
+- Images and recipes are preserved in `/root/backups/evolution-images/` (`docker save` archives, the
+  `package.json`/lockfile patch, the base commit, the pinned Node base digest, `SHA256SUMS`); restore with
+  `docker load < <file>.image.tar.gz`. The daily host prune removes unused images older than 24 h, so the
+  archives, not the local tags, are the rollback source.
+- Prepared, **not deployed**: `local/evolution-api:2.3.7-baileys-rc14-sec1` adds npm `overrides`
+  `proxy-addr@2.0.8` (GHSA-jqcg-44mw-7w3h, critical) and `fast-xml-parser@5.12.1` (GHSA-m7jm-9gc2-mpf2 and
+  related, critical). `npm audit --omit=dev`: 0 critical (was 2). Isolated test on a copy of the Evolution
+  database passed. Effective exposure of both on the running image is low (Express `trust proxy` unset;
+  XML parsing only through S3/MinIO, `S3_ENABLED=false`), so applying it is a scheduled change, not an emergency:
+  `docker service update --no-resolve-image --image local/evolution-api:2.3.7-baileys-rc14-sec1 evolotion_evolution_v2`,
+  then check `open` state and one inbound message; roll back to `...-baileys-rc14` the same way.
 - With `CACHE_REDIS_ENABLED=true`, Evolution keeps the Signal keys (sessions, pre-keys, sender keys,
   LID mappings) in Redis hash `evolution:instance:<instanceId>` and only `creds` in Postgres. Pairing
   again with **Connect** keeps the old Redis keys under new creds, which produces unreadable
@@ -201,8 +212,12 @@ password manager; without it the backup is unrecoverable.
 
 ## Rollback
 
-1. App: `sed -i "s/^APP_VERSION=.*/APP_VERSION=<previous sha>/" deploy.env && $C up -d` (previous image tag
-   kept), or `mv src src.bad && mv src.prev src` for compose/config changes. Check `/api/ready`.
+1. App: `sed -i "s/^APP_VERSION=.*/APP_VERSION=<previous sha>/" deploy.env && $C up -d`, or
+   `mv src src.bad && mv src.prev src` for compose/config changes. Check `/api/ready`.
+   **The host prunes unused images daily** (`/etc/cron.d/docker-image-prune`: `docker image prune -af
+   --filter until=24h` at 00:24 UTC), so the previous tag may be gone. Before each deploy run
+   `docker save alfa-cabelos:<current sha> | gzip -1 > /root/backups/alfa-images/<sha>.tar.gz`, or rebuild
+   the previous SHA from `git archive` (the build is reproducible: pinned lockfile, no secrets at build time).
 2. WhatsApp: `WHATSAPP_ENABLED=false` in `app.env`, `$C up -d app`.
 3. Scheduler: `$C stop scheduler` (the outbox waits; stale rows expire by policy).
 4. Proxy: remove the site link, `nginx -t && systemctl reload nginx`.

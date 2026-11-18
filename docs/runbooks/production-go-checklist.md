@@ -41,27 +41,39 @@ Generate new secrets on the VPS; never copy homologation values.
 
 `deploy.env`: `APP_VERSION=<sha>`, `APP_PORT=13100`. Compose project: `alfa-cabelos-production`.
 
-## 3. Database
+## 3. Release procedure (in this order; stop and roll back at the first failed check)
 
-1. `npx prisma migrate status` against production: exactly one pending, `20261107120000_add_password_reset_challenge`.
-2. With GO: `npx prisma migrate deploy`; `migrate status` → up to date. The migration is additive
-   (table + indexes + RLS) and was applied cleanly to a restored copy of production on 2026-11-17.
-3. Legacy outbox: the release's validity policy retires all 12 old `PENDING` rows without sending
-   (dry-run 2026-11-17: 7 reminders and 1 staff notice for past bookings, 4 recovery codes with
-   expired/missing tokens). No manual cleanup needed.
+Shell variables: `P=alfa-cabelos-production`, `C="docker compose -p $P --env-file deploy.env"`, run
+from `/opt/alfa-cabelos/src/deploy/vps`. Database commands run from a checkout of the release SHA
+on the operator workstation, with the production `DIRECT_URL` only in that shell.
 
-## 4. Cutover
-
-1. Build and start the production stack on the VPS with `WHATSAPP_ENABLED=false`; `/api/ready` → ready.
-2. Nginx site from the template (no `@NOINDEX@`), certificate via certbot, `nginx -t && systemctl reload nginx`.
-3. Smoke on the public URL: home, client login, admin login, booking preview, `/api/ready`;
-   `/api/internal/notifications/process` must return 404 from outside.
-4. Disable the Vercel cron (remove the project's cron or set Vercel `CRON_SECRET` to a value the
-   worker rejects) and set Vercel `WHATSAPP_ENABLED=false`; redeploy Vercel.
-5. Confirm the Vercel worker heartbeat stops (`OperationalHeartbeat.notification-outbox` stops updating from Vercel).
-6. Set `WHATSAPP_ENABLED=true` on the VPS, `docker compose ... up -d app`; watch one scheduler tick
-   (`tick` with `status: 200`) and `whatsapp.send_blocked` (must not appear for real customers).
-7. Point `alfacabelos.vercel.app` visitors to the new domain (Vercel redirect or notice page).
+1. **GO recorded** (who, when, release SHA, domain).
+2. **Backup** of the same day, encrypted and restore-tested (`deploy/vps/README.md`, "Backup and restore").
+   Rehearsed 2026-11-18: 22 migrations, 147 bookings, 63 clients, 23 outbox rows, RLS 18/18.
+3. **Migration**: `npx prisma migrate status` must list exactly `20261107120000_add_password_reset_challenge`;
+   then `npx prisma migrate deploy`; `npx prisma migrate status` → "Database schema is up to date".
+   Rehearsed on the restored copy: applied cleanly, `prisma migrate diff --from-url <db> --to-schema-datamodel
+   prisma/schema.prisma --exit-code` → no difference (drift zero), new table with RLS, data intact.
+4. **Database check**: read-only snapshot (23 migrations applied, RLS on all tables including the new one,
+   counts unchanged) and the legacy outbox dry-run:
+   all 12 old `PENDING` rows are `INVALID` (7 reminders and 1 staff notice for past bookings, 4 recovery
+   codes with expired/missing tokens) and are retired without sending on the first worker run.
+5. **Image**: ship `git archive <sha>`, `$C build app`, `$C up -d` with `WHATSAPP_ENABLED=false`;
+   `$C ps` both healthy; `curl -fsS http://127.0.0.1:13100/api/ready` → ready.
+6. **Domain**: DNS `A <domain>` → VPS; certbot webroot; Nginx site from the template without `@NOINDEX@`;
+   `nginx -t && systemctl reload nginx`; `APP_URL`/`NEXT_PUBLIC_APP_URL=https://<domain>`, `$C up -d app`.
+7. **Production smoke** on `https://<domain>`: home, `/robots.txt` (allows `/`, lists the sitemap),
+   client login, admin login, availability, `/api/ready`; `/api/internal/notifications/process` → 404.
+8. **Scheduler handover**: merging the release to `main` redeploys Vercel **without** the cron (removed from
+   `vercel.json` in this release), so the VPS scheduler is the only worker. Before enabling WhatsApp,
+   confirm `OperationalHeartbeat.notification-outbox` is now updated only every 5 minutes on the boundary
+   by the VPS (`$C logs scheduler | grep tick`). Keep Vercel `WHATSAPP_ENABLED=false`.
+9. **WhatsApp**: `WHATSAPP_ENABLED=true` in production `app.env`, `$C up -d app`; first tick shows the 12
+   legacy rows as `expired` (none sent); then one real booking by the operator, confirmed readable on the phone.
+10. **Monitor** the first 24 h: `$C ps`, `tick_failed`, `whatsapp.send_blocked`, `notification.dead`,
+    `/api/admin/operations/status` backlog, Nginx 5xx.
+11. **Rollback** at any failed step (section 5). Point `alfacabelos.vercel.app` visitors to the new domain
+    (Vercel redirect or notice page) only after step 10 is clean.
 
 ## 5. Rollback (any step)
 
@@ -72,7 +84,7 @@ Generate new secrets on the VPS; never copy homologation values.
 | Scheduler | `docker compose ... stop scheduler` |
 | Proxy | remove the site link, `nginx -t && systemctl reload nginx` |
 | DNS | restore previous records (operator) |
-| Traffic | Vercel production stays deployable; re-enable its cron only after the VPS sends are off |
+| Traffic | Promote the previous Vercel production deployment (it still carries the old cron); stop the VPS scheduler first so only one worker runs |
 | Database | migration stays (additive); data restore only with a separate GO and the verified backup |
 
 ## 6. Domain and homologation policy
