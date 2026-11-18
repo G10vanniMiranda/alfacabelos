@@ -9,8 +9,9 @@ Supabase project: `fcjmntkcbenjpctjllvi`. Nothing here is automated; each step i
 - [ ] Domain purchased; DNS `A <domain>` and `A homolog.<domain>` point to the VPS (TTL 300 s before cutover).
 - [ ] Homologation on `https://homolog.<domain>` passed the browser suite on its public certificate.
 - [ ] Encrypted production backup taken **the same day**, restore-tested (row counts and migration list match).
-- [ ] Evolution runs Baileys 7.0.0-rc12 or newer (currently `local/evolution-api:2.3.7-baileys-rc14`), instance
-      `open`, inbound messages being stored, and a real message confirmed readable on a phone within 24 h.
+- [ ] Evolution runs Baileys 7.0.0-rc12 or newer **with the `<status>` ack fix** (currently
+      `local/evolution-api:2.3.7-baileys-rc14-sec1-statusack`); 24 h of `/root/diag/evolution-health.log` with
+      inbound messages stored and no `stream errored out ... class=status`; a real message confirmed readable on a phone.
 - [ ] `evolution.mi7anda.cloud` resolves publicly (the production app calls it by name).
 
 ## 2. Production `app.env` (VPS `/opt/alfa-cabelos/src/deploy/vps/app.env`, mode 600)

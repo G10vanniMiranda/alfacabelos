@@ -146,13 +146,19 @@ and `WHATSAPP_CANARY_ENABLED=false`, `$C up -d app`, then confirm the outbox has
   `package.json`/lockfile patch, the base commit, the pinned Node base digest, `SHA256SUMS`); restore with
   `docker load < <file>.image.tar.gz`. The daily host prune removes unused images older than 24 h, so the
   archives, not the local tags, are the rollback source.
-- Prepared, **not deployed**: `local/evolution-api:2.3.7-baileys-rc14-sec1` adds npm `overrides`
-  `proxy-addr@2.0.8` (GHSA-jqcg-44mw-7w3h, critical) and `fast-xml-parser@5.12.1` (GHSA-m7jm-9gc2-mpf2 and
-  related, critical). `npm audit --omit=dev`: 0 critical (was 2). Isolated test on a copy of the Evolution
-  database passed. Effective exposure of both on the running image is low (Express `trust proxy` unset;
-  XML parsing only through S3/MinIO, `S3_ENABLED=false`), so applying it is a scheduled change, not an emergency:
-  `docker service update --no-resolve-image --image local/evolution-api:2.3.7-baileys-rc14-sec1 evolotion_evolution_v2`,
-  then check `open` state and one inbound message; roll back to `...-baileys-rc14` the same way.
+- **Running since 2026-11-18 19:05 UTC:** `local/evolution-api:2.3.7-baileys-rc14-sec1-statusack`
+  (sha256:49a05283). On top of rc14 it adds npm `overrides` `proxy-addr@2.0.8` and `fast-xml-parser@5.12.1`
+  (both critical advisories closed; `npm audit --omit=dev`: 0 critical) and a build-time patch,
+  `Docker/patches/baileys-status-ack.mjs`, that acks top-level `<status>` stanzas.
+- Why the patch: WhatsApp now delivers contacts' Status updates as top-level `<status>` stanzas; Baileys
+  rc14 has no handler, never acks them, the server ends the stream every ~50 min with
+  `stream:error -> ack class="status"` and **holds back inbound traffic** while the socket stays `open`
+  (WhiskeySockets/Baileys#2858, Evolution#2778; same fix as Baileys PR #2866/#2883). Observed here on
+  2026-11-18: inbound stopped at ~15:22 UTC; after deploying the patch the held-back messages (1:1, groups
+  and the owner's own phone) were delivered within minutes and live traffic resumed. The patch script fails
+  the build unless baileys is exactly 7.0.0-rc14 with the expected file hash; drop it once an official
+  release contains a `CB:status` handler. Signature to watch: `stream errored out` with `reasonNode` class
+  `status` (the patch makes it disappear).
 - With `CACHE_REDIS_ENABLED=true`, Evolution keeps the Signal keys (sessions, pre-keys, sender keys,
   LID mappings) in Redis hash `evolution:instance:<instanceId>` and only `creds` in Postgres. Pairing
   again with **Connect** keeps the old Redis keys under new creds, which produces unreadable
