@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
   const requestId = requestIdFromHeaders(request.headers);
   const principal = await getAdminSessionPrincipal(request.cookies.get("barber_admin")?.value ?? "");
   if (!principal) return NextResponse.json({ message: "Não autorizado" }, { status: 401 });
+  // Same rule as requireStaff: a barber login without an active barber link sees nothing.
+  if (principal.role === "BARBER" && !principal.barberId) {
+    return NextResponse.json({ message: "Acesso de barbeiro sem vínculo ativo" }, { status: 403 });
+  }
   try {
     const alerts = await listOwnerAlerts({ barberId: scopeBarber(principal) });
     return NextResponse.json({ alerts }, { headers: { "Cache-Control": "private, no-store" } });

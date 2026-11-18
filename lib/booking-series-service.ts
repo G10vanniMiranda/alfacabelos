@@ -105,7 +105,7 @@ async function existingResult(
       }
       await enqueueOccurrenceGroupNotification(tx, {
         seriesId: existing.id, bookingIds: existing.bookings.map((item) => item.id), event,
-        firstConfirmationToken: rawToken, requestId: input.requestId,
+        firstConfirmationToken: rawToken, requestId: input.requestId, replay: true,
       });
     });
     return { seriesId: existing.id, bookingIds: existing.bookings.map((item) => item.id), rawConfirmationTokens, duplicate: true };
@@ -132,6 +132,7 @@ async function existingResult(
         event,
         confirmationToken: rawToken,
         requestId: input.requestId,
+        replay: true,
       });
     }
   });

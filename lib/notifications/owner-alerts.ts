@@ -27,6 +27,7 @@ export async function recordOwnerAlert(tx: Prisma.TransactionClient, input: {
   event: string;
   bookingIds: string[];
   seriesId?: string | null;
+  barberId: string;
   actor?: "CLIENT" | "STAFF";
   requestId?: string;
 }): Promise<void> {
@@ -41,6 +42,7 @@ export async function recordOwnerAlert(tx: Prisma.TransactionClient, input: {
       bookingIds: input.bookingIds.slice(0, MAX_IDS),
       occurrences: input.bookingIds.length,
       seriesId: input.seriesId ?? null,
+      barberId: input.barberId,
       actor: input.actor ?? null,
     },
   });
@@ -62,15 +64,20 @@ export const OWNER_ALERT_LIMIT = 30;
 export async function listOwnerAlerts(input: { barberId?: string; now?: Date } = {}): Promise<OwnerAlert[]> {
   const since = new Date((input.now ?? new Date()).getTime() - OWNER_ALERT_WINDOW_DAYS * 86_400_000);
   const rows = await prisma.auditLog.findMany({
-    where: { action: { startsWith: ACTION_PREFIX }, createdAt: { gte: since } },
+    where: {
+      action: { startsWith: ACTION_PREFIX },
+      createdAt: { gte: since },
+      // Scope in the database so a barber with few bookings is not crowded out by other barbers' alerts.
+      ...(input.barberId ? { metadata: { path: ["barberId"], equals: input.barberId } } : {}),
+    },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: input.barberId ? OWNER_ALERT_LIMIT * 3 : OWNER_ALERT_LIMIT,
+    take: OWNER_ALERT_LIMIT,
     select: { id: true, action: true, createdAt: true, resourceId: true, metadata: true },
   });
   const ids = [...new Set(rows.map((row) => row.resourceId).filter((id): id is string => Boolean(id)))];
   const bookings = ids.length ? await prisma.booking.findMany({
     where: { id: { in: ids } },
-    select: { id: true, barberId: true, customerName: true, dateTimeStart: true, status: true, service: { select: { name: true } } },
+    select: { id: true, customerName: true, dateTimeStart: true, status: true, service: { select: { name: true } } },
   }) : [];
   const byId = new Map(bookings.map((booking) => [booking.id, booking]));
 
@@ -79,8 +86,8 @@ export async function listOwnerAlerts(input: { barberId?: string; now?: Date } =
     const event = row.action.slice(ACTION_PREFIX.length);
     if (!isOwnerAlertEvent(event)) continue;
     const booking = row.resourceId ? byId.get(row.resourceId) : undefined;
-    // Scoped principals never see alerts whose booking is gone or belongs to someone else.
-    if (input.barberId && booking?.barberId !== input.barberId) continue;
+    // Scoped principals never see alerts whose booking no longer exists.
+    if (input.barberId && !booking) continue;
     const metadata = (row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : {}) as Record<string, unknown>;
     alerts.push({
       id: row.id,
@@ -95,7 +102,6 @@ export async function listOwnerAlerts(input: { barberId?: string; now?: Date } =
         status: booking.status,
       } : null,
     });
-    if (alerts.length >= OWNER_ALERT_LIMIT) break;
   }
   return alerts;
 }

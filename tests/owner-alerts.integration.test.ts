@@ -58,3 +58,23 @@ test("every booking change leaves a persistent owner alert, scoped per barber", 
   // Alerts are written in the booking transaction: they never exist without the booking.
   assert.equal(await prisma.auditLog.count({ where: { action: { startsWith: "owner_alert." }, resourceId: bookingId } }), 3);
 });
+
+test("an idempotent replay of the same booking request does not repeat the owner alert", { skip: !disposable }, async () => {
+  const f = await fixture();
+  const single = {
+    serviceId: f.service.id, barberId: f.barber.id, customerName: "[QA] Cliente Replay", customerPhone: CLIENT,
+    start: slot("2037-07-01"), recurrence: "NONE" as const, idempotencyKey: randomUUID(), createdBy: "CLIENT" as const,
+    requestId: `req-${randomUUID()}`,
+  };
+  const first = await createBookingSeriesAtomic(single);
+  // A single booking has no series row: a repeat is refused by the slot conflict, again without an alert.
+  await assert.rejects(createBookingSeriesAtomic(single), /Conflito com agendamento existente/);
+
+  const seriesRequest = { ...single, idempotencyKey: randomUUID(), start: slot("2037-07-05"), recurrence: "DAILY" as const, repeatUntil: "2037-07-07" };
+  const series = await createBookingSeriesAtomic(seriesRequest);
+  assert.equal((await createBookingSeriesAtomic(seriesRequest)).duplicate, true);
+
+  assert.equal(await prisma.auditLog.count({ where: { action: { startsWith: "owner_alert." }, resourceId: first.bookingIds[0]! } }), 1);
+  assert.equal(await prisma.auditLog.count({ where: { action: { startsWith: "owner_alert." }, resourceId: series.bookingIds[0]! } }), 1);
+  assert.equal((await listOwnerAlerts({ barberId: f.barber.id })).length, 2);
+});

@@ -203,6 +203,8 @@ export async function enqueueOccurrenceGroupNotification(
     firstConfirmationToken?: string;
     requestId?: string;
     now?: Date;
+    /** Idempotent replay of an already-created booking: notices are deduplicated by key, the owner alert is not repeated. */
+    replay?: boolean;
   },
 ): Promise<number> {
   if (!input.bookingIds.length) return 0;
@@ -213,10 +215,12 @@ export async function enqueueOccurrenceGroupNotification(
     orderBy: { dateTimeStart: "asc" },
   });
   if (!bookings.length) return 0;
-  await recordOwnerAlert(tx, {
-    event: input.event, bookingIds: bookings.map((booking) => booking.id), seriesId: input.seriesId,
-    actor: input.actor, requestId: input.requestId,
-  });
+  if (!input.replay) {
+    await recordOwnerAlert(tx, {
+      event: input.event, bookingIds: bookings.map((booking) => booking.id), seriesId: input.seriesId,
+      barberId: bookings[0]!.barberId, actor: input.actor, requestId: input.requestId,
+    });
+  }
   if (bookings.length === 1 || !input.seriesId) {
     let count = 0;
     for (const booking of bookings) {
@@ -242,6 +246,8 @@ export async function enqueueBookingNotification(
     actor?: BookingChangeActor;
     confirmationToken?: string;
     requestId?: string;
+    /** Idempotent replay of an already-created booking: notices are deduplicated by key, the owner alert is not repeated. */
+    replay?: boolean;
   },
 ): Promise<number> {
   const booking = await tx.booking.findUnique({
@@ -249,9 +255,12 @@ export async function enqueueBookingNotification(
     include: BOOKING_SNAPSHOT_INCLUDE,
   });
   if (!booking) throw new Error(`Booking ${input.bookingId} not found while creating notification intent`);
-  await recordOwnerAlert(tx, {
-    event: input.event, bookingIds: [booking.id], seriesId: booking.seriesId, actor: input.actor, requestId: input.requestId,
-  });
+  if (!input.replay) {
+    await recordOwnerAlert(tx, {
+      event: input.event, bookingIds: [booking.id], seriesId: booking.seriesId, barberId: booking.barberId,
+      actor: input.actor, requestId: input.requestId,
+    });
+  }
   const intents = buildBookingNotificationIntents({
     snapshot: toSnapshot(booking, input.confirmationToken),
     seriesId: booking.seriesId ?? undefined,
