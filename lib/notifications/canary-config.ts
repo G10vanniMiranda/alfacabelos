@@ -32,7 +32,8 @@ const LITERAL_PHONE = /^\+?[\d\s().-]{10,20}$/;
 export function readCanaryConfig(env: Env, now: Date): CanaryState {
   if (env.WHATSAPP_CANARY_ENABLED?.trim().toLowerCase() !== "true") return { status: "disabled" };
 
-  const roundId = env.WHATSAPP_CANARY_ROUND_ID?.trim() ?? "";
+  // Lower-cased so that changing only the case of the id cannot start a fresh budget.
+  const roundId = env.WHATSAPP_CANARY_ROUND_ID?.trim().toLowerCase() ?? "";
   if (!/^[a-z0-9][a-z0-9-]{2,39}$/i.test(roundId)) return { status: "invalid", reason: "canary_round_id" };
 
   const instanceId = env.WHATSAPP_CANARY_INSTANCE_ID?.trim() ?? "";

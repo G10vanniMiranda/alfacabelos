@@ -207,3 +207,18 @@ test("a blocked send never reaches the provider", async () => {
   assert.deepEqual(outsider, { ok: false, retryable: false, category: "send_blocked", error: "WhatsApp send blocked: recipient_not_allowlisted" });
   assert.equal(calls, 0);
 });
+
+test("positive control: an allowed production send reaches the provider exactly once", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return Response.json({ key: { id: "MSG-OK" } }, { status: 201 }); };
+  for (const key of Object.keys(process.env)) if (key.startsWith("WHATSAPP_") || key.startsWith("PRODUCTION_")) delete process.env[key];
+  Object.assign(process.env, production);
+  const result = await sendWhatsAppOnce({ to: "(69) 99999-0001", message: "Teste", context: "test", idempotencyKey: "k" });
+  assert.deepEqual(result, { ok: true, providerMessageId: "MSG-OK" });
+  assert.equal(calls, 1);
+});
+
+test("canary round id is case-insensitive so a case change cannot reset the budget", () => {
+  const state = readCanaryConfig({ ...canary, WHATSAPP_CANARY_ROUND_ID: "Round-01" }, now);
+  assert.ok(state.status === "active" && state.config.roundId === "round-01");
+});
